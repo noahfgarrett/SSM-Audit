@@ -1,0 +1,8 @@
+[
+  {
+    "version": "1.0.0",
+    "date": "2026-08-08",
+    "type": "major",
+    "notes": "- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, and recommended corrections for every finding\n- Added fast filtering, fullscreen review, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"
+  }
+]

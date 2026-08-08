@@ -1,0 +1,16 @@
+export const MODULES=[
+  'src/core/text.js',
+  'src/version.js',
+  'src/state.js',
+  'src/io/workbook.js',
+  'src/exto/rev21-contract.js',
+  'src/audit/model.js',
+  'src/audit/engine.js',
+  'src/core/download.js',
+  'src/ui/icons.js',
+  'src/ui/feedback.js',
+  'src/audit/export.js',
+  'src/update/update.js',
+  'src/ui/audit.js',
+  'src/boot.js',
+];
