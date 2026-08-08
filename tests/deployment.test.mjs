@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 
 const root=resolve(new URL('..',import.meta.url).pathname)
 test('single-file build is offline-ready and pinned to its own updater',()=>{
@@ -18,7 +19,9 @@ test('single-file build is offline-ready and pinned to its own updater',()=>{
 
 test('committed source and fixtures contain no confidential audit target names',()=>{
   const paths=[];const walk=directory=>{for(const entry of readdirSync(directory,{withFileTypes:true})){const path=resolve(directory,entry.name);if(entry.isDirectory()&&entry.name!=='.git')walk(path);else if(entry.isFile())paths.push(path);}};walk(root)
-  const text=paths.filter(path=>!/\.xlsx$|sheetjs\.js$|SSM-Audit\.html$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n')
   const confidentialNames=new RegExp([['Spar','row'].join(''),['Exto-Cx-Registry','_SP'].join('')].join('|'),'i')
+  assert.equal(paths.filter(path=>/\.xlsx$/i.test(path)).map(path=>relative(root,path)).join(','),'tests/fixtures/synthetic-registry.xlsx')
+  assert.equal(createHash('sha256').update(readFileSync(resolve(root,'tests/fixtures/synthetic-registry.xlsx'))).digest('hex'),'e6d75eec5f5f8fb20ba8bb8b6d96c4fadd024a46f7adf988f7d7aea951c419da')
+  const text=paths.filter(path=>!/\.xlsx$|sheetjs\.js$|SSM-Audit\.html$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n')
   assert.doesNotMatch(text,confidentialNames)
 })

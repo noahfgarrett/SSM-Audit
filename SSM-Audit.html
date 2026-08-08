@@ -1447,7 +1447,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, and recommended corrections for every finding\n- Added fast filtering, fullscreen review, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1470,7 +1470,7 @@ const S={
 };
 
 function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',severity:'all',category:'all',search:'',sort:'severity',selectedFindingId:'',scrollTop:0,fullscreen:false};
+  S.session={name:'',snapshot:null,result:null,error:'',severity:'all',category:'all',search:'',sort:'severity',selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null};
 }
 
 resetSession();
@@ -1606,6 +1606,8 @@ function detectAuditRegistryHeader(aoa,maxRows=200){
 
 function auditSnapshotFromAoa(aoa,source={}){
   const detected=detectAuditRegistryHeader(aoa);if(!detected)return null;
+  const rowNums=Array.isArray(source.rowNums)?source.rowNums:null;
+  const physicalRow=index=>Number.isInteger(rowNums&&rowNums[index])?rowNums[index]+1:index+1;
   const rows=[];
   for(let rowIndex=detected.headerRow+1;rowIndex<aoa.length;rowIndex++){
     const sourceRow=aoa[rowIndex]||[],record={};let populated=false;
@@ -1614,13 +1616,14 @@ function auditSnapshotFromAoa(aoa,source={}){
       record[column.field]=value;if(value)populated=true;
     }
     if(!populated)continue;
-    record._source=Object.freeze({file:clean(source.file),sheet:clean(source.sheet),row:rowIndex+1,columns:Object.freeze({...detected.fields})});
+    record._source=Object.freeze({file:clean(source.file),sheet:clean(source.sheet),row:physicalRow(rowIndex),columns:Object.freeze({...detected.fields})});
     rows.push(Object.freeze(record));
   }
   const missingHeaders=EXTO_REV21_COLUMNS.filter(column=>detected.fields[column.field]==null).map(column=>column.header);
-  const missingHeaderEntries=missingHeaders.map(header=>Object.freeze({header,sheet:clean(source.sheet),headerRow:detected.headerRow+1}));
+  const headerRow=physicalRow(detected.headerRow);
+  const missingHeaderEntries=missingHeaders.map(header=>Object.freeze({header,sheet:clean(source.sheet),headerRow}));
   return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(source.file),sheet:clean(source.sheet)}),
-    headerRow:detected.headerRow+1,fields:Object.freeze({...detected.fields}),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries),rows:Object.freeze(rows)});
+    headerRow,fields:Object.freeze({...detected.fields}),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries),rows:Object.freeze(rows)});
 }
 
 async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,report){
@@ -1630,7 +1633,7 @@ async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,report){
       if(report)report((index+done/Math.max(1,total))/Math.max(1,names.length),`Scanning ${name}`);
       if(checkpoint)await checkpoint();
     });
-    const snapshot=auditSnapshotFromAoa(parsed.aoa,{file:fileName,sheet:name});if(snapshot)snapshots.push(snapshot);
+    const snapshot=auditSnapshotFromAoa(parsed.aoa,{file:fileName,sheet:name,rowNums:parsed.rowNums});if(snapshot)snapshots.push(snapshot);
     if(report)report((index+1)/Math.max(1,names.length),`Scanned ${index+1} of ${names.length} tabs`);
     if(checkpoint)await checkpoint();
   }
@@ -1692,16 +1695,22 @@ function auditFinding(rule,severity,row,details={}){
 }
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
 function auditCyclePaths(nodes,edges){
-  const state=new Map(),stack=[],cycles=[],seen=new Set();
-  const visit=node=>{
-    state.set(node,1);stack.push(node);
-    for(const next of edges.get(node)||[]){
-      if(state.get(next)===1){const start=stack.indexOf(next),cycle=[...stack.slice(start),next],key=[...new Set(cycle)].sort(natCmp).join('|');if(!seen.has(key)){seen.add(key);cycles.push(cycle);}}
-      else if(!state.get(next))visit(next);
+  const state=new Map(),path=[],pathIndex=new Map(),cycles=[],seen=new Set();
+  for(const start of nodes){
+    if(state.get(start))continue;
+    state.set(start,1);pathIndex.set(start,path.length);path.push(start);
+    const frames=[{node:start,next:[...(edges.get(start)||[])],index:0}];
+    while(frames.length){
+      const frame=frames[frames.length-1];
+      if(frame.index<frame.next.length){
+        const next=frame.next[frame.index++],nextState=state.get(next);
+        if(nextState===1){const from=pathIndex.get(next),cycle=[...path.slice(from),next],key=[...new Set(cycle)].sort(natCmp).join('|');if(!seen.has(key)){seen.add(key);cycles.push(cycle);}}
+        else if(!nextState){state.set(next,1);pathIndex.set(next,path.length);path.push(next);frames.push({node:next,next:[...(edges.get(next)||[])],index:0});}
+      }else{
+        frames.pop();state.set(frame.node,2);pathIndex.delete(frame.node);path.pop();
+      }
     }
-    stack.pop();state.set(node,2);
-  };
-  for(const node of nodes)if(!state.get(node))visit(node);
+  }
   return cycles;
 }
 
@@ -1901,7 +1910,7 @@ function versionedFilename(version){return `SSM-Audit-v${String(version).replace
 function selectReleaseAsset(release){
   const version=String(release&&release.tag_name||'').replace(/^v/i,''),assets=release&&release.assets||[];
   const exact=`SSM-Audit-v${version}.html`.toLowerCase();
-  const asset=assets.find(item=>String(item.name).toLowerCase()===exact)||assets.find(item=>/^SSM-Audit-v[\d.]+\.html$/i.test(String(item.name)));
+  const asset=assets.find(item=>String(item.name).toLowerCase()===exact);
   return asset?{version,assetName:asset.name,downloadUrl:asset.browser_download_url,releaseNotes:release.body||'',publishedAt:release.published_at||''}:null;
 }
 
@@ -2035,10 +2044,12 @@ async function addAuditTarget(file,navigate){
 }
 
 function filteredFindings(){
-  const query=clean(S.session.search).toUpperCase();let rows=S.session.result.findings.filter(finding=>(S.session.severity==='all'||finding.severity===S.session.severity)&&(S.session.category==='all'||finding.category===S.session.category)&&(!query||finding.searchKey.includes(query)));
+  const query=clean(S.session.search).toUpperCase(),key=[S.session.severity,S.session.category,query,S.session.sort].join('\u0001');
+  if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
+  let rows=S.session.result.findings.filter(finding=>(S.session.severity==='all'||finding.severity===S.session.severity)&&(S.session.category==='all'||finding.category===S.session.category)&&(!query||finding.searchKey.includes(query)));
   if(S.session.sort==='equipment')rows=[...rows].sort((a,b)=>a.equipmentId.localeCompare(b.equipmentId,undefined,{numeric:true,sensitivity:'base'})||a.row-b.row);
   else if(S.session.sort==='rule')rows=[...rows].sort((a,b)=>a.rule.id.localeCompare(b.rule.id)||a.row-b.row);
-  return rows;
+  S.session.filteredCacheKey=key;S.session.filteredCacheRows=rows;return rows;
 }
 function statusMarkup(summary){const label=summary.status==='blocked'?'Blocked':summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
 function severityOptions(){return `<option value="all">All severities</option>`+SSM_AUDIT_SEVERITIES.map(value=>`<option value="${value}" ${S.session.severity===value?'selected':''}>${SEVERITY_LABELS[value]}</option>`).join('');}

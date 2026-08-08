@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
-import { runSsmAudit } from '../src/audit/engine.js'
+import { auditCyclePaths, runSsmAudit } from '../src/audit/engine.js'
 
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
 const index = Object.fromEntries(EXTO_REV21_COLUMNS.map(column => [column.field, column.index]))
@@ -29,6 +29,24 @@ test('SSM Audit detects the official header row beyond the first line', () => {
   assert.equal(snapshot.headerRow, 2)
   assert.equal(snapshot.rows[0]._source.row, 3)
   assert.equal(snapshot.rows[0]._source.file, 'synthetic.xlsx')
+})
+
+test('SSM Audit preserves physical Excel row numbers after blank rows are compacted', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'B1-GIS-01', closestParent: '602  Medium Voltage', upn: '602', discipline: 'ELECTRICAL' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry', rowNums: [1, 3] })
+  assert.equal(snapshot.headerRow, 2)
+  assert.equal(snapshot.rows[0]._source.row, 4)
+})
+
+test('cycle detection handles deeply nested hierarchies without recursion', () => {
+  const count = 25000, nodes = Array.from({ length: count }, (_, index) => `N${index}`), edges = new Map()
+  for (let index = 0; index < count - 1; index++) edges.set(nodes[index], new Set([nodes[index + 1]]))
+  edges.set(nodes[count - 1], new Set([nodes[0]]))
+  const cycles = auditCyclePaths(nodes, edges)
+  assert.equal(cycles.length, 1)
+  assert.equal(cycles[0].length, count + 1)
 })
 
 test('SSM Audit produces explainable structural and dependency findings', () => {
