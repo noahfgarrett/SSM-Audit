@@ -24,6 +24,8 @@ export function detectAuditRegistryHeader(aoa,maxRows=200){
 
 export function auditSnapshotFromAoa(aoa,source={}){
   const detected=detectAuditRegistryHeader(aoa);if(!detected)return null;
+  const rowNums=Array.isArray(source.rowNums)?source.rowNums:null;
+  const physicalRow=index=>Number.isInteger(rowNums&&rowNums[index])?rowNums[index]+1:index+1;
   const rows=[];
   for(let rowIndex=detected.headerRow+1;rowIndex<aoa.length;rowIndex++){
     const sourceRow=aoa[rowIndex]||[],record={};let populated=false;
@@ -32,13 +34,14 @@ export function auditSnapshotFromAoa(aoa,source={}){
       record[column.field]=value;if(value)populated=true;
     }
     if(!populated)continue;
-    record._source=Object.freeze({file:clean(source.file),sheet:clean(source.sheet),row:rowIndex+1,columns:Object.freeze({...detected.fields})});
+    record._source=Object.freeze({file:clean(source.file),sheet:clean(source.sheet),row:physicalRow(rowIndex),columns:Object.freeze({...detected.fields})});
     rows.push(Object.freeze(record));
   }
   const missingHeaders=EXTO_REV21_COLUMNS.filter(column=>detected.fields[column.field]==null).map(column=>column.header);
-  const missingHeaderEntries=missingHeaders.map(header=>Object.freeze({header,sheet:clean(source.sheet),headerRow:detected.headerRow+1}));
+  const headerRow=physicalRow(detected.headerRow);
+  const missingHeaderEntries=missingHeaders.map(header=>Object.freeze({header,sheet:clean(source.sheet),headerRow}));
   return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(source.file),sheet:clean(source.sheet)}),
-    headerRow:detected.headerRow+1,fields:Object.freeze({...detected.fields}),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries),rows:Object.freeze(rows)});
+    headerRow,fields:Object.freeze({...detected.fields}),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries),rows:Object.freeze(rows)});
 }
 
 export async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,report){
@@ -48,7 +51,7 @@ export async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,rep
       if(report)report((index+done/Math.max(1,total))/Math.max(1,names.length),`Scanning ${name}`);
       if(checkpoint)await checkpoint();
     });
-    const snapshot=auditSnapshotFromAoa(parsed.aoa,{file:fileName,sheet:name});if(snapshot)snapshots.push(snapshot);
+    const snapshot=auditSnapshotFromAoa(parsed.aoa,{file:fileName,sheet:name,rowNums:parsed.rowNums});if(snapshot)snapshots.push(snapshot);
     if(report)report((index+1)/Math.max(1,names.length),`Scanned ${index+1} of ${names.length} tabs`);
     if(checkpoint)await checkpoint();
   }

@@ -6,7 +6,7 @@ export const S={
 };
 
 export function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',severity:'all',category:'all',search:'',sort:'severity',selectedFindingId:'',scrollTop:0,fullscreen:false};
+  S.session={name:'',snapshot:null,result:null,error:'',severity:'all',category:'all',search:'',sort:'severity',selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null};
 }
 
 resetSession();

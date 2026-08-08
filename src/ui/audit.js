@@ -81,10 +81,12 @@ export async function addAuditTarget(file,navigate){
 }
 
 function filteredFindings(){
-  const query=clean(S.session.search).toUpperCase();let rows=S.session.result.findings.filter(finding=>(S.session.severity==='all'||finding.severity===S.session.severity)&&(S.session.category==='all'||finding.category===S.session.category)&&(!query||finding.searchKey.includes(query)));
+  const query=clean(S.session.search).toUpperCase(),key=[S.session.severity,S.session.category,query,S.session.sort].join('\u0001');
+  if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
+  let rows=S.session.result.findings.filter(finding=>(S.session.severity==='all'||finding.severity===S.session.severity)&&(S.session.category==='all'||finding.category===S.session.category)&&(!query||finding.searchKey.includes(query)));
   if(S.session.sort==='equipment')rows=[...rows].sort((a,b)=>a.equipmentId.localeCompare(b.equipmentId,undefined,{numeric:true,sensitivity:'base'})||a.row-b.row);
   else if(S.session.sort==='rule')rows=[...rows].sort((a,b)=>a.rule.id.localeCompare(b.rule.id)||a.row-b.row);
-  return rows;
+  S.session.filteredCacheKey=key;S.session.filteredCacheRows=rows;return rows;
 }
 function statusMarkup(summary){const label=summary.status==='blocked'?'Blocked':summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
 function severityOptions(){return `<option value="all">All severities</option>`+SSM_AUDIT_SEVERITIES.map(value=>`<option value="${value}" ${S.session.severity===value?'selected':''}>${SEVERITY_LABELS[value]}</option>`).join('');}

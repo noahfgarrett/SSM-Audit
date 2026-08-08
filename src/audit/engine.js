@@ -45,17 +45,23 @@ function auditFinding(rule,severity,row,details={}){
     searchKey:auditNormId([rule.id,rule.category,equipmentId,source.sheet,details.field,details.why,actual,details.expected,details.relatedEquipmentId].join(' '))});
 }
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
-function auditCyclePaths(nodes,edges){
-  const state=new Map(),stack=[],cycles=[],seen=new Set();
-  const visit=node=>{
-    state.set(node,1);stack.push(node);
-    for(const next of edges.get(node)||[]){
-      if(state.get(next)===1){const start=stack.indexOf(next),cycle=[...stack.slice(start),next],key=[...new Set(cycle)].sort(natCmp).join('|');if(!seen.has(key)){seen.add(key);cycles.push(cycle);}}
-      else if(!state.get(next))visit(next);
+export function auditCyclePaths(nodes,edges){
+  const state=new Map(),path=[],pathIndex=new Map(),cycles=[],seen=new Set();
+  for(const start of nodes){
+    if(state.get(start))continue;
+    state.set(start,1);pathIndex.set(start,path.length);path.push(start);
+    const frames=[{node:start,next:[...(edges.get(start)||[])],index:0}];
+    while(frames.length){
+      const frame=frames[frames.length-1];
+      if(frame.index<frame.next.length){
+        const next=frame.next[frame.index++],nextState=state.get(next);
+        if(nextState===1){const from=pathIndex.get(next),cycle=[...path.slice(from),next],key=[...new Set(cycle)].sort(natCmp).join('|');if(!seen.has(key)){seen.add(key);cycles.push(cycle);}}
+        else if(!nextState){state.set(next,1);pathIndex.set(next,path.length);path.push(next);frames.push({node:next,next:[...(edges.get(next)||[])],index:0});}
+      }else{
+        frames.pop();state.set(frame.node,2);pathIndex.delete(frame.node);path.pop();
+      }
     }
-    stack.pop();state.set(node,2);
-  };
-  for(const node of nodes)if(!state.get(node))visit(node);
+  }
   return cycles;
 }
 

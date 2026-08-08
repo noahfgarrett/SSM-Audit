@@ -18,3 +18,7 @@ test('updater selects only the standalone versioned HTML asset',()=>{
   assert.equal(info.version,'1.2.3')
   assert.equal(versionedFilename(info.version),'SSM-Audit-v1.2.3.html')
 })
+
+test('updater rejects an HTML asset whose version does not match the release tag',()=>{
+  assert.equal(selectReleaseAsset({tag_name:'v1.2.3',assets:[{name:'SSM-Audit-v1.2.2.html',browser_download_url:'wrong'}]}),null)
+})

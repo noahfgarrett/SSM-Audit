@@ -14,7 +14,7 @@ export function versionedFilename(version){return `SSM-Audit-v${String(version).
 export function selectReleaseAsset(release){
   const version=String(release&&release.tag_name||'').replace(/^v/i,''),assets=release&&release.assets||[];
   const exact=`SSM-Audit-v${version}.html`.toLowerCase();
-  const asset=assets.find(item=>String(item.name).toLowerCase()===exact)||assets.find(item=>/^SSM-Audit-v[\d.]+\.html$/i.test(String(item.name)));
+  const asset=assets.find(item=>String(item.name).toLowerCase()===exact);
   return asset?{version,assetName:asset.name,downloadUrl:asset.browser_download_url,releaseNotes:release.body||'',publishedAt:release.published_at||''}:null;
 }
 
