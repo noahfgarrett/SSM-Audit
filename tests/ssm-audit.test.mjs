@@ -113,6 +113,7 @@ test('commissioning logic distinguishes healthy paths from missing links', () =>
     row({ equipmentId: 'BLD-RIO-MISSING', closestParent: '650 Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel' }),
     row({ equipmentId: 'BLD-CS-OK', closestParent: 'BLD-PUMP-OK', dependencies: 'BLD-RIO-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
     row({ equipmentId: 'BLD-CS-MISSING', closestParent: 'BLD-PUMP-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
+    row({ equipmentId: '1820 Mechanical System - Pumps', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Centrifugal Pump System', itemMaster: 'VF_Blank' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const result = runSsmAudit(snapshot)
   const byRule = ruleId => result.findings.filter(finding => finding.rule.id === ruleId).map(finding => finding.equipmentId)

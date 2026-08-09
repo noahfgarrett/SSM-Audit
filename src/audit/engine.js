@@ -54,10 +54,11 @@ function auditFinding(rule,severity,row,details={}){
 }
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
 function auditDescription(row){return auditNormId(row&&row.equipmentDescription);}
+function auditIsOrganizationalHeader(row){return /^VF[_ -]?BLANK/i.test(clean(row&&row.itemMaster))||/^HEADER$/i.test(clean(row&&row.equipmentDescription));}
 function auditIsElectrical(row){return auditNormId(row&&row.discipline)==='ELECTRICAL';}
-function auditIsControlEquipment(row){return /REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL|VARIABLE FREQUENCY|\bVFD\b|MOTOR STARTER|FMS/.test(auditDescription(row));}
-function auditIsDrivenEquipment(row){return !auditIsElectrical(row)&&/AIR HANDLER|CENTRIFUGAL PUMP|VERTICALLY MOUNTED PUMP|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b/.test(auditDescription(row));}
-function auditNeedsControlLink(row){return !auditIsElectrical(row)&&/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER/.test(auditDescription(row));}
+function auditIsControlEquipment(row){return !auditIsOrganizationalHeader(row)&&/REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL|VARIABLE FREQUENCY|\bVFD\b|MOTOR STARTER|FMS/.test(auditDescription(row));}
+function auditIsDrivenEquipment(row){return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&/AIR HANDLER|CENTRIFUGAL PUMP|VERTICALLY MOUNTED PUMP|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b/.test(auditDescription(row));}
+function auditNeedsControlLink(row){return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER/.test(auditDescription(row));}
 function auditReachableFrom(seeds,edges){
   const reached=new Set(seeds),queue=[...seeds];
   for(let index=0;index<queue.length;index++)for(const next of edges.get(queue[index])||[])if(!reached.has(next)){reached.add(next);queue.push(next);}

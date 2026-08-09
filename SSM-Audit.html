@@ -1459,7 +1459,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1470,7 +1470,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.1.1';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -1715,10 +1715,11 @@ function auditFinding(rule,severity,row,details={}){
 }
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
 function auditDescription(row){return auditNormId(row&&row.equipmentDescription);}
+function auditIsOrganizationalHeader(row){return /^VF[_ -]?BLANK/i.test(clean(row&&row.itemMaster))||/^HEADER$/i.test(clean(row&&row.equipmentDescription));}
 function auditIsElectrical(row){return auditNormId(row&&row.discipline)==='ELECTRICAL';}
-function auditIsControlEquipment(row){return /REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL|VARIABLE FREQUENCY|\bVFD\b|MOTOR STARTER|FMS/.test(auditDescription(row));}
-function auditIsDrivenEquipment(row){return !auditIsElectrical(row)&&/AIR HANDLER|CENTRIFUGAL PUMP|VERTICALLY MOUNTED PUMP|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b/.test(auditDescription(row));}
-function auditNeedsControlLink(row){return !auditIsElectrical(row)&&/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER/.test(auditDescription(row));}
+function auditIsControlEquipment(row){return !auditIsOrganizationalHeader(row)&&/REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL|VARIABLE FREQUENCY|\bVFD\b|MOTOR STARTER|FMS/.test(auditDescription(row));}
+function auditIsDrivenEquipment(row){return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&/AIR HANDLER|CENTRIFUGAL PUMP|VERTICALLY MOUNTED PUMP|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b/.test(auditDescription(row));}
+function auditNeedsControlLink(row){return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER/.test(auditDescription(row));}
 function auditReachableFrom(seeds,edges){
   const reached=new Set(seeds),queue=[...seeds];
   for(let index=0;index<queue.length;index++)for(const next of edges.get(queue[index])||[])if(!reached.has(next)){reached.add(next);queue.push(next);}
