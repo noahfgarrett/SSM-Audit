@@ -8,7 +8,7 @@ import { ic } from './icons.js'
 import { copyTagHtml, runWithProgress, toast, wireCopyTags } from './feedback.js'
 
 const AUDIT_ROW_HEIGHT=48,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
-const CATEGORY_LABELS={upload:'Upload Readiness',structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
+const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const SEVERITY_LABELS={blocker:'Blocker',error:'Error',warning:'Warning',info:'Advisory'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
 let auditOutsideHandler=null,auditEscapeHandler=null;
@@ -23,7 +23,7 @@ function importStatus(){
 export function renderUpload(navigate){
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='upload';
   $('#view').innerHTML=`<section class="upload-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Cx Upload Validation + SSM Rules</span><h2>Audit an existing SSM</h2><p>Check a completed Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
+    <div class="screen-heading"><div><span class="eyebrow">Registry Integrity + SSM Rules</span><h2>Audit an existing SSM</h2><p>Check a completed Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
     <div class="upload-grid">
       <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a Cx Registry workbook">
         <span class="drop-icon">${ic('file-spreadsheet')}</span>
@@ -41,7 +41,7 @@ export function renderUpload(navigate){
     <div class="coverage-band">
       <div><span>01</span><b>Hierarchy</b><p>Parents, roots, cycles, and discipline or UPN crossings.</p></div>
       <div><span>02</span><b>Dependencies</b><p>Unresolved, repeated, self-referencing, and circular predecessors.</p></div>
-      <div><span>03</span><b>Cx upload readiness</b><p>Allowed values, required fields, milestones, Item Masters, and headers.</p></div>
+      <div><span>03</span><b>Commissioning logic</b><p>Control sources, power paths, equipment roles, milestones, and headers.</p></div>
     </div>
   </section>`;
   wireUpload(navigate);
@@ -134,7 +134,7 @@ function renderRows(){
 }
 function openFinding(id,opener){
   const finding=S.session.result.findings.find(item=>item.id===id);if(!finding)return;
-  S.session.selectedFindingId=id;S.session.opener=opener;$('#drawerTitle').textContent='Audit finding';$('#drawerBody').innerHTML=`<div class="audit-drawer"><div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span><code>${esc(finding.rule.id)}</code></div><h3>${esc(finding.why)}</h3>${finding.equipmentId?`<div class="audit-subject">${copyTagHtml(finding.equipmentId)}</div>`:''}<div class="audit-detail"><span>Found</span><p>${esc(typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual))||'Blank'}</p></div><div class="audit-detail expected"><span>Expected</span><p>${esc(typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected))}</p></div><div class="audit-detail action"><span>Recommended correction</span><p>${esc(finding.recommendation)}</p></div><dl class="audit-evidence"><dt>Rule source</dt><dd>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</dd><dt>Rule</dt><dd><b>${esc(finding.rule.title)}</b><br>${esc(finding.rule.statement)}</dd><dt>Evidence</dt><dd>${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'&mdash;'}${finding.field?' &middot; '+esc(finding.field):''}</dd><dt>Fingerprint</dt><dd><code>${esc(finding.fingerprint)}</code></dd></dl></div>`;
+  S.session.selectedFindingId=id;S.session.opener=opener;$('#drawerTitle').textContent='Audit finding';$('#drawerBody').innerHTML=`<div class="audit-drawer"><div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span><code>${esc(finding.rule.id)}</code></div><h3>${esc(finding.why)}</h3>${finding.equipmentId?`<div class="audit-subject">${copyTagHtml(finding.equipmentId)}</div>`:''}<div class="audit-detail"><span>Found</span><p>${esc(typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual))||'Blank'}</p></div><div class="audit-detail expected"><span>Expected</span><p>${esc(typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected))}</p></div><div class="audit-detail action"><span>Recommended correction</span><p>${esc(finding.recommendation)}</p></div><dl class="audit-evidence"><dt>Rule source</dt><dd>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</dd><dt>Confidence</dt><dd>${esc(finding.rule.confidence)}</dd><dt>Rule</dt><dd><b>${esc(finding.rule.title)}</b><br>${esc(finding.rule.statement)}</dd><dt>Evidence</dt><dd>${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'&mdash;'}${finding.field?' &middot; '+esc(finding.field):''}</dd><dt>Fingerprint</dt><dd><code>${esc(finding.fingerprint)}</code></dd></dl></div>`;
   wireCopyTags($('#drawerBody'));$('#drawerBack').classList.add('show');$('#drawer').focus();
 }
 export function closeDrawer(){

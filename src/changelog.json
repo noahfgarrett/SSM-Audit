@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.2.0",
+    "date": "2026-08-09",
+    "type": "feature",
+    "notes": "- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added strict L1/L2 milestone completeness plus semantic phase, capacity, and percentage checks\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Added the future standardized Item Master check to the rule catalog and reports in a clearly disabled state until the approved VF standard is supplied\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"
+  },
+  {
     "version": "1.1.1",
     "date": "2026-08-09",
     "type": "fix",

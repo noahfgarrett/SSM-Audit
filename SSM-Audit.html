@@ -1365,6 +1365,8 @@ body.audit-fullscreen{overflow:hidden}
 .guide-card{width:min(860px,calc(100vw - 32px));height:min(650px,calc(100dvh - 32px));max-width:none;display:grid;grid-template-columns:210px minmax(0,1fr);padding:0;overflow:hidden}
 .guide-side{padding:22px 14px;background:var(--panel);color:#fff}.guide-side h2{margin:0 8px 17px;font-size:15px;letter-spacing:0}.guide-side button{width:100%;display:flex;align-items:center;gap:9px;border:0;background:transparent;color:#cbd0d8;padding:9px 10px;text-align:left;font-size:12px;cursor:pointer}.guide-side button.active,.guide-side button:hover{background:rgba(255,255,255,.09);color:#fff}.guide-side .ic{width:15px;height:15px}
 .guide-main{position:relative;padding:30px 34px;overflow:auto}.guide-main>.icon-btn{position:absolute;top:14px;right:14px}.guide-copy{max-width:620px}.guide-copy h3{margin:8px 0 12px;font-size:22px;letter-spacing:0}.guide-copy p,.guide-copy li{color:var(--ink-2);font-size:13px;line-height:1.65}.guide-copy ol{padding-left:21px}.guide-note{display:flex;gap:9px;margin-top:18px;padding:12px;border-left:3px solid var(--accent);background:var(--accent-50);color:var(--ink-2);font-size:12px;line-height:1.55}.guide-note .ic{flex:0 0 16px;width:16px;height:16px}
+.guide-copy li.rule-disabled{opacity:.68}.guide-copy li.rule-disabled small{display:block;margin-top:3px;color:var(--ink-3)}
+.rule-confidence{display:inline-flex;margin-left:6px;padding:1px 6px;border:1px solid var(--border);border-radius:4px;color:var(--ink-3);font-family:var(--mono);font-size:10px;text-transform:uppercase;vertical-align:1px}
 .audit-fullscreen .topbar,.audit-fullscreen .version-link{display:none}.audit-fullscreen #view{padding:0;max-width:none}
 .drawer[tabindex]:focus{outline:none}
 
@@ -1459,7 +1461,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added strict L1/L2 milestone completeness plus semantic phase, capacity, and percentage checks\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Added the future standardized Item Master check to the rule catalog and reports in a clearly disabled state until the approved VF standard is supplied\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1470,7 +1472,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.1.1';
+const APP_VERSION='1.2.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -1663,46 +1665,47 @@ function auditFingerprint(value){
 }
 
 /* src/audit/engine.js */
-const SSM_AUDIT_STANDARD='Cx Upload Validation + SSM Rules';
+const SSM_AUDIT_STANDARD='Registry Integrity + SSM Rules';
 const SSM_AUDIT_SEVERITIES=['blocker','error','warning','info'];
-const SSM_AUDIT_CATEGORIES=['upload','structure','dependencies','metadata','milestones','item-masters','headers'];
+const SSM_AUDIT_CATEGORIES=['structure','dependencies','metadata','milestones','item-masters','headers'];
 const SSM_AUDIT_SOURCES=Object.freeze([
-  Object.freeze({id:'upload',label:'Cx Upload Validation',description:'Required columns, required values, and allowed upload values.'}),
+  Object.freeze({id:'registry',label:'Registry Integrity',description:'Internal identity, references, and metadata consistency in an existing SSM.'}),
   Object.freeze({id:'sop',label:'SSM SOP',description:'Parent-child structure, dependencies, sequencing, milestones, and headers.'}),
-  Object.freeze({id:'logic',label:'Commissioning Logic',description:'Repeatable control and electrical enabling relationships.'}),
+  Object.freeze({id:'logic',label:'Commissioning Logic',description:'Confidence-rated control, electrical, and process-enabling relationships.'}),
 ]);
 const SSM_AUDIT_SEVERITY_RANK={blocker:0,error:1,warning:2,info:3};
 
-function auditRule(id,source,category,title,statement){return Object.freeze({id,version:1,source,category,title,statement,standardRef:title});}
+function auditRule(id,source,category,title,statement,options={}){return Object.freeze({id,version:1,source,category,title,statement,standardRef:title,confidence:options.confidence||'required',enabled:options.enabled!==false,disabledReason:options.disabledReason||''});}
 const SSM_AUDIT_RULES=Object.freeze({
-  missingHeader:auditRule('upload.missing-header','upload','upload','Required upload column','Each required Cx upload column must be present.'),
-  missingGating:auditRule('upload.missing-gating-field','upload','upload','Required upload value','Each required Cx upload value must be populated.'),
-  invalidDropdown:auditRule('metadata.invalid-dropdown-value','upload','metadata','Allowed upload value','Populated upload values must use the allowed Cx vocabulary.'),
   duplicateId:auditRule('identity.duplicate-equipment-id','sop','metadata','Unique equipment identity','Each Equipment ID must occur once in an SSM.'),
   blankParent:auditRule('parent.blank','sop','structure','Complete hierarchy','Each equipment row must have a parent or System Name root.'),
   selfParent:auditRule('parent.self','sop','structure','No self-parenting','Equipment cannot be its own parent.'),
-  unresolvedParent:auditRule('parent.unresolved','upload','structure','Resolvable parent','A parent must resolve to equipment, an intentional new header, or an existing external parent.'),
-  generatedHeader:auditRule('parent.generated-header-review','upload','headers','Intentional new header','A proposed upload header must be intentional and consistently reused.'),
+  unresolvedParent:auditRule('parent.unresolved','registry','structure','Resolvable parent','A parent must resolve to equipment, an intentional new header, or an existing external parent.'),
+  generatedHeader:auditRule('parent.generated-header-review','registry','headers','Intentional new header','A proposed organizational header must be intentional and consistently reused.'),
   crossUpn:auditRule('parent.cross-upn','sop','structure','Parent and child share a UPN','Structural parent-child equipment must remain within one UPN.'),
   crossDiscipline:auditRule('parent.cross-discipline','sop','structure','Parent and child share a discipline','Cross-discipline relationships belong in Dependencies unless an approved exception applies.'),
-  parentAsDependency:auditRule('dependency.repeats-parent','sop','dependencies','Parent is not repeated','A structural parent should not also be listed as the same child’s dependency.'),
   parentCycle:auditRule('parent.cycle','sop','structure','Acyclic hierarchy','A parent chain cannot loop back to itself.'),
-  literalNa:auditRule('dependency.literal-na','upload','dependencies','Blank means no dependency','Use a blank dependency cell instead of a literal N/A value.'),
   selfDependency:auditRule('dependency.self','sop','dependencies','No self-dependency','Equipment cannot depend on itself.'),
   duplicateDependency:auditRule('dependency.duplicate','sop','dependencies','Unique dependency references','List each dependency once per equipment row.'),
   unresolvedDependency:auditRule('dependency.unresolved','sop','dependencies','Resolvable dependency','A dependency must resolve locally or identify its external project.'),
   precedenceCycle:auditRule('dependency.precedence-cycle','sop','dependencies','Acyclic commissioning sequence','Parent and dependency links cannot create a circular startup sequence.'),
-  systemUpn:auditRule('metadata.system-upn-mismatch','upload','metadata','System Name matches UPN','System Name and UPN must identify the same approved system.'),
-  icDiscipline:auditRule('metadata.ic-discipline','upload','metadata','Approved controls mapping','I&C equipment must map to the approved controls discipline and tag-derived UPN.'),
+  systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name matches UPN','System Name and UPN must identify the same system.'),
+  icDiscipline:auditRule('metadata.ic-discipline','registry','metadata','Approved controls mapping','I&C equipment must map to the approved controls discipline and tag-derived UPN.'),
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','Consistent UPN grouping','One UPN should map to one System Name and Discipline.'),
-  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','L1 Milestone Parent and L2 Milestone should be assigned together.'),
-  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone parent','One L2 milestone should map to one L1 parent.'),
-  legacyItemMaster:auditRule('item-master.legacy','upload','item-masters','Current Item Master','Use the current allowed Item Master vocabulary.'),
+  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','When a project uses milestones, every equipment row must include both L1 Milestone Parent and L2 Milestone.'),
+  milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','Aligned milestone intent','L1 and L2 milestone intent must not conflict on an explicit phase, capacity, or percentage target.'),
+  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone meaning','One L2 milestone should map to one consistent L1 milestone intent.'),
+  itemMasterStandard:auditRule('item-master.standardized-assignment','registry','item-masters','Standardized Item Master','Item Master assignments should match the approved VF standard by equipment meaning, not by project prefix.',{enabled:false,confidence:'pending',disabledReason:'Waiting for the approved VF Item Master standard.'}),
   headerDependency:auditRule('header.has-dependency','sop','headers','Header groups only','An organizational header should not carry unexplained dependencies.'),
   unusedHeader:auditRule('header.unused','sop','headers','Header has children','An organizational header must group at least one child.'),
-  controlLink:auditRule('logic.control-link-missing','logic','dependencies','Control link present','High-confidence control devices should identify their control source.'),
-  drivenElectricalPath:auditRule('logic.driven-electrical-path-missing','logic','dependencies','Electrical enabling path present','Electrically driven equipment should trace to an electrical predecessor.'),
-  controlElectricalPath:auditRule('logic.control-electrical-path-missing','logic','dependencies','Control power path present','Control equipment should trace to an electrical supply predecessor.'),
+  controlLink:auditRule('logic.control-link-missing','logic','dependencies','Control source present','A control device with a repeatable relationship should identify its RIO, PLC, VFD, or control-panel source.',{confidence:'description-rated'}),
+  drivenElectricalPath:auditRule('logic.driven-electrical-path-missing','logic','dependencies','Electrical enabling path present','Electrically driven equipment should trace to an electrical predecessor.',{confidence:'strong'}),
+  controlElectricalPath:auditRule('logic.control-electrical-path-missing','logic','dependencies','Control power path present','Control equipment should trace to an electrical supply predecessor.',{confidence:'strong'}),
+  rioControlPath:auditRule('logic.rio-control-path-missing','logic','dependencies','RIO controller path present','A RIO should link to an I/O cluster, PLC, upstream RIO, or equivalent controller.',{confidence:'strong'}),
+  driveParent:auditRule('logic.drive-parent-unexpected','logic','structure','Drive grouped with driven equipment','A VFD or motor starter should be structurally grouped with the equipment it operates.',{confidence:'strong'}),
+  heatTraceChain:auditRule('logic.heat-trace-chain-missing','logic','structure','Heat-trace chain present','Heat-trace panels and connection boxes should follow their transformer, panel, or upstream connection-box chain.',{confidence:'strong'}),
+  fduDependency:auditRule('logic.fdu-supported-equipment-missing','logic','dependencies','Fiber unit identifies served equipment','A fiber distribution unit should identify the equipment or system it enables.',{confidence:'strong'}),
+  vesdaFireAlarm:auditRule('logic.vesda-fire-alarm-missing','logic','dependencies','VESDA fire-alarm dependency present','A VESDA system should identify its associated fire alarm panel as a dependency.',{confidence:'required'}),
 });
 
 function auditFinding(rule,severity,row,details={}){
@@ -1715,11 +1718,49 @@ function auditFinding(rule,severity,row,details={}){
 }
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
 function auditDescription(row){return auditNormId(row&&row.equipmentDescription);}
-function auditIsOrganizationalHeader(row){return /^VF[_ -]?BLANK/i.test(clean(row&&row.itemMaster))||/^HEADER$/i.test(clean(row&&row.equipmentDescription));}
+function auditReferences(value){return auditSplitReferences(value).filter(reference=>!/^N\/?A$/i.test(reference));}
+function auditIsOrganizationalHeader(row){return /^HEADER$/i.test(clean(row&&row.equipmentDescription));}
 function auditIsElectrical(row){return auditNormId(row&&row.discipline)==='ELECTRICAL';}
-function auditIsControlEquipment(row){return !auditIsOrganizationalHeader(row)&&/REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL|VARIABLE FREQUENCY|\bVFD\b|MOTOR STARTER|FMS/.test(auditDescription(row));}
-function auditIsDrivenEquipment(row){return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&/AIR HANDLER|CENTRIFUGAL PUMP|VERTICALLY MOUNTED PUMP|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b/.test(auditDescription(row));}
-function auditNeedsControlLink(row){return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER/.test(auditDescription(row));}
+function auditIsRio(row){return !auditIsOrganizationalHeader(row)&&/REMOTE\s*I\/?O|\bRIO\b/.test(auditDescription(row));}
+function auditIsDriveOrStarter(row){return !auditIsOrganizationalHeader(row)&&/^VARIABLE FREQUENCY DRIVE\b|\bVFD SKID\b|\bMOTOR STARTER\b/.test(auditDescription(row));}
+function auditIsController(row){return !auditIsOrganizationalHeader(row)&&(/I\/?O CLUSTER|IO CLUSTER|REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|PROGRAMMABLE LOGIC CONTROLLER|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL/.test(auditDescription(row))||auditIsDriveOrStarter(row));}
+function auditRequiresRioController(row){return auditIsRio(row)&&!/\bPLC\b|PROGRAMMABLE LOGIC CONTROLLER/.test(auditDescription(row));}
+function auditIsControlEquipment(row){return auditIsController(row)||/FMS (?:CABINET|CONTROLLER)/.test(auditDescription(row));}
+function auditIsDrivenEquipment(row){const description=auditDescription(row);return !auditIsOrganizationalHeader(row)&&!auditIsElectrical(row)&&!/\bPLC\b|PROGRAMMABLE LOGIC CONTROLLER|CONTROL PANEL|\bVFD SKID\b|^VARIABLE FREQUENCY DRIVE\b|\bMOTOR STARTER\b/.test(description)&&/AIR HANDLER|\bMAH\b|\bAHU\b|PUMP|\bFAN\b|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b|\bBOILER\b|COOLING TOWER|\bMIXER\b/.test(description);}
+function auditIsTransformer(row){return /TRANSFORMER/.test(auditDescription(row));}
+function auditIsHeatTracePanel(row){return /HEAT TRACE PANEL|HEAT TRACING PANEL/.test(auditDescription(row));}
+function auditIsHeatTraceConnection(row){return /HEAT TRACE POWER CONNECTION/.test(auditDescription(row));}
+function auditIsFdu(row){return /FIBER OPTIC DISTRIBUTION UNIT|\bFDU\b/.test(auditDescription(row));}
+function auditIsVesda(row){return /\bVESDA\b|VERY EARLY SMOKE/.test(auditDescription(row));}
+function auditIsFireAlarmPanel(row){return /FIRE ALARM PANEL/.test(auditDescription(row));}
+function auditControlExpectation(row){
+  if(auditIsOrganizationalHeader(row)||auditIsElectrical(row))return '';
+  const description=auditDescription(row);
+  if(/VOLTAGE TRANSMITTER|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|ANALYZER TRANSMITTER[- ]MOISTURE|LEVEL TRANSMITTER - GWR/.test(description))return 'strong';
+  if(/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER|FLOW SWITCH|FLOW TRANSMITTER|TEMPERATURE TRANSMITTER|STATUS INDICATOR/.test(description))return 'advisory';
+  return '';
+}
+function auditMilestoneTokens(value){
+  const text=auditNormId(value).replace(/^L[12]-[^ ]+\s*-?\s*/,'');if(!text)return [];
+  const tokens=[];let match;
+  if((match=text.match(/\b(25|30|50|100)\s*(?:PERCENT|%)/)))tokens.push(`percent-${match[1]}`);
+  if(/END[- ]STATE|\bCAPACITY\b/.test(text))tokens.push('capacity');
+  if(/\bENABLING\b/.test(text))tokens.push('enabling');
+  if(/ENERGIZ/.test(text))tokens.push('energization');
+  if(/BLOW\s*DOWN|\bBD START\b/.test(text))tokens.push('blowdown');
+  if(/OP(?:ERATIONAL)? READY/.test(text))tokens.push('operational-ready');
+  if(/ROOMS? .*READY|ROOM READY/.test(text))tokens.push('room-ready');
+  if(/EQUIPMENT SET/.test(text))tokens.push('equipment-set');
+  if(/DATA COLLECTION/.test(text))tokens.push('data-collection');
+  return [...new Set(tokens)];
+}
+function auditMilestoneIntentKey(value){const tokens=auditMilestoneTokens(value);return tokens.length?tokens.join('|'):'unclassified';}
+function auditMilestoneConflict(l1,l2){
+  const left=auditMilestoneTokens(l1),right=auditMilestoneTokens(l2),leftPercent=left.find(token=>token.startsWith('percent-')),rightPercent=right.find(token=>token.startsWith('percent-'));
+  if(leftPercent&&rightPercent&&leftPercent!==rightPercent)return `${leftPercent.replace('percent-','')}% L1 versus ${rightPercent.replace('percent-','')}% L2`;
+  if(left.includes('capacity')&&right.includes('enabling')||left.includes('enabling')&&right.includes('capacity'))return 'capacity versus enabling';
+  return '';
+}
 function auditReachableFrom(seeds,edges){
   const reached=new Set(seeds),queue=[...seeds];
   for(let index=0;index<queue.length;index++)for(const next of edges.get(queue[index])||[])if(!reached.has(next)){reached.add(next);queue.push(next);}
@@ -1748,23 +1789,23 @@ function auditCyclePaths(nodes,edges){
 function runSsmAudit(snapshot){
   const rows=snapshot&&snapshot.rows||[],findings=[];let checks=0;
   const add=(rule,severity,row,details)=>findings.push(auditFinding(rule,severity,row,details));
-  const missingHeaderEntries=snapshot&&snapshot.missingHeaderEntries||((snapshot&&snapshot.missingHeaders)||[]).map(header=>({header,sheet:'',headerRow:0}));
-  for(const entry of missingHeaderEntries){checks++;add(SSM_AUDIT_RULES.missingHeader,'blocker',{_source:{sheet:entry.sheet,row:entry.headerRow}},{field:entry.header,why:`${entry.header} is missing from this registry.`,expected:'Required Cx upload column present',recommendation:'Add or correctly map the missing column before relying on this audit.'});}
   const rowsById=new Map(),duplicates=new Map();
   for(const row of rows){const key=auditNormId(row.equipmentId);if(!key)continue;if(rowsById.has(key)){const list=duplicates.get(key)||[rowsById.get(key)];list.push(row);duplicates.set(key,list);}else rowsById.set(key,row);}
   for(const list of duplicates.values())for(const row of list){checks++;add(SSM_AUDIT_RULES.duplicateId,'blocker',row,{field:'Equipment ID',why:'Equipment IDs must be unique in one SSM register.',actual:row.equipmentId,expected:'One row per Equipment ID',recommendation:'Merge duplicate records or assign the correct unique equipment tag.'});}
   const children=new Map(),parentEdges=new Map(),precedenceEdges=new Map(),generatedHeaders=new Map(),nodes=new Set(rowsById.keys());
   const addEdge=(map,from,to)=>{if(!from||!to)return;const set=map.get(from)||new Set();set.add(to);map.set(from,set);};
-  const upnGroups=new Map(),milestoneGroups=new Map();
+  const upnGroups=new Map(),milestoneGroups=new Map(),projectUsesMilestones=rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
-    for(const column of EXTO_REV21_COLUMNS.filter(column=>column.gating)){checks++;if(!clean(row[column.field]))add(SSM_AUDIT_RULES.missingGating,'blocker',row,{field:column.header,why:`${column.header} is required for Cx upload.`,expected:'Required value populated',recommendation:`Populate ${column.header} before upload.`});}
-    for(const issue of extoRev21ValidatePartial(row)){checks++;const field=EXTO_REV21_COLUMNS.find(column=>column.field===issue.field)?.header||issue.field;add(SSM_AUDIT_RULES.invalidDropdown,issue.field==='systemName'||issue.field==='upn'||issue.field==='discipline'?'blocker':'error',row,{field,why:`${field} is not allowed by Cx upload validation.`,actual:issue.value,expected:'An allowed Cx upload value',recommendation:'Choose the allowed value that matches the project source data.'});}
     if(/^I\s*(?:&|AND)\s*C$/i.test(clean(row.discipline))){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'I&C does not match the allowed Cx discipline mapping.',actual:`${row.discipline}; tag UPN candidates: ${candidates.join(', ')||'none'}`,expected:'FACILITIES MONITORING SYSTEM with one tag-derived UPN',recommendation:candidates.length===1?`Use UPN ${candidates[0]} and its allowed System Name.`:'Resolve the tag-derived UPN before assigning Discipline and System Name.'});}
-    if(row.systemName&&row.upn){checks++;const prefix=extoRev21Norm(row.systemName).split(' ')[0],systemUpn=extoRev21Canonical('upn',prefix);if(systemUpn&&extoRev21Norm(systemUpn)!==extoRev21Norm(row.upn))add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',why:'System Name does not match the row UPN.',actual:`UPN ${row.upn}; System ${row.systemName}`,expected:`The allowed System Name for UPN ${row.upn}`,recommendation:'Correct the UPN or select its allowed System Name.'});}
-    if(row.milestone&&!row.milestoneParent||!row.milestone&&row.milestoneParent){checks++;add(SSM_AUDIT_RULES.milestonePair,'warning',row,{field:'Milestone',why:'L1 Milestone Parent and L2 Milestone should be assigned as a pair.',actual:`L2: ${row.milestone||'blank'}; L1: ${row.milestoneParent||'blank'}`,expected:'Both populated or both blank under the project milestone policy',recommendation:'Confirm the project milestone program and complete the missing side of the pair.'});}
-    if(row.milestone){const parents=milestoneGroups.get(auditNormId(row.milestone))||new Map();parents.set(auditNormId(row.milestoneParent),(parents.get(auditNormId(row.milestoneParent))||0)+1);milestoneGroups.set(auditNormId(row.milestone),parents);}
-    if(/^CA_/i.test(clean(row.itemMaster))){checks++;add(SSM_AUDIT_RULES.legacyItemMaster,'warning',row,{field:'Item Master Unique Identifier',why:'Item Master does not use the current allowed vocabulary.',actual:row.itemMaster,expected:'Current VF Item Master',recommendation:'Select the current allowed Item Master before upload.'});}
+    if(row.systemName&&row.upn){checks++;const match=extoRev21Norm(row.systemName).match(/^([0-9]+)(?:\s|$)/),systemUpn=match&&match[1];if(systemUpn&&extoRev21Norm(systemUpn)!==extoRev21Norm(row.upn))add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',why:'System Name identifies a different UPN than the row assignment.',actual:`UPN ${row.upn}; System ${row.systemName}`,expected:`System Name beginning with UPN ${row.upn}`,recommendation:'Correct the UPN or select the System Name assigned to that UPN.'});}
+    if(projectUsesMilestones){checks++;if(!clean(row.milestone)||!clean(row.milestoneParent))add(SSM_AUDIT_RULES.milestonePair,'error',row,{field:'Milestones',why:'This project uses milestones, but this equipment does not have a complete L1/L2 pair.',actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone populated',recommendation:'Assign the equipment to its governing L1 milestone and corresponding L2 milestone.'});}
+    if(row.milestone&&row.milestoneParent){
+      const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;
+      if(conflict)add(SSM_AUDIT_RULES.milestoneIntent,'warning',row,{field:'Milestones',why:`The milestone pair has conflicting intent: ${conflict}.`,actual:`L1: ${row.milestoneParent}; L2: ${row.milestone}`,expected:'L1 and L2 milestones with compatible phase and capacity intent',recommendation:'Confirm the equipment belongs to the same startup phase represented by both milestones.'});
+      const key=auditNormId(row.milestone),entry=milestoneGroups.get(key)||{row,parents:new Map()};
+      const intent=auditMilestoneIntentKey(row.milestoneParent),values=entry.parents.get(intent)||new Set();values.add(clean(row.milestoneParent));entry.parents.set(intent,values);milestoneGroups.set(key,entry);
+    }
     const upn=auditNormId(row.upn);if(upn){const group=upnGroups.get(upn)||{systems:new Set(),disciplines:new Set(),wbs:new Set(),rows:[]};if(row.systemName)group.systems.add(auditNormId(row.systemName));if(row.discipline)group.disciplines.add(auditNormId(row.discipline));if(row.wbs)group.wbs.add(auditNormId(row.wbs));group.rows.push(row);upnGroups.set(upn,group);}
     checks++;if(!parentId)add(SSM_AUDIT_RULES.blankParent,'blocker',row,{field:'Closest Parent',why:'This equipment has no structural parent or System Name root.',expected:'Equipment parent or the row System Name',recommendation:'Assign the correct same-UPN parent; use System Name for a root.'});
     else if(parentId===id)add(SSM_AUDIT_RULES.selfParent,'blocker',row,{field:'Closest Parent',why:'Equipment cannot be its own parent.',actual:row.closestParent,expected:'A different parent tag or System Name',recommendation:'Select the actual parent and re-check the branch.'});
@@ -1783,33 +1824,41 @@ function runSsmAudit(snapshot){
         }
       }else if(status!=='EXISTING')add(SSM_AUDIT_RULES.unresolvedParent,'blocker',row,{field:'Closest Parent',why:'Closest Parent cannot be resolved for Cx upload.',actual:row.closestParent,expected:'Resolvable equipment, New header, or Existing external parent',recommendation:'Correct the parent reference and Closest Parent Status.'});
     }
-    const dependencies=auditSplitReferences(row.dependencies),seenDeps=new Set();
+    const dependencies=auditReferences(row.dependencies),seenDeps=new Set();
     for(const dependency of dependencies){const depId=auditNormId(dependency);checks++;
-      if(/^N\/?A$/i.test(dependency))add(SSM_AUDIT_RULES.literalNa,'blocker',row,{field:'Dependencies',why:'Cx upload validation expects a blank cell when no dependency exists.',actual:dependency,expected:'Blank dependency cell',recommendation:'Remove the literal N/A value.'});
-      else if(depId===id)add(SSM_AUDIT_RULES.selfDependency,'error',row,{field:'Dependencies',why:'Equipment cannot depend on itself.',actual:dependency,expected:'A different predecessor tag',recommendation:'Remove the self-reference.'});
+      if(depId===id)add(SSM_AUDIT_RULES.selfDependency,'error',row,{field:'Dependencies',why:'Equipment cannot depend on itself.',actual:dependency,expected:'A different predecessor tag',recommendation:'Remove the self-reference.'});
       if(seenDeps.has(depId))add(SSM_AUDIT_RULES.duplicateDependency,'warning',row,{field:'Dependencies',why:'The same dependency is listed more than once.',actual:dependency,expected:'One reference per dependency',recommendation:'Remove the duplicate reference.'});seenDeps.add(depId);
-      if(depId&&depId===parentId)add(SSM_AUDIT_RULES.parentAsDependency,'error',row,{field:'Dependencies',why:'A child does not also list its structural parent as a dependency.',actual:dependency,expected:'Parent only in Closest Parent',recommendation:'Remove the duplicate dependency unless the hierarchy itself is being corrected.'});
-      if(depId&&!rowsById.has(depId)&&!clean(row.dependencyProject)&&!/^N\/?A$/i.test(dependency))add(SSM_AUDIT_RULES.unresolvedDependency,'error',row,{field:'Dependencies',why:'The dependency tag is absent and no external Dependency Project is supplied.',actual:dependency,expected:'Resolvable tag or external Dependency Project',recommendation:'Correct the tag or identify the project containing it.'});
+      if(depId&&!rowsById.has(depId)&&!clean(row.dependencyProject))add(SSM_AUDIT_RULES.unresolvedDependency,'error',row,{field:'Dependencies',why:'The dependency tag is absent and no external Dependency Project is supplied.',actual:dependency,expected:'Resolvable tag or external Dependency Project',recommendation:'Correct the tag or identify the project containing it.'});
       if(rowsById.has(depId)&&depId!==id&&depId!==parentId)addEdge(precedenceEdges,depId,id);
     }
   }
   for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`A proposed new header is referenced by ${entry.count.toLocaleString()} equipment row${entry.count===1?'':'s'}.`,actual:entry.parent,expected:'An intentional upload header or the row System Name',recommendation:'Confirm this is one intentional organizational header; otherwise add or correct the missing equipment record.'});}
   for(const [upn,group] of upnGroups){checks++;if(group.systems.size>1||group.disciplines.size>1)add(SSM_AUDIT_RULES.upnInconsistent,'error',group.rows[0],{field:'UPN',why:'One UPN maps to multiple System Names or Disciplines in this registry.',actual:`Systems: ${[...group.systems].join('; ')}; Disciplines: ${[...group.disciplines].join('; ')}`,expected:'One approved System Name and Discipline per UPN',recommendation:`Review all rows assigned to UPN ${upn}.`});}
-  for(const [milestone,parents] of milestoneGroups){checks++;if(parents.size>1)add(SSM_AUDIT_RULES.milestoneInconsistent,'error',rows.find(row=>auditNormId(row.milestone)===milestone),{field:'Milestone Parent',why:'The same L2 milestone maps to multiple L1 parents.',actual:[...parents.keys()].join('; '),expected:'One L1 parent per L2 milestone',recommendation:'Correct the inconsistent milestone assignment.'});}
+  for(const entry of milestoneGroups.values()){
+    const meaningful=[...entry.parents].filter(([intent])=>intent!=='unclassified');checks++;
+    if(meaningful.length>1)add(SSM_AUDIT_RULES.milestoneInconsistent,'error',entry.row,{field:'Milestone Parent',why:'The same L2 milestone maps to conflicting L1 milestone meanings.',actual:meaningful.map(([intent])=>intent).join('; '),expected:'One consistent L1 phase and readiness intent per L2 milestone',recommendation:'Review the affected milestone assignments by meaning rather than milestone number.'});
+  }
   for(const cycle of auditCyclePaths(nodes,parentEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.parentCycle,'blocker',row,{field:'Closest Parent',why:'The Closest Parent chain contains a cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic parent hierarchy',recommendation:'Break the cycle by correcting at least one Closest Parent.'});}
   for(const cycle of auditCyclePaths(nodes,precedenceEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.precedenceCycle,'blocker',row,{field:'Dependencies',why:'Parent and dependency relationships create a startup sequence cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic commissioning sequence',recommendation:'Review the involved parent/dependency links and break the circular gating logic.'});}
-  for(const row of rows){const headerLike=/^VF[_ -]?BLANK/i.test(clean(row.itemMaster))&&/^HEADER$/i.test(clean(row.equipmentDescription));if(!headerLike)continue;const id=auditNormId(row.equipmentId),childCount=(children.get(id)||[]).length;
-    if(auditSplitReferences(row.dependencies).length){checks++;add(SSM_AUDIT_RULES.headerDependency,'warning',row,{field:'Dependencies',why:'An organizational header normally groups children and should not carry unexplained dependencies.',actual:row.dependencies,expected:'Blank unless explicitly approved',recommendation:'Confirm the header is intentional and document why it gates other equipment.'});}
+  for(const row of rows){if(!auditIsOrganizationalHeader(row))continue;const id=auditNormId(row.equipmentId),childCount=(children.get(id)||[]).length;
+    if(auditReferences(row.dependencies).length){checks++;add(SSM_AUDIT_RULES.headerDependency,'warning',row,{field:'Dependencies',why:'An organizational header normally groups children and should not carry unexplained dependencies.',actual:row.dependencies,expected:'Blank unless explicitly approved',recommendation:'Confirm the header is intentional and document why it gates other equipment.'});}
     if(!childCount){checks++;add(SSM_AUDIT_RULES.unusedHeader,'warning',row,{field:'Equipment ID',why:'This header-like row has no children.',actual:row.equipmentId,expected:'At least one grouped child',recommendation:'Remove the unused header or attach the intended children.'});}
   }
   const electricalSeeds=new Set(rows.filter(auditIsElectrical).map(row=>auditNormId(row.equipmentId)).filter(Boolean));
   const electricalPath=auditReachableFrom(electricalSeeds,precedenceEdges);
   for(const row of rows){
     const id=auditNormId(row.equipmentId);if(!id)continue;
-    const parent=rowsById.get(auditNormId(row.closestParent)),dependencies=auditSplitReferences(row.dependencies).map(value=>rowsById.get(auditNormId(value))).filter(Boolean);
-    if(auditNeedsControlLink(row)){checks++;if(![parent,...dependencies].some(auditIsControlEquipment))add(SSM_AUDIT_RULES.controlLink,'info',row,{field:'Dependencies',why:'No control-system link was found for this control device.',actual:row.dependencies||'Blank',expected:'A control panel, RIO, PLC, VFD, or motor-starter link',recommendation:'Confirm the control source and add it as a parent or dependency when required.'});}
+    const parent=rowsById.get(auditNormId(row.closestParent)),dependencies=auditReferences(row.dependencies).map(value=>rowsById.get(auditNormId(value))).filter(Boolean),related=[parent,...dependencies].filter(Boolean);
+    const controlExpectation=auditControlExpectation(row);
+    if(controlExpectation){checks++;if(!related.some(auditIsController))add(SSM_AUDIT_RULES.controlLink,controlExpectation==='strong'?'warning':'info',row,{field:'Dependencies',why:'This control device has no traceable RIO, PLC, VFD, or control-panel source.',actual:row.dependencies||'Blank',expected:'A control source linked as a parent or dependency',recommendation:'Confirm the control source and add the missing relationship.'});}
     if(auditIsDrivenEquipment(row)){checks++;if(!electricalPath.has(id))add(SSM_AUDIT_RULES.drivenElectricalPath,'warning',row,{field:'Dependencies',why:'No electrical enabling path was found for this driven equipment.',actual:row.dependencies||'Blank',expected:'A commissioning path to its electrical supply equipment',recommendation:'Trace the supplying panel, starter, or VFD and add the missing relationship.'});}
-    if(!auditIsElectrical(row)&&auditIsControlEquipment(row)){checks++;if(!electricalPath.has(id))add(SSM_AUDIT_RULES.controlElectricalPath,'info',row,{field:'Dependencies',why:'No electrical supply path was found for this control equipment.',actual:row.dependencies||'Blank',expected:'A commissioning path to its electrical supply equipment',recommendation:'Confirm the supplying panel or circuit and add the missing relationship.'});}
+    if(!auditIsElectrical(row)&&auditIsControlEquipment(row)){checks++;if(!electricalPath.has(id))add(SSM_AUDIT_RULES.controlElectricalPath,auditIsRio(row)?'warning':'info',row,{field:'Dependencies',why:'This control equipment has no traceable electrical supply.',actual:row.dependencies||'Blank',expected:'A commissioning path to its supplying panel, circuit, or transformer',recommendation:'Confirm the supplying electrical equipment and add the missing relationship.'});}
+    if(auditRequiresRioController(row)){checks++;if(!related.some(auditIsController))add(SSM_AUDIT_RULES.rioControlPath,'warning',row,{field:'Dependencies',why:'This RIO has no traceable controller or upstream I/O relationship.',actual:row.dependencies||'Blank',expected:'I/O cluster, PLC, upstream RIO, or equivalent controller',recommendation:'Add the controlling or upstream I/O relationship.'});}
+    if(auditIsDriveOrStarter(row)){checks++;if(!parent||!auditIsDrivenEquipment(parent))add(SSM_AUDIT_RULES.driveParent,'warning',row,{field:'Closest Parent',why:'This drive or starter is not grouped with driven equipment.',actual:parent?`${row.closestParent} (${parent.equipmentDescription||'description unavailable'})`:(row.closestParent||'Blank'),expected:'Pump, fan, air handler, chiller, compressor, scrubber, boiler, cooling tower, or mixer',recommendation:'Move the drive beneath the equipment it operates, then preserve its electrical feed as a dependency.'});}
+    if(auditIsHeatTracePanel(row)){checks++;if(!parent||!auditIsTransformer(parent))add(SSM_AUDIT_RULES.heatTraceChain,'warning',row,{field:'Closest Parent',why:'This heat-trace panel does not follow a transformer in the structural chain.',actual:parent?`${row.closestParent} (${parent.equipmentDescription||'description unavailable'})`:(row.closestParent||'Blank'),expected:'Supplying transformer',recommendation:'Confirm and assign the transformer that supplies this panel.'});}
+    if(auditIsHeatTraceConnection(row)){checks++;if(!parent||(!auditIsHeatTracePanel(parent)&&!auditIsHeatTraceConnection(parent)))add(SSM_AUDIT_RULES.heatTraceChain,'warning',row,{field:'Closest Parent',why:'This heat-trace connection box is outside its panel or connection-box chain.',actual:parent?`${row.closestParent} (${parent.equipmentDescription||'description unavailable'})`:(row.closestParent||'Blank'),expected:'Heat-trace panel or upstream heat-trace connection box',recommendation:'Attach the connection box to the correct heat-trace branch.'});}
+    if(auditIsFdu(row)){checks++;if(!dependencies.length)add(SSM_AUDIT_RULES.fduDependency,'warning',row,{field:'Dependencies',why:'This fiber distribution unit does not identify the equipment or system it enables.',actual:'Blank',expected:'At least one served-equipment dependency',recommendation:'Add the supported equipment or system as a dependency.'});}
+    if(auditIsVesda(row)){checks++;if(!dependencies.some(auditIsFireAlarmPanel))add(SSM_AUDIT_RULES.vesdaFireAlarm,'error',row,{field:'Dependencies',why:'This VESDA system does not identify its associated fire alarm panel.',actual:row.dependencies||'Blank',expected:'Associated fire alarm panel dependency',recommendation:'Add the fire alarm panel that handles the VESDA alarms and actions.'});}
   }
   findings.sort((a,b)=>(SSM_AUDIT_SEVERITY_RANK[a.severity]-SSM_AUDIT_SEVERITY_RANK[b.severity])||natCmp(a.category,b.category)||natCmp(a.equipmentId,b.equipmentId)||a.row-b.row||natCmp(a.rule.id,b.rule.id));
   const severity=Object.fromEntries(SSM_AUDIT_SEVERITIES.map(level=>[level,findings.filter(finding=>finding.severity===level).length]));
@@ -1917,24 +1966,24 @@ function exportSsmAuditXlsx(){
   const summarySheet=XLSX.utils.aoa_to_sheet(summaryRows);
   summarySheet['!cols']=[{wch:24},{wch:72}];styleHeaderRow(summarySheet);addSheet(workbook,summarySheet,'Audit Summary');
 
-  const findingHeaders=['Severity','Category','Rule Source','Rule','Rule ID','Equipment ID','Sheet','Row','Field','Why flagged','Found','Expected','Recommended correction','Fingerprint'];
+  const findingHeaders=['Severity','Confidence','Category','Rule Source','Rule','Rule ID','Equipment ID','Sheet','Row','Field','Why flagged','Found','Expected','Recommended correction','Fingerprint'];
   const findingRows=result.findings.map(finding=>[
-    finding.severity.toUpperCase(),finding.category,finding.rule.source,finding.rule.title,finding.rule.id,finding.equipmentId,finding.sheet,finding.row,finding.field,finding.why,
+    finding.severity.toUpperCase(),finding.rule.confidence,finding.category,finding.rule.source,finding.rule.title,finding.rule.id,finding.equipmentId,finding.sheet,finding.row,finding.field,finding.why,
     printable(finding.actual),printable(finding.expected),finding.recommendation,finding.fingerprint,
   ]);
   const findingsSheet=XLSX.utils.aoa_to_sheet([findingHeaders,...findingRows]);
-  findingsSheet['!cols']=[{wch:11},{wch:18},{wch:20},{wch:32},{wch:34},{wch:28},{wch:22},{wch:9},{wch:25},{wch:58},{wch:45},{wch:45},{wch:58},{wch:12}];
-  styleHeaderRow(findingsSheet);findingsSheet['!autofilter']={ref:`A1:N${Math.max(1,findingRows.length+1)}`};addSheet(workbook,findingsSheet,'Findings');
+  findingsSheet['!cols']=[{wch:11},{wch:18},{wch:18},{wch:20},{wch:32},{wch:34},{wch:28},{wch:22},{wch:9},{wch:25},{wch:58},{wch:45},{wch:45},{wch:58},{wch:12}];
+  styleHeaderRow(findingsSheet);findingsSheet['!autofilter']={ref:`A1:O${Math.max(1,findingRows.length+1)}`};addSheet(workbook,findingsSheet,'Findings');
 
-  const byRule=new Map();
+  const byRule=new Map(Object.values(SSM_AUDIT_RULES).map(rule=>[rule.id,{rule,blocker:0,error:0,warning:0,info:0,total:0}]));
   for(const finding of result.findings){
     const entry=byRule.get(finding.rule.id)||{rule:finding.rule,blocker:0,error:0,warning:0,info:0,total:0};
     entry[finding.severity]++;entry.total++;byRule.set(finding.rule.id,entry);
   }
-  const ruleRows=[['Rule Source','Rule','Rule Statement','Rule ID','Category','Blockers','Errors','Warnings','Advisories','Total'],
-    ...[...byRule.values()].sort((a,b)=>b.total-a.total||a.rule.id.localeCompare(b.rule.id)).map(entry=>[entry.rule.source,entry.rule.title,entry.rule.statement,entry.rule.id,entry.rule.category,entry.blocker,entry.error,entry.warning,entry.info,entry.total])];
-  const rulesSheet=XLSX.utils.aoa_to_sheet(ruleRows);rulesSheet['!cols']=[{wch:20},{wch:32},{wch:62},{wch:34},{wch:20},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11}];
-  styleHeaderRow(rulesSheet);rulesSheet['!autofilter']={ref:`A1:J${Math.max(1,ruleRows.length)}`};addSheet(workbook,rulesSheet,'Rule Summary');
+  const ruleRows=[['Rule Source','Rule','Status','Confidence','Rule Statement','Rule ID','Category','Blockers','Errors','Warnings','Advisories','Total'],
+    ...[...byRule.values()].sort((a,b)=>Number(b.rule.enabled)-Number(a.rule.enabled)||b.total-a.total||a.rule.id.localeCompare(b.rule.id)).map(entry=>[entry.rule.source,entry.rule.title,entry.rule.enabled?'Enabled':'Disabled',entry.rule.confidence,entry.rule.statement+(entry.rule.disabledReason?` ${entry.rule.disabledReason}`:''),entry.rule.id,entry.rule.category,entry.blocker,entry.error,entry.warning,entry.info,entry.total])];
+  const rulesSheet=XLSX.utils.aoa_to_sheet(ruleRows);rulesSheet['!cols']=[{wch:20},{wch:32},{wch:12},{wch:18},{wch:70},{wch:40},{wch:20},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11}];
+  styleHeaderRow(rulesSheet);rulesSheet['!autofilter']={ref:`A1:L${Math.max(1,ruleRows.length)}`};addSheet(workbook,rulesSheet,'Rule Summary');
 
   const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   downloadBlob(`${base}-Audit.xlsx`,workbookBlob(workbook));toast('SSM Audit report exported');
@@ -2012,7 +2061,7 @@ function initUpdate(){
 
 /* src/ui/audit.js */
 const AUDIT_ROW_HEIGHT=48,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
-const CATEGORY_LABELS={upload:'Upload Readiness',structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
+const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const SEVERITY_LABELS={blocker:'Blocker',error:'Error',warning:'Warning',info:'Advisory'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
 let auditOutsideHandler=null,auditEscapeHandler=null;
@@ -2027,7 +2076,7 @@ function importStatus(){
 function renderUpload(navigate){
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='upload';
   $('#view').innerHTML=`<section class="upload-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Cx Upload Validation + SSM Rules</span><h2>Audit an existing SSM</h2><p>Check a completed Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
+    <div class="screen-heading"><div><span class="eyebrow">Registry Integrity + SSM Rules</span><h2>Audit an existing SSM</h2><p>Check a completed Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
     <div class="upload-grid">
       <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a Cx Registry workbook">
         <span class="drop-icon">${ic('file-spreadsheet')}</span>
@@ -2045,7 +2094,7 @@ function renderUpload(navigate){
     <div class="coverage-band">
       <div><span>01</span><b>Hierarchy</b><p>Parents, roots, cycles, and discipline or UPN crossings.</p></div>
       <div><span>02</span><b>Dependencies</b><p>Unresolved, repeated, self-referencing, and circular predecessors.</p></div>
-      <div><span>03</span><b>Cx upload readiness</b><p>Allowed values, required fields, milestones, Item Masters, and headers.</p></div>
+      <div><span>03</span><b>Commissioning logic</b><p>Control sources, power paths, equipment roles, milestones, and headers.</p></div>
     </div>
   </section>`;
   wireUpload(navigate);
@@ -2138,7 +2187,7 @@ function renderRows(){
 }
 function openFinding(id,opener){
   const finding=S.session.result.findings.find(item=>item.id===id);if(!finding)return;
-  S.session.selectedFindingId=id;S.session.opener=opener;$('#drawerTitle').textContent='Audit finding';$('#drawerBody').innerHTML=`<div class="audit-drawer"><div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span><code>${esc(finding.rule.id)}</code></div><h3>${esc(finding.why)}</h3>${finding.equipmentId?`<div class="audit-subject">${copyTagHtml(finding.equipmentId)}</div>`:''}<div class="audit-detail"><span>Found</span><p>${esc(typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual))||'Blank'}</p></div><div class="audit-detail expected"><span>Expected</span><p>${esc(typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected))}</p></div><div class="audit-detail action"><span>Recommended correction</span><p>${esc(finding.recommendation)}</p></div><dl class="audit-evidence"><dt>Rule source</dt><dd>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</dd><dt>Rule</dt><dd><b>${esc(finding.rule.title)}</b><br>${esc(finding.rule.statement)}</dd><dt>Evidence</dt><dd>${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'&mdash;'}${finding.field?' &middot; '+esc(finding.field):''}</dd><dt>Fingerprint</dt><dd><code>${esc(finding.fingerprint)}</code></dd></dl></div>`;
+  S.session.selectedFindingId=id;S.session.opener=opener;$('#drawerTitle').textContent='Audit finding';$('#drawerBody').innerHTML=`<div class="audit-drawer"><div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span><code>${esc(finding.rule.id)}</code></div><h3>${esc(finding.why)}</h3>${finding.equipmentId?`<div class="audit-subject">${copyTagHtml(finding.equipmentId)}</div>`:''}<div class="audit-detail"><span>Found</span><p>${esc(typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual))||'Blank'}</p></div><div class="audit-detail expected"><span>Expected</span><p>${esc(typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected))}</p></div><div class="audit-detail action"><span>Recommended correction</span><p>${esc(finding.recommendation)}</p></div><dl class="audit-evidence"><dt>Rule source</dt><dd>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</dd><dt>Confidence</dt><dd>${esc(finding.rule.confidence)}</dd><dt>Rule</dt><dd><b>${esc(finding.rule.title)}</b><br>${esc(finding.rule.statement)}</dd><dt>Evidence</dt><dd>${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'&mdash;'}${finding.field?' &middot; '+esc(finding.field):''}</dd><dt>Fingerprint</dt><dd><code>${esc(finding.fingerprint)}</code></dd></dl></div>`;
   wireCopyTags($('#drawerBody'));$('#drawerBack').classList.add('show');$('#drawer').focus();
 }
 function closeDrawer(){
@@ -2164,10 +2213,10 @@ function wireAuditResult(navigate){
 }
 
 /* src/boot.js */
-const ruleGuide=()=>SSM_AUDIT_SOURCES.map(source=>`<h4>${esc(source.label)}</h4><ul>${Object.values(SSM_AUDIT_RULES).filter(rule=>rule.source===source.id).map(rule=>`<li><b>${esc(rule.title)}.</b> ${esc(rule.statement)}</li>`).join('')}</ul>`).join('');
+const ruleGuide=()=>SSM_AUDIT_SOURCES.map(source=>`<h4>${esc(source.label)}</h4><ul>${Object.values(SSM_AUDIT_RULES).filter(rule=>rule.source===source.id).map(rule=>`<li class="${rule.enabled?'':'rule-disabled'}"><b>${esc(rule.title)}.</b> ${esc(rule.statement)} <span class="rule-confidence">${rule.enabled?esc(rule.confidence):'Disabled'}</span>${rule.disabledReason?`<small>${esc(rule.disabledReason)}</small>`:''}</li>`).join('')}</ul>`).join('');
 const GUIDE_SECTIONS=[
   {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
-  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks objective Cx upload requirements, SSM SOP rules, and repeatable commissioning relationships.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and allowed values.</li><li>Dependencies, electrical and control paths, milestones, Item Masters, and organizational headers.</li></ol>'},
+  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks an existing registry for internal integrity, SSM SOP requirements, and confidence-rated commissioning relationships.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and milestone completeness.</li><li>Dependencies, electrical and control paths, equipment-role patterns, and organizational headers.</li></ol><div class="guide-note">'+ic('info')+'Current upload-template vocabulary is checked before export in SSManagement, not against an already-uploaded registry.</div>'},
   {id:'rules',label:'Rule catalog',icon:'check-check',title:'Rules used by the audit',body:ruleGuide()},
   {id:'findings',label:'Understanding findings',icon:'triangle-alert',title:'Read each finding as evidence',body:'<p>Every finding identifies the rule, source row, observed value, expected result, recommended correction, and a stable fingerprint. Use filters to isolate one severity or category, then open a row for the complete explanation.</p>'},
   {id:'report',label:'Exporting results',icon:'file-down',title:'Create a resolution report',body:'<p>Export report creates an Excel workbook containing the audit summary, every finding, and a rule-level count. The report is generated locally and can be used to assign and track corrections.</p>'},
