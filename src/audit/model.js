@@ -55,7 +55,7 @@ export async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,rep
     if(report)report((index+1)/Math.max(1,names.length),`Scanned ${index+1} of ${names.length} tabs`);
     if(checkpoint)await checkpoint();
   }
-  if(!snapshots.length)throw new Error('No Exto registry tab with Equipment ID, Closest Parent, UPN, and Discipline headers was found');
+  if(!snapshots.length)throw new Error('No Cx Registry tab with Equipment ID, Closest Parent, UPN, and Discipline headers was found');
   const rows=snapshots.flatMap(snapshot=>snapshot.rows),missingHeaders=[...new Set(snapshots.flatMap(snapshot=>snapshot.missingHeaders))];
   const missingHeaderEntries=snapshots.flatMap(snapshot=>snapshot.missingHeaderEntries);
   return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(fileName),sheets:Object.freeze(snapshots.map(snapshot=>snapshot.source.sheet))}),

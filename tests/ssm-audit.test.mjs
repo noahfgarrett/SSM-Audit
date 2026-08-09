@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
-import { auditCyclePaths, runSsmAudit } from '../src/audit/engine.js'
+import { auditCyclePaths, runSsmAudit, SSM_AUDIT_RULES, SSM_AUDIT_SOURCES } from '../src/audit/engine.js'
 
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
 const index = Object.fromEntries(EXTO_REV21_COLUMNS.map(column => [column.field, column.index]))
@@ -90,6 +90,36 @@ test('repeated New-header references collapse to one actionable finding', () => 
   const findings = runSsmAudit(snapshot).findings.filter(finding => finding.rule.id === 'parent.generated-header-review')
   assert.equal(findings.length, 1)
   assert.match(findings[0].why, /2 equipment rows/)
+})
+
+test('every audit rule has a neutral source, title, and concise statement', () => {
+  const sourceIds = new Set(SSM_AUDIT_SOURCES.map(source => source.id))
+  assert.deepEqual([...sourceIds], ['upload', 'sop', 'logic'])
+  for (const rule of Object.values(SSM_AUDIT_RULES)) {
+    assert.ok(sourceIds.has(rule.source), rule.id)
+    assert.ok(rule.title && rule.statement, rule.id)
+    assert.doesNotMatch(`${rule.title} ${rule.statement} ${rule.standardRef}`, /Rev21|golden SSM|Exto[- ]Cx/i)
+  }
+})
+
+test('commissioning logic distinguishes healthy paths from missing links', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'BLD-PNL-01', closestParent: '602 Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602 Medium Voltage', equipmentDescription: 'Electrical Panel' }),
+    row({ equipmentId: 'BLD-VFD-01', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', dependencies: 'BLD-PNL-01', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Variable Frequency Drive' }),
+    row({ equipmentId: 'BLD-PUMP-OK', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', dependencies: 'BLD-VFD-01', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Centrifugal Pump' }),
+    row({ equipmentId: 'BLD-PUMP-MISSING', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Centrifugal Pump' }),
+    row({ equipmentId: 'BLD-RIO-OK', closestParent: '650 Facility Management System', closestParentStatus: 'NEW', dependencies: 'BLD-PNL-01', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel' }),
+    row({ equipmentId: 'BLD-RIO-MISSING', closestParent: '650 Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel' }),
+    row({ equipmentId: 'BLD-CS-OK', closestParent: 'BLD-PUMP-OK', dependencies: 'BLD-RIO-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
+    row({ equipmentId: 'BLD-CS-MISSING', closestParent: 'BLD-PUMP-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  const byRule = ruleId => result.findings.filter(finding => finding.rule.id === ruleId).map(finding => finding.equipmentId)
+  assert.deepEqual(byRule('logic.driven-electrical-path-missing'), ['BLD-PUMP-MISSING'])
+  assert.deepEqual(byRule('logic.control-electrical-path-missing'), ['BLD-RIO-MISSING'])
+  assert.deepEqual(byRule('logic.control-link-missing'), ['BLD-CS-MISSING'])
+  assert.equal(result.summary.source.logic, 3)
 })
 
 test('the audit path is isolated from profile learning and hierarchy imports', () => {

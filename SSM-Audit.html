@@ -1242,7 +1242,7 @@ body.audit-fullscreen{overflow:hidden}
 .audit-cat.active{color:var(--accent-700)}
 .audit-cat.active::after{content:"";position:absolute;left:8px;right:8px;bottom:0;height:2px;background:var(--accent)}
 .audit-cat.active b{background:var(--accent-100);color:var(--accent-700)}
-.audit-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) 150px 175px 150px auto;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.audit-toolbar{position:relative;display:grid;grid-template-columns:minmax(260px,1fr) auto 205px auto;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--border);background:var(--surface-2)}
 .audit-toolbar .searchbox{display:flex;align-items:center;gap:8px;height:38px;min-width:0;padding:0 10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface)}
 .audit-toolbar .searchbox:focus-within{border-color:var(--accent-400);box-shadow:var(--ring)}
 .audit-toolbar .searchbox .ic{width:15px;height:15px;flex:0 0 auto;color:var(--ink-3)}
@@ -1250,6 +1250,17 @@ body.audit-fullscreen{overflow:hidden}
 .audit-toolbar select{height:38px;min-width:0;padding:0 28px 0 9px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);color:var(--ink-2);font:12px var(--sans)}
 .audit-toolbar select:focus-visible{outline:0;border-color:var(--accent-400);box-shadow:var(--ring)}
 .audit-count{color:var(--ink-3);font:11px var(--mono);white-space:nowrap;text-align:right}
+.audit-filter-wrap{position:relative}
+.audit-filter-button{height:38px;min-width:102px;justify-content:center;background:var(--surface)}
+.audit-filter-button b{display:none;min-width:18px;height:18px;padding:0 5px;border-radius:5px;background:var(--accent);color:#fff;font:700 10px/18px var(--mono);text-align:center}
+.audit-filter-button.active{border-color:var(--accent-400);color:var(--accent-700)}.audit-filter-button.active b{display:block}
+.audit-filter-menu{position:absolute;z-index:12;top:44px;right:0;width:370px;max-width:calc(100vw - 24px);border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);box-shadow:var(--shadow-lg);overflow:hidden}
+.audit-filter-menu[hidden]{display:none}.audit-filter-head{display:flex;align-items:center;gap:12px;padding:12px 13px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.audit-filter-head>div{min-width:0;flex:1}.audit-filter-head b,.audit-filter-head span{display:block}.audit-filter-head b{font-size:12.5px}.audit-filter-head span{margin-top:2px;color:var(--ink-3);font-size:10.5px}
+.audit-filter-scroll{max-height:min(510px,calc(100dvh - 250px));overflow:auto;padding:4px 12px 12px}.audit-filter-scroll fieldset{margin:0;padding:11px 0 7px;border:0;border-bottom:1px solid var(--border)}.audit-filter-scroll fieldset:last-child{border-bottom:0}
+.audit-filter-scroll legend{padding:0 2px 6px;color:var(--ink-3);font:700 9.5px var(--mono);text-transform:uppercase}
+.audit-filter-option{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:32px;padding:3px 5px;border-radius:5px;cursor:pointer}.audit-filter-option:hover{background:var(--surface-2)}
+.audit-filter-option input{width:15px;height:15px;margin:0;accent-color:var(--accent)}.audit-filter-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2);font-size:11.5px}.audit-filter-option b{color:var(--ink-3);font:10px var(--mono)}
 .audit-table-wrap{position:relative;min-height:320px;overflow:auto;overscroll-behavior:contain;background:var(--surface)}
 .audit-table{width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed}
 .audit-table th{position:sticky;top:0;z-index:2;height:35px;padding:0 10px;border-bottom:1px solid var(--border);background:var(--surface-2);color:var(--ink-3);font:700 10px var(--mono);text-align:left;text-transform:uppercase}
@@ -1295,7 +1306,7 @@ body.audit-fullscreen{overflow:hidden}
   .audit-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
   .audit-summary>div:nth-child(3){border-right:0}
   .audit-summary>div:nth-child(-n+3){border-bottom:1px solid var(--border)}
-  .audit-toolbar{grid-template-columns:minmax(0,1fr) repeat(3,minmax(125px,160px))}
+  .audit-toolbar{grid-template-columns:minmax(0,1fr) auto minmax(180px,220px)}
   .audit-toolbar .searchbox{grid-column:1/-1}
   .audit-count{grid-column:1/-1;text-align:left}
   .audit-table th:nth-child(4),.audit-table td:nth-child(4),.audit-table th:nth-child(5),.audit-table td:nth-child(5){display:none}
@@ -1312,8 +1323,9 @@ body.audit-fullscreen{overflow:hidden}
   .audit-summary>div:nth-child(odd){border-right:1px solid var(--border)}
   .audit-summary>div:nth-child(even){border-right:0}
   .audit-summary>div:nth-child(-n+4){border-bottom:1px solid var(--border)}
-  .audit-toolbar{grid-template-columns:1fr 1fr}
-  .audit-toolbar select:last-of-type{grid-column:1/-1}
+  .audit-toolbar{grid-template-columns:auto minmax(0,1fr)}
+  .audit-toolbar select{min-width:0}
+  .audit-filter-menu{position:fixed;top:auto;right:8px;bottom:8px;left:8px;width:auto;max-width:none}
   .audit-shell.fullscreen{inset:3px}
 }
 @media (pointer:coarse){
@@ -1447,7 +1459,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1458,7 +1470,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.1.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -1470,7 +1482,7 @@ const S={
 };
 
 function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',severity:'all',category:'all',search:'',sort:'severity',selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null};
+  S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null};
 }
 
 resetSession();
@@ -1637,7 +1649,7 @@ async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,report){
     if(report)report((index+1)/Math.max(1,names.length),`Scanned ${index+1} of ${names.length} tabs`);
     if(checkpoint)await checkpoint();
   }
-  if(!snapshots.length)throw new Error('No Exto registry tab with Equipment ID, Closest Parent, UPN, and Discipline headers was found');
+  if(!snapshots.length)throw new Error('No Cx Registry tab with Equipment ID, Closest Parent, UPN, and Discipline headers was found');
   const rows=snapshots.flatMap(snapshot=>snapshot.rows),missingHeaders=[...new Set(snapshots.flatMap(snapshot=>snapshot.missingHeaders))];
   const missingHeaderEntries=snapshots.flatMap(snapshot=>snapshot.missingHeaderEntries);
   return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(fileName),sheets:Object.freeze(snapshots.map(snapshot=>snapshot.source.sheet))}),
@@ -1651,39 +1663,47 @@ function auditFingerprint(value){
 }
 
 /* src/audit/engine.js */
-const SSM_AUDIT_STANDARD='SSM SOP + Exto Rev21';
+const SSM_AUDIT_STANDARD='Cx Upload Validation + SSM Rules';
 const SSM_AUDIT_SEVERITIES=['blocker','error','warning','info'];
 const SSM_AUDIT_CATEGORIES=['upload','structure','dependencies','metadata','milestones','item-masters','headers'];
+const SSM_AUDIT_SOURCES=Object.freeze([
+  Object.freeze({id:'upload',label:'Cx Upload Validation',description:'Required columns, required values, and allowed upload values.'}),
+  Object.freeze({id:'sop',label:'SSM SOP',description:'Parent-child structure, dependencies, sequencing, milestones, and headers.'}),
+  Object.freeze({id:'logic',label:'Commissioning Logic',description:'Repeatable control and electrical enabling relationships.'}),
+]);
 const SSM_AUDIT_SEVERITY_RANK={blocker:0,error:1,warning:2,info:3};
 
-function auditRule(id,category,standardRef){return {id,version:1,category,standardRef};}
-const SSM_AUDIT_RULES={
-  missingHeader:auditRule('upload.missing-header','upload','Exto Rev21 upload contract'),
-  missingGating:auditRule('upload.missing-gating-field','upload','Exto Rev21 gating fields'),
-  invalidDropdown:auditRule('metadata.invalid-dropdown-value','metadata','Exto Rev21 approved dropdowns'),
-  duplicateId:auditRule('identity.duplicate-equipment-id','metadata','SSM unique equipment identity'),
-  blankParent:auditRule('parent.blank','structure','SOP parent-child hierarchy'),
-  selfParent:auditRule('parent.self','structure','SOP parent-child hierarchy'),
-  unresolvedParent:auditRule('parent.unresolved','structure','Exto Closest Parent Status guidance'),
-  generatedHeader:auditRule('parent.generated-header-review','headers','Exto New parent/header guidance'),
-  crossUpn:auditRule('parent.cross-upn','structure','SOP child UPN must match parent UPN'),
-  crossDiscipline:auditRule('parent.cross-discipline','structure','SOP Discipline > UPN hierarchy'),
-  parentAsDependency:auditRule('dependency.repeats-parent','dependencies','SOP child does not repeat its parent as a dependency'),
-  parentCycle:auditRule('parent.cycle','structure','SSM acyclic parent hierarchy'),
-  literalNa:auditRule('dependency.literal-na','dependencies','Exto blank dependency semantics'),
-  selfDependency:auditRule('dependency.self','dependencies','SSM predecessor logic'),
-  duplicateDependency:auditRule('dependency.duplicate','dependencies','SSM predecessor logic'),
-  unresolvedDependency:auditRule('dependency.unresolved','dependencies','SSM dependency references'),
-  precedenceCycle:auditRule('dependency.precedence-cycle','dependencies','SOP sequential startup logic'),
-  systemUpn:auditRule('metadata.system-upn-mismatch','metadata','Exto UPN and System Name contract'),
-  icDiscipline:auditRule('metadata.ic-discipline','metadata','Exto approved Discipline vocabulary'),
-  upnInconsistent:auditRule('metadata.upn-inconsistent','metadata','SOP Discipline > UPN/System hierarchy'),
-  milestonePair:auditRule('milestone.incomplete-pair','milestones','SOP L1/L2 milestone hierarchy'),
-  milestoneInconsistent:auditRule('milestone.parent-inconsistent','milestones','SOP L1/L2 milestone hierarchy'),
-  legacyItemMaster:auditRule('item-master.legacy','item-masters','VF Item Master standard'),
-  headerDependency:auditRule('header.has-dependency','headers','SOP organizational header semantics'),
-  unusedHeader:auditRule('header.unused','headers','SOP organizational header semantics'),
-};
+function auditRule(id,source,category,title,statement){return Object.freeze({id,version:1,source,category,title,statement,standardRef:title});}
+const SSM_AUDIT_RULES=Object.freeze({
+  missingHeader:auditRule('upload.missing-header','upload','upload','Required upload column','Each required Cx upload column must be present.'),
+  missingGating:auditRule('upload.missing-gating-field','upload','upload','Required upload value','Each required Cx upload value must be populated.'),
+  invalidDropdown:auditRule('metadata.invalid-dropdown-value','upload','metadata','Allowed upload value','Populated upload values must use the allowed Cx vocabulary.'),
+  duplicateId:auditRule('identity.duplicate-equipment-id','sop','metadata','Unique equipment identity','Each Equipment ID must occur once in an SSM.'),
+  blankParent:auditRule('parent.blank','sop','structure','Complete hierarchy','Each equipment row must have a parent or System Name root.'),
+  selfParent:auditRule('parent.self','sop','structure','No self-parenting','Equipment cannot be its own parent.'),
+  unresolvedParent:auditRule('parent.unresolved','upload','structure','Resolvable parent','A parent must resolve to equipment, an intentional new header, or an existing external parent.'),
+  generatedHeader:auditRule('parent.generated-header-review','upload','headers','Intentional new header','A proposed upload header must be intentional and consistently reused.'),
+  crossUpn:auditRule('parent.cross-upn','sop','structure','Parent and child share a UPN','Structural parent-child equipment must remain within one UPN.'),
+  crossDiscipline:auditRule('parent.cross-discipline','sop','structure','Parent and child share a discipline','Cross-discipline relationships belong in Dependencies unless an approved exception applies.'),
+  parentAsDependency:auditRule('dependency.repeats-parent','sop','dependencies','Parent is not repeated','A structural parent should not also be listed as the same child’s dependency.'),
+  parentCycle:auditRule('parent.cycle','sop','structure','Acyclic hierarchy','A parent chain cannot loop back to itself.'),
+  literalNa:auditRule('dependency.literal-na','upload','dependencies','Blank means no dependency','Use a blank dependency cell instead of a literal N/A value.'),
+  selfDependency:auditRule('dependency.self','sop','dependencies','No self-dependency','Equipment cannot depend on itself.'),
+  duplicateDependency:auditRule('dependency.duplicate','sop','dependencies','Unique dependency references','List each dependency once per equipment row.'),
+  unresolvedDependency:auditRule('dependency.unresolved','sop','dependencies','Resolvable dependency','A dependency must resolve locally or identify its external project.'),
+  precedenceCycle:auditRule('dependency.precedence-cycle','sop','dependencies','Acyclic commissioning sequence','Parent and dependency links cannot create a circular startup sequence.'),
+  systemUpn:auditRule('metadata.system-upn-mismatch','upload','metadata','System Name matches UPN','System Name and UPN must identify the same approved system.'),
+  icDiscipline:auditRule('metadata.ic-discipline','upload','metadata','Approved controls mapping','I&C equipment must map to the approved controls discipline and tag-derived UPN.'),
+  upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','Consistent UPN grouping','One UPN should map to one System Name and Discipline.'),
+  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','L1 Milestone Parent and L2 Milestone should be assigned together.'),
+  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone parent','One L2 milestone should map to one L1 parent.'),
+  legacyItemMaster:auditRule('item-master.legacy','upload','item-masters','Current Item Master','Use the current allowed Item Master vocabulary.'),
+  headerDependency:auditRule('header.has-dependency','sop','headers','Header groups only','An organizational header should not carry unexplained dependencies.'),
+  unusedHeader:auditRule('header.unused','sop','headers','Header has children','An organizational header must group at least one child.'),
+  controlLink:auditRule('logic.control-link-missing','logic','dependencies','Control link present','High-confidence control devices should identify their control source.'),
+  drivenElectricalPath:auditRule('logic.driven-electrical-path-missing','logic','dependencies','Electrical enabling path present','Electrically driven equipment should trace to an electrical predecessor.'),
+  controlElectricalPath:auditRule('logic.control-electrical-path-missing','logic','dependencies','Control power path present','Control equipment should trace to an electrical supply predecessor.'),
+});
 
 function auditFinding(rule,severity,row,details={}){
   const equipmentId=clean(row&&row.equipmentId),source=row&&row._source||{},actual=details.actual==null?'':details.actual;
@@ -1691,9 +1711,19 @@ function auditFinding(rule,severity,row,details={}){
   return Object.freeze({schemaVersion:1,id:`${rule.id}:${fingerprint}`,fingerprint,rule,severity,category:rule.category,
     equipmentId,row:source.row||0,sheet:source.sheet||'',field:details.field||'',why:details.why||'',actual,
     expected:details.expected==null?'':details.expected,recommendation:details.recommendation||'',relatedEquipmentId:details.relatedEquipmentId||'',
-    searchKey:auditNormId([rule.id,rule.category,equipmentId,source.sheet,details.field,details.why,actual,details.expected,details.relatedEquipmentId].join(' '))});
+    searchKey:auditNormId([rule.id,rule.source,rule.title,rule.category,equipmentId,source.sheet,details.field,details.why,actual,details.expected,details.relatedEquipmentId].join(' '))});
 }
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
+function auditDescription(row){return auditNormId(row&&row.equipmentDescription);}
+function auditIsElectrical(row){return auditNormId(row&&row.discipline)==='ELECTRICAL';}
+function auditIsControlEquipment(row){return /REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|CONTROL PANEL|FIRE ALARM PANEL|GAS DETECTION PANEL|SECURITY CONTROL PANEL|VARIABLE FREQUENCY|\bVFD\b|MOTOR STARTER|FMS/.test(auditDescription(row));}
+function auditIsDrivenEquipment(row){return !auditIsElectrical(row)&&/AIR HANDLER|CENTRIFUGAL PUMP|VERTICALLY MOUNTED PUMP|\bCHILLER\b|\bCOMPRESSOR\b|\bBLOWER\b|\bSCRUBBER\b/.test(auditDescription(row));}
+function auditNeedsControlLink(row){return !auditIsElectrical(row)&&/POWER SUPPLY ALARM|CURRENT SWITCH|HAND SWITCH.*(?:POSITION|HOA)|PRESSURE SWITCH HIGH|LEVEL SWITCH LOW|HUMIDITY CONTROL VALVE|POSITION INDICATING TRANSMITTER|TEMPERATURE TRANSMITTER.*LINE|CONTROL VALVE.*GLOBE|HUMIDITY ELEMENT TRANSMITTER/.test(auditDescription(row));}
+function auditReachableFrom(seeds,edges){
+  const reached=new Set(seeds),queue=[...seeds];
+  for(let index=0;index<queue.length;index++)for(const next of edges.get(queue[index])||[])if(!reached.has(next)){reached.add(next);queue.push(next);}
+  return reached;
+}
 function auditCyclePaths(nodes,edges){
   const state=new Map(),path=[],pathIndex=new Map(),cycles=[],seen=new Set();
   for(const start of nodes){
@@ -1718,7 +1748,7 @@ function runSsmAudit(snapshot){
   const rows=snapshot&&snapshot.rows||[],findings=[];let checks=0;
   const add=(rule,severity,row,details)=>findings.push(auditFinding(rule,severity,row,details));
   const missingHeaderEntries=snapshot&&snapshot.missingHeaderEntries||((snapshot&&snapshot.missingHeaders)||[]).map(header=>({header,sheet:'',headerRow:0}));
-  for(const entry of missingHeaderEntries){checks++;add(SSM_AUDIT_RULES.missingHeader,'blocker',{_source:{sheet:entry.sheet,row:entry.headerRow}},{field:entry.header,why:`The registry tab does not contain the ${entry.header} column.`,expected:'Rev21 semantic header present',recommendation:'Add or correctly name the missing column before relying on this audit.'});}
+  for(const entry of missingHeaderEntries){checks++;add(SSM_AUDIT_RULES.missingHeader,'blocker',{_source:{sheet:entry.sheet,row:entry.headerRow}},{field:entry.header,why:`${entry.header} is missing from this registry.`,expected:'Required Cx upload column present',recommendation:'Add or correctly map the missing column before relying on this audit.'});}
   const rowsById=new Map(),duplicates=new Map();
   for(const row of rows){const key=auditNormId(row.equipmentId);if(!key)continue;if(rowsById.has(key)){const list=duplicates.get(key)||[rowsById.get(key)];list.push(row);duplicates.set(key,list);}else rowsById.set(key,row);}
   for(const list of duplicates.values())for(const row of list){checks++;add(SSM_AUDIT_RULES.duplicateId,'blocker',row,{field:'Equipment ID',why:'Equipment IDs must be unique in one SSM register.',actual:row.equipmentId,expected:'One row per Equipment ID',recommendation:'Merge duplicate records or assign the correct unique equipment tag.'});}
@@ -1727,15 +1757,15 @@ function runSsmAudit(snapshot){
   const upnGroups=new Map(),milestoneGroups=new Map();
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
-    for(const column of EXTO_REV21_COLUMNS.filter(column=>column.gating)){checks++;if(!clean(row[column.field]))add(SSM_AUDIT_RULES.missingGating,'blocker',row,{field:column.header,why:`${column.header} is a gating Exto field and is blank.`,expected:'Populated gating value',recommendation:`Populate ${column.header} before upload.`});}
-    for(const issue of extoRev21ValidatePartial(row)){checks++;add(SSM_AUDIT_RULES.invalidDropdown,issue.field==='systemName'||issue.field==='upn'||issue.field==='discipline'?'blocker':'error',row,{field:EXTO_REV21_COLUMNS.find(column=>column.field===issue.field)?.header||issue.field,why:issue.reason,actual:issue.value,expected:`A value from ${issue.dropdown}`,recommendation:'Choose the approved value that matches the project source data.'});}
-    if(/^I\s*(?:&|AND)\s*C$/i.test(clean(row.discipline))){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'I&C is not an approved Exto Discipline. The equipment tag must identify its FMS UPN.',actual:`${row.discipline}; tag UPN candidates: ${candidates.join(', ')||'none'}`,expected:'FACILITIES MONITORING SYSTEM with one tag-derived UPN',recommendation:candidates.length===1?`Use UPN ${candidates[0]} and the approved ${candidates[0]} System Name.`:'Resolve the tag-derived UPN before assigning the Exto Discipline and System Name.'});}
-    if(row.systemName&&row.upn){checks++;const prefix=extoRev21Norm(row.systemName).split(' ')[0],systemUpn=extoRev21Canonical('upn',prefix);if(systemUpn&&extoRev21Norm(systemUpn)!==extoRev21Norm(row.upn))add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',why:'The approved System Name identifies a different UPN than the row UPN.',actual:`UPN ${row.upn}; System ${row.systemName}`,expected:`The approved System Name for UPN ${row.upn}`,recommendation:'Correct the UPN or select the approved System Name for this equipment.'});}
+    for(const column of EXTO_REV21_COLUMNS.filter(column=>column.gating)){checks++;if(!clean(row[column.field]))add(SSM_AUDIT_RULES.missingGating,'blocker',row,{field:column.header,why:`${column.header} is required for Cx upload.`,expected:'Required value populated',recommendation:`Populate ${column.header} before upload.`});}
+    for(const issue of extoRev21ValidatePartial(row)){checks++;const field=EXTO_REV21_COLUMNS.find(column=>column.field===issue.field)?.header||issue.field;add(SSM_AUDIT_RULES.invalidDropdown,issue.field==='systemName'||issue.field==='upn'||issue.field==='discipline'?'blocker':'error',row,{field,why:`${field} is not allowed by Cx upload validation.`,actual:issue.value,expected:'An allowed Cx upload value',recommendation:'Choose the allowed value that matches the project source data.'});}
+    if(/^I\s*(?:&|AND)\s*C$/i.test(clean(row.discipline))){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'I&C does not match the allowed Cx discipline mapping.',actual:`${row.discipline}; tag UPN candidates: ${candidates.join(', ')||'none'}`,expected:'FACILITIES MONITORING SYSTEM with one tag-derived UPN',recommendation:candidates.length===1?`Use UPN ${candidates[0]} and its allowed System Name.`:'Resolve the tag-derived UPN before assigning Discipline and System Name.'});}
+    if(row.systemName&&row.upn){checks++;const prefix=extoRev21Norm(row.systemName).split(' ')[0],systemUpn=extoRev21Canonical('upn',prefix);if(systemUpn&&extoRev21Norm(systemUpn)!==extoRev21Norm(row.upn))add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',why:'System Name does not match the row UPN.',actual:`UPN ${row.upn}; System ${row.systemName}`,expected:`The allowed System Name for UPN ${row.upn}`,recommendation:'Correct the UPN or select its allowed System Name.'});}
     if(row.milestone&&!row.milestoneParent||!row.milestone&&row.milestoneParent){checks++;add(SSM_AUDIT_RULES.milestonePair,'warning',row,{field:'Milestone',why:'L1 Milestone Parent and L2 Milestone should be assigned as a pair.',actual:`L2: ${row.milestone||'blank'}; L1: ${row.milestoneParent||'blank'}`,expected:'Both populated or both blank under the project milestone policy',recommendation:'Confirm the project milestone program and complete the missing side of the pair.'});}
     if(row.milestone){const parents=milestoneGroups.get(auditNormId(row.milestone))||new Map();parents.set(auditNormId(row.milestoneParent),(parents.get(auditNormId(row.milestoneParent))||0)+1);milestoneGroups.set(auditNormId(row.milestone),parents);}
-    if(/^CA_/i.test(clean(row.itemMaster))){checks++;add(SSM_AUDIT_RULES.legacyItemMaster,'warning',row,{field:'Item Master Unique Identifier',why:'This is a legacy CA Item Master rather than the current VF vocabulary.',actual:row.itemMaster,expected:'Approved VF Item Master',recommendation:'Review against the current Item Master Revision Template before upload.'});}
+    if(/^CA_/i.test(clean(row.itemMaster))){checks++;add(SSM_AUDIT_RULES.legacyItemMaster,'warning',row,{field:'Item Master Unique Identifier',why:'Item Master does not use the current allowed vocabulary.',actual:row.itemMaster,expected:'Current VF Item Master',recommendation:'Select the current allowed Item Master before upload.'});}
     const upn=auditNormId(row.upn);if(upn){const group=upnGroups.get(upn)||{systems:new Set(),disciplines:new Set(),wbs:new Set(),rows:[]};if(row.systemName)group.systems.add(auditNormId(row.systemName));if(row.discipline)group.disciplines.add(auditNormId(row.discipline));if(row.wbs)group.wbs.add(auditNormId(row.wbs));group.rows.push(row);upnGroups.set(upn,group);}
-    checks++;if(!parentId)add(SSM_AUDIT_RULES.blankParent,'blocker',row,{field:'Closest Parent',why:'Every Exto row requires a structural parent or System Name root.',expected:'Equipment parent or the row System Name',recommendation:'Assign the correct same-UPN parent; use System Name for a root.'});
+    checks++;if(!parentId)add(SSM_AUDIT_RULES.blankParent,'blocker',row,{field:'Closest Parent',why:'This equipment has no structural parent or System Name root.',expected:'Equipment parent or the row System Name',recommendation:'Assign the correct same-UPN parent; use System Name for a root.'});
     else if(parentId===id)add(SSM_AUDIT_RULES.selfParent,'blocker',row,{field:'Closest Parent',why:'Equipment cannot be its own parent.',actual:row.closestParent,expected:'A different parent tag or System Name',recommendation:'Select the actual parent and re-check the branch.'});
     else{
       const parent=rowsById.get(parentId);
@@ -1750,11 +1780,11 @@ function runSsmAudit(snapshot){
         if(parentId!==auditNormId(row.systemName)){
           const entry=generatedHeaders.get(parentId)||{row,parent:row.closestParent,count:0};entry.count++;generatedHeaders.set(parentId,entry);
         }
-      }else if(status!=='EXISTING')add(SSM_AUDIT_RULES.unresolvedParent,'blocker',row,{field:'Closest Parent',why:'The parent is not in this registry and is not identified as New or Existing.',actual:row.closestParent,expected:'Resolvable equipment, New header, or Existing external parent',recommendation:'Correct the parent reference and Closest Parent Status.'});
+      }else if(status!=='EXISTING')add(SSM_AUDIT_RULES.unresolvedParent,'blocker',row,{field:'Closest Parent',why:'Closest Parent cannot be resolved for Cx upload.',actual:row.closestParent,expected:'Resolvable equipment, New header, or Existing external parent',recommendation:'Correct the parent reference and Closest Parent Status.'});
     }
     const dependencies=auditSplitReferences(row.dependencies),seenDeps=new Set();
     for(const dependency of dependencies){const depId=auditNormId(dependency);checks++;
-      if(/^N\/?A$/i.test(dependency))add(SSM_AUDIT_RULES.literalNa,'blocker',row,{field:'Dependencies',why:'Exto expects a blank cell when there is no dependency; N/A is treated as a tag.',actual:dependency,expected:'Blank dependency cell',recommendation:'Remove the literal N/A value.'});
+      if(/^N\/?A$/i.test(dependency))add(SSM_AUDIT_RULES.literalNa,'blocker',row,{field:'Dependencies',why:'Cx upload validation expects a blank cell when no dependency exists.',actual:dependency,expected:'Blank dependency cell',recommendation:'Remove the literal N/A value.'});
       else if(depId===id)add(SSM_AUDIT_RULES.selfDependency,'error',row,{field:'Dependencies',why:'Equipment cannot depend on itself.',actual:dependency,expected:'A different predecessor tag',recommendation:'Remove the self-reference.'});
       if(seenDeps.has(depId))add(SSM_AUDIT_RULES.duplicateDependency,'warning',row,{field:'Dependencies',why:'The same dependency is listed more than once.',actual:dependency,expected:'One reference per dependency',recommendation:'Remove the duplicate reference.'});seenDeps.add(depId);
       if(depId&&depId===parentId)add(SSM_AUDIT_RULES.parentAsDependency,'error',row,{field:'Dependencies',why:'A child does not also list its structural parent as a dependency.',actual:dependency,expected:'Parent only in Closest Parent',recommendation:'Remove the duplicate dependency unless the hierarchy itself is being corrected.'});
@@ -1762,7 +1792,7 @@ function runSsmAudit(snapshot){
       if(rowsById.has(depId)&&depId!==id&&depId!==parentId)addEdge(precedenceEdges,depId,id);
     }
   }
-  for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`A New parent is absent from the registry and is referenced by ${entry.count.toLocaleString()} equipment row${entry.count===1?'':'s'}.`,actual:entry.parent,expected:'An intentional approved header or the row System Name',recommendation:'Confirm this is one intentional organizational header; otherwise add or correct the missing equipment record.'});}
+  for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`A proposed new header is referenced by ${entry.count.toLocaleString()} equipment row${entry.count===1?'':'s'}.`,actual:entry.parent,expected:'An intentional upload header or the row System Name',recommendation:'Confirm this is one intentional organizational header; otherwise add or correct the missing equipment record.'});}
   for(const [upn,group] of upnGroups){checks++;if(group.systems.size>1||group.disciplines.size>1)add(SSM_AUDIT_RULES.upnInconsistent,'error',group.rows[0],{field:'UPN',why:'One UPN maps to multiple System Names or Disciplines in this registry.',actual:`Systems: ${[...group.systems].join('; ')}; Disciplines: ${[...group.disciplines].join('; ')}`,expected:'One approved System Name and Discipline per UPN',recommendation:`Review all rows assigned to UPN ${upn}.`});}
   for(const [milestone,parents] of milestoneGroups){checks++;if(parents.size>1)add(SSM_AUDIT_RULES.milestoneInconsistent,'error',rows.find(row=>auditNormId(row.milestone)===milestone),{field:'Milestone Parent',why:'The same L2 milestone maps to multiple L1 parents.',actual:[...parents.keys()].join('; '),expected:'One L1 parent per L2 milestone',recommendation:'Correct the inconsistent milestone assignment.'});}
   for(const cycle of auditCyclePaths(nodes,parentEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.parentCycle,'blocker',row,{field:'Closest Parent',why:'The Closest Parent chain contains a cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic parent hierarchy',recommendation:'Break the cycle by correcting at least one Closest Parent.'});}
@@ -1771,11 +1801,21 @@ function runSsmAudit(snapshot){
     if(auditSplitReferences(row.dependencies).length){checks++;add(SSM_AUDIT_RULES.headerDependency,'warning',row,{field:'Dependencies',why:'An organizational header normally groups children and should not carry unexplained dependencies.',actual:row.dependencies,expected:'Blank unless explicitly approved',recommendation:'Confirm the header is intentional and document why it gates other equipment.'});}
     if(!childCount){checks++;add(SSM_AUDIT_RULES.unusedHeader,'warning',row,{field:'Equipment ID',why:'This header-like row has no children.',actual:row.equipmentId,expected:'At least one grouped child',recommendation:'Remove the unused header or attach the intended children.'});}
   }
+  const electricalSeeds=new Set(rows.filter(auditIsElectrical).map(row=>auditNormId(row.equipmentId)).filter(Boolean));
+  const electricalPath=auditReachableFrom(electricalSeeds,precedenceEdges);
+  for(const row of rows){
+    const id=auditNormId(row.equipmentId);if(!id)continue;
+    const parent=rowsById.get(auditNormId(row.closestParent)),dependencies=auditSplitReferences(row.dependencies).map(value=>rowsById.get(auditNormId(value))).filter(Boolean);
+    if(auditNeedsControlLink(row)){checks++;if(![parent,...dependencies].some(auditIsControlEquipment))add(SSM_AUDIT_RULES.controlLink,'info',row,{field:'Dependencies',why:'No control-system link was found for this control device.',actual:row.dependencies||'Blank',expected:'A control panel, RIO, PLC, VFD, or motor-starter link',recommendation:'Confirm the control source and add it as a parent or dependency when required.'});}
+    if(auditIsDrivenEquipment(row)){checks++;if(!electricalPath.has(id))add(SSM_AUDIT_RULES.drivenElectricalPath,'warning',row,{field:'Dependencies',why:'No electrical enabling path was found for this driven equipment.',actual:row.dependencies||'Blank',expected:'A commissioning path to its electrical supply equipment',recommendation:'Trace the supplying panel, starter, or VFD and add the missing relationship.'});}
+    if(!auditIsElectrical(row)&&auditIsControlEquipment(row)){checks++;if(!electricalPath.has(id))add(SSM_AUDIT_RULES.controlElectricalPath,'info',row,{field:'Dependencies',why:'No electrical supply path was found for this control equipment.',actual:row.dependencies||'Blank',expected:'A commissioning path to its electrical supply equipment',recommendation:'Confirm the supplying panel or circuit and add the missing relationship.'});}
+  }
   findings.sort((a,b)=>(SSM_AUDIT_SEVERITY_RANK[a.severity]-SSM_AUDIT_SEVERITY_RANK[b.severity])||natCmp(a.category,b.category)||natCmp(a.equipmentId,b.equipmentId)||a.row-b.row||natCmp(a.rule.id,b.rule.id));
   const severity=Object.fromEntries(SSM_AUDIT_SEVERITIES.map(level=>[level,findings.filter(finding=>finding.severity===level).length]));
   const category=Object.fromEntries(SSM_AUDIT_CATEGORIES.map(name=>[name,findings.filter(finding=>finding.category===name).length]));
+  const source=Object.fromEntries(SSM_AUDIT_SOURCES.map(item=>[item.id,findings.filter(finding=>finding.rule.source===item.id).length]));
   return Object.freeze({schemaVersion:1,standard:SSM_AUDIT_STANDARD,rows:Object.freeze([...rows]),findings:Object.freeze(findings),
-    summary:Object.freeze({rows:rows.length,checks,findings:findings.length,severity:Object.freeze(severity),category:Object.freeze(category),status:severity.blocker?'blocked':severity.error||severity.warning?'review':'ready'})});
+    summary:Object.freeze({rows:rows.length,checks,findings:findings.length,severity:Object.freeze(severity),category:Object.freeze(category),source:Object.freeze(source),status:severity.blocker?'blocked':severity.error||severity.warning?'review':'ready'})});
 }
 
 /* src/core/download.js */
@@ -1876,24 +1916,24 @@ function exportSsmAuditXlsx(){
   const summarySheet=XLSX.utils.aoa_to_sheet(summaryRows);
   summarySheet['!cols']=[{wch:24},{wch:72}];styleHeaderRow(summarySheet);addSheet(workbook,summarySheet,'Audit Summary');
 
-  const findingHeaders=['Severity','Category','Rule ID','Equipment ID','Sheet','Row','Field','Why flagged','Found','Expected','Recommended correction','Standard reference','Fingerprint'];
+  const findingHeaders=['Severity','Category','Rule Source','Rule','Rule ID','Equipment ID','Sheet','Row','Field','Why flagged','Found','Expected','Recommended correction','Fingerprint'];
   const findingRows=result.findings.map(finding=>[
-    finding.severity.toUpperCase(),finding.category,finding.rule.id,finding.equipmentId,finding.sheet,finding.row,finding.field,finding.why,
-    printable(finding.actual),printable(finding.expected),finding.recommendation,finding.rule.standardRef,finding.fingerprint,
+    finding.severity.toUpperCase(),finding.category,finding.rule.source,finding.rule.title,finding.rule.id,finding.equipmentId,finding.sheet,finding.row,finding.field,finding.why,
+    printable(finding.actual),printable(finding.expected),finding.recommendation,finding.fingerprint,
   ]);
   const findingsSheet=XLSX.utils.aoa_to_sheet([findingHeaders,...findingRows]);
-  findingsSheet['!cols']=[{wch:11},{wch:18},{wch:32},{wch:28},{wch:22},{wch:9},{wch:25},{wch:58},{wch:45},{wch:45},{wch:58},{wch:42},{wch:12}];
-  styleHeaderRow(findingsSheet);findingsSheet['!autofilter']={ref:`A1:M${Math.max(1,findingRows.length+1)}`};addSheet(workbook,findingsSheet,'Findings');
+  findingsSheet['!cols']=[{wch:11},{wch:18},{wch:20},{wch:32},{wch:34},{wch:28},{wch:22},{wch:9},{wch:25},{wch:58},{wch:45},{wch:45},{wch:58},{wch:12}];
+  styleHeaderRow(findingsSheet);findingsSheet['!autofilter']={ref:`A1:N${Math.max(1,findingRows.length+1)}`};addSheet(workbook,findingsSheet,'Findings');
 
   const byRule=new Map();
   for(const finding of result.findings){
     const entry=byRule.get(finding.rule.id)||{rule:finding.rule,blocker:0,error:0,warning:0,info:0,total:0};
     entry[finding.severity]++;entry.total++;byRule.set(finding.rule.id,entry);
   }
-  const ruleRows=[['Rule ID','Category','Standard reference','Blockers','Errors','Warnings','Advisories','Total'],
-    ...[...byRule.values()].sort((a,b)=>b.total-a.total||a.rule.id.localeCompare(b.rule.id)).map(entry=>[entry.rule.id,entry.rule.category,entry.rule.standardRef,entry.blocker,entry.error,entry.warning,entry.info,entry.total])];
-  const rulesSheet=XLSX.utils.aoa_to_sheet(ruleRows);rulesSheet['!cols']=[{wch:34},{wch:20},{wch:44},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11}];
-  styleHeaderRow(rulesSheet);rulesSheet['!autofilter']={ref:`A1:H${Math.max(1,ruleRows.length)}`};addSheet(workbook,rulesSheet,'Rule Summary');
+  const ruleRows=[['Rule Source','Rule','Rule Statement','Rule ID','Category','Blockers','Errors','Warnings','Advisories','Total'],
+    ...[...byRule.values()].sort((a,b)=>b.total-a.total||a.rule.id.localeCompare(b.rule.id)).map(entry=>[entry.rule.source,entry.rule.title,entry.rule.statement,entry.rule.id,entry.rule.category,entry.blocker,entry.error,entry.warning,entry.info,entry.total])];
+  const rulesSheet=XLSX.utils.aoa_to_sheet(ruleRows);rulesSheet['!cols']=[{wch:20},{wch:32},{wch:62},{wch:34},{wch:20},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11}];
+  styleHeaderRow(rulesSheet);rulesSheet['!autofilter']={ref:`A1:J${Math.max(1,ruleRows.length)}`};addSheet(workbook,rulesSheet,'Rule Summary');
 
   const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   downloadBlob(`${base}-Audit.xlsx`,workbookBlob(workbook));toast('SSM Audit report exported');
@@ -1973,6 +2013,8 @@ function initUpdate(){
 const AUDIT_ROW_HEIGHT=48,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const CATEGORY_LABELS={upload:'Upload Readiness',structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const SEVERITY_LABELS={blocker:'Blocker',error:'Error',warning:'Warning',info:'Advisory'};
+const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
+let auditOutsideHandler=null,auditEscapeHandler=null;
 
 function importStatus(){
   const result=S.session.result,summary=result&&result.summary;
@@ -1982,11 +2024,11 @@ function importStatus(){
 }
 
 function renderUpload(navigate){
-  document.body.classList.remove('audit-fullscreen');S.screen='upload';
+  teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='upload';
   $('#view').innerHTML=`<section class="upload-shell">
-    <div class="screen-heading"><div><span class="eyebrow">SSM SOP + Exto Rev21</span><h2>Audit an existing SSM</h2><p>Check a completed Exto Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
+    <div class="screen-heading"><div><span class="eyebrow">Cx Upload Validation + SSM Rules</span><h2>Audit an existing SSM</h2><p>Check a completed Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
     <div class="upload-grid">
-      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose an Exto Cx Registry workbook">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a Cx Registry workbook">
         <span class="drop-icon">${ic('file-spreadsheet')}</span>
         <h3>Choose a completed Cx Registry</h3>
         <p>Drop an Excel workbook here or browse this device.</p>
@@ -2002,7 +2044,7 @@ function renderUpload(navigate){
     <div class="coverage-band">
       <div><span>01</span><b>Hierarchy</b><p>Parents, roots, cycles, and discipline or UPN crossings.</p></div>
       <div><span>02</span><b>Dependencies</b><p>Unresolved, repeated, self-referencing, and circular predecessors.</p></div>
-      <div><span>03</span><b>Exto readiness</b><p>Approved values, gating fields, milestones, Item Masters, and headers.</p></div>
+      <div><span>03</span><b>Cx upload readiness</b><p>Allowed values, required fields, milestones, Item Masters, and headers.</p></div>
     </div>
   </section>`;
   wireUpload(navigate);
@@ -2044,17 +2086,32 @@ async function addAuditTarget(file,navigate){
 }
 
 function filteredFindings(){
-  const query=clean(S.session.search).toUpperCase(),key=[S.session.severity,S.session.category,query,S.session.sort].join('\u0001');
+  const query=clean(S.session.search).toUpperCase(),hiddenSources=new Set(S.session.hiddenSources||[]),hiddenSeverities=new Set(S.session.hiddenSeverities||[]),hiddenCategories=new Set(S.session.hiddenCategories||[]),hiddenRules=new Set(S.session.hiddenRules||[]);
+  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort].join('\u0001');
   if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
-  let rows=S.session.result.findings.filter(finding=>(S.session.severity==='all'||finding.severity===S.session.severity)&&(S.session.category==='all'||finding.category===S.session.category)&&(!query||finding.searchKey.includes(query)));
-  if(S.session.sort==='equipment')rows=[...rows].sort((a,b)=>a.equipmentId.localeCompare(b.equipmentId,undefined,{numeric:true,sensitivity:'base'})||a.row-b.row);
-  else if(S.session.sort==='rule')rows=[...rows].sort((a,b)=>a.rule.id.localeCompare(b.rule.id)||a.row-b.row);
+  let rows=S.session.result.findings.filter(finding=>!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query)));
+  const natural=(a,b)=>String(a||'').localeCompare(String(b||''),undefined,{numeric:true,sensitivity:'base'}),sort=S.session.sort;
+  if(sort==='severity-asc')rows=[...rows].reverse();
+  else if(sort==='equipment-asc'||sort==='equipment-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.equipmentId,b.equipmentId)||a.row-b.row));
+  else if(sort==='rule-asc'||sort==='rule-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.rule.title,b.rule.title)||natural(a.rule.id,b.rule.id)||a.row-b.row));
+  else if(sort==='row-asc'||sort==='row-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*((a.row-b.row)||natural(a.sheet,b.sheet)));
   S.session.filteredCacheKey=key;S.session.filteredCacheRows=rows;return rows;
 }
 function statusMarkup(summary){const label=summary.status==='blocked'?'Blocked':summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
-function severityOptions(){return `<option value="all">All severities</option>`+SSM_AUDIT_SEVERITIES.map(value=>`<option value="${value}" ${S.session.severity===value?'selected':''}>${SEVERITY_LABELS[value]}</option>`).join('');}
-function categoryOptions(){return `<option value="all">All categories</option>`+SSM_AUDIT_CATEGORIES.map(value=>`<option value="${value}" ${S.session.category===value?'selected':''}>${CATEGORY_LABELS[value]}</option>`).join('');}
-function categoryTabs(summary){return `<button class="audit-cat ${S.session.category==='all'?'active':''}" data-audit-category="all">All <b>${summary.findings.toLocaleString()}</b></button>`+SSM_AUDIT_CATEGORIES.map(category=>`<button class="audit-cat ${S.session.category===category?'active':''}" data-audit-category="${category}">${CATEGORY_LABELS[category]} <b>${(summary.category[category]||0).toLocaleString()}</b></button>`).join('');}
+function categoryTabs(summary){const hidden=new Set(S.session.hiddenCategories||[]);return `<button class="audit-cat ${hidden.size?'':'active'}" data-audit-category="all">All <b>${summary.findings.toLocaleString()}</b></button>`+SSM_AUDIT_CATEGORIES.map(category=>`<button class="audit-cat ${hidden.has(category)?'':'active'}" data-audit-category="${category}" aria-pressed="${hidden.has(category)?'false':'true'}">${CATEGORY_LABELS[category]} <b>${(summary.category[category]||0).toLocaleString()}</b></button>`).join('');}
+function filterCount(){return ['hiddenSources','hiddenSeverities','hiddenCategories','hiddenRules'].reduce((total,key)=>total+(S.session[key]||[]).length,0);}
+function filterCheck(key,value,label,count){const checked=!(S.session[key]||[]).includes(value);return `<label class="audit-filter-option"><input type="checkbox" data-audit-filter-key="${key}" value="${esc(value)}" ${checked?'checked':''}><span>${esc(label)}</span><b>${Number(count||0).toLocaleString()}</b></label>`;}
+function filterMenu(result){
+  const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);
+  const rules=[...new Map(result.findings.map(finding=>[finding.rule.id,finding.rule])).values()].sort((a,b)=>a.title.localeCompare(b.title)||a.id.localeCompare(b.id));
+  return `<div class="audit-filter-menu ${S.session.filterOpen?'open':''}" id="auditFilterMenu" ${S.session.filterOpen?'':'hidden'}>
+    <div class="audit-filter-head"><div><b>Show findings</b><span>Checked items stay visible</span></div><button class="btn ghost sm" id="auditResetFilters" type="button">${ic('rotate-ccw')}Reset</button></div>
+    <div class="audit-filter-scroll"><fieldset><legend>Rule source</legend>${SSM_AUDIT_SOURCES.map(source=>filterCheck('hiddenSources',source.id,source.label,result.summary.source[source.id])).join('')}</fieldset>
+    <fieldset><legend>Severity</legend>${SSM_AUDIT_SEVERITIES.map(level=>filterCheck('hiddenSeverities',level,SEVERITY_LABELS[level],result.summary.severity[level])).join('')}</fieldset>
+    <fieldset><legend>Individual rules</legend>${rules.map(rule=>filterCheck('hiddenRules',rule.id,rule.title,counts.get(rule.id))).join('')}</fieldset></div>
+  </div>`;
+}
+function sortOptions(){const options=[['severity-desc','Severity: high to low'],['severity-asc','Severity: low to high'],['equipment-asc','Equipment: A to Z'],['equipment-desc','Equipment: Z to A'],['rule-asc','Rule: A to Z'],['rule-desc','Rule: Z to A'],['row-asc','Row: low to high'],['row-desc','Row: high to low']];return options.map(([value,label])=>`<option value="${value}" ${S.session.sort===value?'selected':''}>${label}</option>`).join('');}
 
 function renderAuditResult(navigate){
   const result=S.session&&S.session.result;if(!result){navigate('upload');return;}
@@ -2063,15 +2120,15 @@ function renderAuditResult(navigate){
     <div class="audit-head"><button class="btn ghost" id="auditBack">${ic('arrow-left')}Files</button><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><span class="eyebrow">${esc(result.standard)}</span><h2>SSM Audit</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
     <div class="audit-summary"><div><span>Rows audited</span><b>${summary.rows.toLocaleString()}</b></div><div class="critical"><span>Blockers</span><b>${summary.severity.blocker.toLocaleString()}</b></div><div class="error"><span>Errors</span><b>${summary.severity.error.toLocaleString()}</b></div><div class="warning"><span>Warnings</span><b>${summary.severity.warning.toLocaleString()}</b></div><div><span>Advisories</span><b>${summary.severity.info.toLocaleString()}</b></div><div><span>Checks completed</span><b>${summary.checks.toLocaleString()}</b></div></div>
     <div class="audit-categories">${categoryTabs(summary)}</div>
-    <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, rules, and explanations" value="${esc(S.session.search)}"></div><select id="auditSeverity" aria-label="Severity">${severityOptions()}</select><select id="auditCategory" aria-label="Category">${categoryOptions()}</select><select id="auditSort" aria-label="Sort findings"><option value="severity" ${S.session.sort==='severity'?'selected':''}>Severity order</option><option value="equipment" ${S.session.sort==='equipment'?'selected':''}>Equipment ID</option><option value="rule" ${S.session.sort==='rule'?'selected':''}>Rule</option></select><span class="audit-count" id="auditCount"></span></div>
-    <div class="audit-table-wrap" id="auditTableWrap"><table class="audit-table"><thead><tr><th>Severity</th><th>Finding</th><th>Equipment ID</th><th>Category</th><th>Source</th><th aria-label="Open details"></th></tr></thead><tbody id="auditRows"></tbody></table></div>
+    <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, rules, and explanations" value="${esc(S.session.search)}"></div><div class="audit-filter-wrap"><button class="btn audit-filter-button ${filterCount()?'active':''}" id="auditFilters" type="button" aria-expanded="${S.session.filterOpen?'true':'false'}">${ic('filter')}Filters <b id="auditFilterCount">${filterCount()||''}</b></button>${filterMenu(result)}</div><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
+    <div class="audit-table-wrap" id="auditTableWrap"><table class="audit-table"><thead><tr><th>Severity</th><th>Finding</th><th>Equipment ID</th><th>Rule source</th><th>Evidence</th><th aria-label="Open details"></th></tr></thead><tbody id="auditRows"></tbody></table></div>
   </section>`;
   wireAuditResult(navigate);
 }
 
-function auditRowHtml(finding){return `<tr data-audit-finding="${esc(finding.id)}" tabindex="0" aria-label="Open ${esc(finding.rule.id)} finding for ${esc(finding.equipmentId||'registry')}"><td><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span></td><td><b>${esc(finding.why)}</b><span>${esc(finding.rule.id)}</span></td><td>${copyTagHtml(finding.equipmentId)}</td><td>${esc(CATEGORY_LABELS[finding.category]||finding.category)}</td><td>${esc(finding.sheet||'Registry')} &middot; ${finding.row||'&mdash;'}</td><td>${ic('chevron-right')}</td></tr>`;}
+function auditRowHtml(finding){return `<tr data-audit-finding="${esc(finding.id)}" tabindex="0" aria-label="Open ${esc(finding.rule.title)} finding for ${esc(finding.equipmentId||'registry')}"><td><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span></td><td><b>${esc(finding.why)}</b><span>${esc(finding.rule.title)} &middot; ${esc(CATEGORY_LABELS[finding.category]||finding.category)}</span></td><td>${copyTagHtml(finding.equipmentId)}</td><td>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</td><td>${esc(finding.sheet||'Registry')} &middot; ${finding.row||'&mdash;'}</td><td>${ic('chevron-right')}</td></tr>`;}
 function renderRows(){
-  const wrap=$('#auditTableWrap'),body=$('#auditRows');if(!wrap||!body)return;const findings=filteredFindings(),count=$('#auditCount');if(count)count.textContent=`${findings.length.toLocaleString()} finding${findings.length===1?'':'s'}`;
+  const wrap=$('#auditTableWrap'),body=$('#auditRows');if(!wrap||!body)return;const findings=filteredFindings(),count=$('#auditCount');if(count)count.textContent=`${findings.length.toLocaleString()} of ${S.session.result.findings.length.toLocaleString()} findings`;
   const visible=Math.min(AUDIT_MAX_ROWS,Math.max(28,Math.ceil(wrap.clientHeight/AUDIT_ROW_HEIGHT)+AUDIT_OVERSCAN*2));
   const start=Math.min(Math.max(0,findings.length-visible),Math.max(0,Math.floor(wrap.scrollTop/AUDIT_ROW_HEIGHT)-AUDIT_OVERSCAN)),end=Math.min(findings.length,start+visible);
   const spacer=height=>height?`<tr class="audit-spacer" aria-hidden="true"><td colspan="6" style="height:${height}px"></td></tr>`:'';
@@ -2080,28 +2137,37 @@ function renderRows(){
 }
 function openFinding(id,opener){
   const finding=S.session.result.findings.find(item=>item.id===id);if(!finding)return;
-  S.session.selectedFindingId=id;S.session.opener=opener;$('#drawerTitle').textContent='Audit finding';$('#drawerBody').innerHTML=`<div class="audit-drawer"><div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span><code>${esc(finding.rule.id)}</code></div><h3>${esc(finding.why)}</h3>${finding.equipmentId?`<div class="audit-subject">${copyTagHtml(finding.equipmentId)}</div>`:''}<div class="audit-detail"><span>Found</span><p>${esc(typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual))||'Blank'}</p></div><div class="audit-detail expected"><span>Expected</span><p>${esc(typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected))}</p></div><div class="audit-detail action"><span>Recommended correction</span><p>${esc(finding.recommendation)}</p></div><dl class="audit-evidence"><dt>Standard</dt><dd>${esc(finding.rule.standardRef)}</dd><dt>Evidence</dt><dd>${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'&mdash;'}${finding.field?' &middot; '+esc(finding.field):''}</dd><dt>Fingerprint</dt><dd><code>${esc(finding.fingerprint)}</code></dd></dl></div>`;
+  S.session.selectedFindingId=id;S.session.opener=opener;$('#drawerTitle').textContent='Audit finding';$('#drawerBody').innerHTML=`<div class="audit-drawer"><div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span><code>${esc(finding.rule.id)}</code></div><h3>${esc(finding.why)}</h3>${finding.equipmentId?`<div class="audit-subject">${copyTagHtml(finding.equipmentId)}</div>`:''}<div class="audit-detail"><span>Found</span><p>${esc(typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual))||'Blank'}</p></div><div class="audit-detail expected"><span>Expected</span><p>${esc(typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected))}</p></div><div class="audit-detail action"><span>Recommended correction</span><p>${esc(finding.recommendation)}</p></div><dl class="audit-evidence"><dt>Rule source</dt><dd>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</dd><dt>Rule</dt><dd><b>${esc(finding.rule.title)}</b><br>${esc(finding.rule.statement)}</dd><dt>Evidence</dt><dd>${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'&mdash;'}${finding.field?' &middot; '+esc(finding.field):''}</dd><dt>Fingerprint</dt><dd><code>${esc(finding.fingerprint)}</code></dd></dl></div>`;
   wireCopyTags($('#drawerBody'));$('#drawerBack').classList.add('show');$('#drawer').focus();
 }
 function closeDrawer(){
   $('#drawerBack').classList.remove('show');const opener=S.session&&S.session.opener;if(opener&&document.contains(opener))opener.focus();
 }
 function rerenderRows(reset){const wrap=$('#auditTableWrap');if(reset&&wrap)wrap.scrollTop=0;renderRows();}
+function updateFilterButton(){const count=filterCount(),button=$('#auditFilters'),badge=$('#auditFilterCount');if(button)button.classList.toggle('active',!!count);if(badge)badge.textContent=count||'';}
+function setFilterOpen(open){S.session.filterOpen=!!open;const menu=$('#auditFilterMenu'),button=$('#auditFilters');if(menu){menu.hidden=!open;menu.classList.toggle('open',!!open);}if(button)button.setAttribute('aria-expanded',open?'true':'false');}
+function teardownAuditFilters(){if(auditOutsideHandler)document.removeEventListener('pointerdown',auditOutsideHandler);if(auditEscapeHandler)document.removeEventListener('keydown',auditEscapeHandler);auditOutsideHandler=null;auditEscapeHandler=null;}
 function wireAuditResult(navigate){
+  teardownAuditFilters();
   $('#auditBack').onclick=()=>navigate('upload');$('#exportAudit').onclick=exportSsmAuditXlsx;
   $('#auditFullscreen').onclick=()=>{S.session.fullscreen=!S.session.fullscreen;renderAuditResult(navigate);};
   $('#auditSearch').oninput=event=>{S.session.search=event.target.value;rerenderRows(true);};
-  $('#auditSeverity').onchange=event=>{S.session.severity=event.target.value;rerenderRows(true);};
-  $('#auditCategory').onchange=event=>{S.session.category=event.target.value;renderAuditResult(navigate);};
   $('#auditSort').onchange=event=>{S.session.sort=event.target.value;rerenderRows(true);};
-  $$('[data-audit-category]').forEach(button=>button.onclick=()=>{S.session.category=button.dataset.auditCategory;renderAuditResult(navigate);});
+  $('#auditFilters').onclick=event=>{event.stopPropagation();setFilterOpen(!S.session.filterOpen);};
+  $('#auditResetFilters').onclick=()=>{S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.filteredCacheKey='';renderAuditResult(navigate);};
+  $$('[data-audit-filter-key]').forEach(input=>input.onchange=()=>{const key=input.dataset.auditFilterKey,values=new Set(S.session[key]||[]);if(input.checked)values.delete(input.value);else values.add(input.value);S.session[key]=[...values];S.session.filteredCacheKey='';updateFilterButton();rerenderRows(true);});
+  $$('[data-audit-category]').forEach(button=>button.onclick=()=>{const category=button.dataset.auditCategory;if(category==='all')S.session.hiddenCategories=[];else{const hidden=new Set(S.session.hiddenCategories||[]);if(hidden.has(category))hidden.delete(category);else hidden.add(category);S.session.hiddenCategories=[...hidden];}S.session.filteredCacheKey='';renderAuditResult(navigate);});
+  auditOutsideHandler=event=>{if(S.session.filterOpen&&!event.target.closest('.audit-filter-wrap'))setFilterOpen(false);};document.addEventListener('pointerdown',auditOutsideHandler);
+  auditEscapeHandler=event=>{if(event.key==='Escape'&&S.session.filterOpen){setFilterOpen(false);$('#auditFilters')?.focus();}};document.addEventListener('keydown',auditEscapeHandler);
   const wrap=$('#auditTableWrap');wrap.scrollTop=S.session.scrollTop||0;let frame=0;wrap.onscroll=()=>{S.session.scrollTop=wrap.scrollTop;if(frame)return;frame=requestAnimationFrame(()=>{frame=0;renderRows();});};requestAnimationFrame(renderRows);
 }
 
 /* src/boot.js */
+const ruleGuide=()=>SSM_AUDIT_SOURCES.map(source=>`<h4>${esc(source.label)}</h4><ul>${Object.values(SSM_AUDIT_RULES).filter(rule=>rule.source===source.id).map(rule=>`<li><b>${esc(rule.title)}.</b> ${esc(rule.statement)}</li>`).join('')}</ul>`).join('');
 const GUIDE_SECTIONS=[
-  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Exto Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
-  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks objective rules from the SSM SOP and approved Exto Rev21 contract.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and approved values.</li><li>Dependencies, circular startup sequences, milestones, Item Masters, and organizational headers.</li></ol>'},
+  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
+  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks objective Cx upload requirements, SSM SOP rules, and repeatable commissioning relationships.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and allowed values.</li><li>Dependencies, electrical and control paths, milestones, Item Masters, and organizational headers.</li></ol>'},
+  {id:'rules',label:'Rule catalog',icon:'check-check',title:'Rules used by the audit',body:ruleGuide()},
   {id:'findings',label:'Understanding findings',icon:'triangle-alert',title:'Read each finding as evidence',body:'<p>Every finding identifies the rule, source row, observed value, expected result, recommended correction, and a stable fingerprint. Use filters to isolate one severity or category, then open a row for the complete explanation.</p>'},
   {id:'report',label:'Exporting results',icon:'file-down',title:'Create a resolution report',body:'<p>Export report creates an Excel workbook containing the audit summary, every finding, and a rule-level count. The report is generated locally and can be used to assign and track corrections.</p>'},
   {id:'privacy',label:'Privacy',icon:'lock',title:'The registry stays on this device',body:'<p>The selected workbook is never uploaded, persisted, or used to learn rules. Refreshing or closing the HTML clears the audit session.</p><div class="guide-note">'+ic('info')+'The only automatic network request is an anonymous check for a newer SSM Audit release when the HTML opens or refreshes.</div>'},

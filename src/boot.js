@@ -1,13 +1,16 @@
 import { $, $$, esc } from './core/text.js'
 import { APP_VERSION } from './version.js'
 import { S } from './state.js'
+import { SSM_AUDIT_RULES, SSM_AUDIT_SOURCES } from './audit/engine.js'
 import { ic } from './ui/icons.js'
 import { closeDrawer, renderAuditResult, renderUpload } from './ui/audit.js'
 import { closeUpdateModal, initUpdate } from './update/update.js'
 
+const ruleGuide=()=>SSM_AUDIT_SOURCES.map(source=>`<h4>${esc(source.label)}</h4><ul>${Object.values(SSM_AUDIT_RULES).filter(rule=>rule.source===source.id).map(rule=>`<li><b>${esc(rule.title)}.</b> ${esc(rule.statement)}</li>`).join('')}</ul>`).join('');
 const GUIDE_SECTIONS=[
-  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Exto Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
-  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks objective rules from the SSM SOP and approved Exto Rev21 contract.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and approved values.</li><li>Dependencies, circular startup sequences, milestones, Item Masters, and organizational headers.</li></ol>'},
+  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
+  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks objective Cx upload requirements, SSM SOP rules, and repeatable commissioning relationships.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and allowed values.</li><li>Dependencies, electrical and control paths, milestones, Item Masters, and organizational headers.</li></ol>'},
+  {id:'rules',label:'Rule catalog',icon:'check-check',title:'Rules used by the audit',body:ruleGuide()},
   {id:'findings',label:'Understanding findings',icon:'triangle-alert',title:'Read each finding as evidence',body:'<p>Every finding identifies the rule, source row, observed value, expected result, recommended correction, and a stable fingerprint. Use filters to isolate one severity or category, then open a row for the complete explanation.</p>'},
   {id:'report',label:'Exporting results',icon:'file-down',title:'Create a resolution report',body:'<p>Export report creates an Excel workbook containing the audit summary, every finding, and a rule-level count. The report is generated locally and can be used to assign and track corrections.</p>'},
   {id:'privacy',label:'Privacy',icon:'lock',title:'The registry stays on this device',body:'<p>The selected workbook is never uploaded, persisted, or used to learn rules. Refreshing or closing the HTML clears the audit session.</p><div class="guide-note">'+ic('info')+'The only automatic network request is an anonymous check for a newer SSM Audit release when the HTML opens or refreshes.</div>'},
