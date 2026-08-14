@@ -188,13 +188,13 @@ async function addComparisonFile(file,side,navigate){
     });
     if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,result:auditResult,error:''};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
-    S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
+    S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
 }
 
 async function runComparison(navigate){
   if(!S.comparison.targetSnapshot||!S.comparison.referenceSnapshot){toast('Choose both registries first');return;}
-  await runWithProgress('Comparing project hierarchies','Building values are excluded',async(checkpoint,report)=>{report(.15,'Indexing target systems');await checkpoint();report(.38,'Aligning equipment by UPN and meaning');await checkpoint();const result=compareSsmRegistries(S.comparison.targetSnapshot,S.comparison.referenceSnapshot);S.comparison.result=result;const selected=result.systems.find(system=>system.status!=='aligned')||result.systems[0];S.comparison.selectedUpn=selected&&selected.upn||'';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};report(1,`${result.summary.systems.toLocaleString()} systems compared`);});
+  await runWithProgress('Comparing project hierarchies','Building values are excluded',async(checkpoint,report)=>{report(.15,'Indexing target systems');await checkpoint();report(.38,'Aligning equipment by UPN and meaning');await checkpoint();const result=compareSsmRegistries(S.comparison.targetSnapshot,S.comparison.referenceSnapshot);S.comparison.result=result;const selected=result.systems.find(system=>system.status!=='aligned')||result.systems[0];S.comparison.selectedUpn=selected&&selected.upn||'';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};report(1,`${result.summary.systems.toLocaleString()} systems compared`);});
   navigate('compare');
 }
 
@@ -356,7 +356,7 @@ function countCard(label,target,reference){return `<div><span>${esc(label)}</spa
 function observationIcon(type){return type==='headers'?'folder-tree':type==='controls'?'network':type==='hierarchy'?'list-tree':type==='coverage'?'layers':'tag';}
 function comparisonObservations(system){
   if(!system.observations.length)return '<div class="compare-aligned-note">'+ic('check-check')+'No system-level pattern differences were found after Building was excluded.</div>';
-  return `<div class="compare-observation-list">${system.observations.slice(0,80).map(item=>`<div class="compare-observation ${item.type}"><span>${ic(observationIcon(item.type))}</span><div><b>${esc(item.title)}</b><small>${esc(item.subject)}</small></div><code>${esc(item.target)} / ${esc(item.reference)}</code></div>`).join('')}${system.observations.length>80?`<p class="compare-more">${(system.observations.length-80).toLocaleString()} additional observations are included in the Excel export.</p>`:''}</div>`;
+  return `<div class="compare-observation-list">${system.observations.map(item=>`<div class="compare-observation ${item.type}"><span>${ic(observationIcon(item.type))}</span><div><b>${esc(item.title)}</b><small>${esc(item.subject)}</small></div><code>${esc(item.target)} / ${esc(item.reference)}</code></div>`).join('')}</div>`;
 }
 function treeExpansion(system){
   const store=S.comparison.treeExpandedByUpn||(S.comparison.treeExpandedByUpn={});
@@ -405,18 +405,31 @@ function renderComparisonPairs(){
   const visible=Math.min(COMPARE_MAX_ROWS,Math.max(18,Math.ceil(wrap.clientHeight/COMPARE_ROW_HEIGHT)+COMPARE_OVERSCAN*2)),start=Math.min(Math.max(0,pairs.length-visible),Math.max(0,Math.floor(wrap.scrollTop/COMPARE_ROW_HEIGHT)-COMPARE_OVERSCAN)),end=Math.min(pairs.length,start+visible);
   const spacer=height=>height?`<div class="compare-pair-spacer" style="height:${height}px" aria-hidden="true"></div>`:'';body.innerHTML=spacer(start*COMPARE_ROW_HEIGHT)+pairs.slice(start,end).map(pairHtml).join('')+spacer((pairs.length-end)*COMPARE_ROW_HEIGHT);wireCopyTags(body);
 }
+function comparisonDetailTabs(system){
+  const active=S.comparison.detailTab||'hierarchy',tabs=[
+    {id:'hierarchy',icon:'list-tree',label:'Hierarchy',count:system.pairs.length},
+    {id:'differences',icon:'triangle-alert',label:'System differences',count:system.observations.length},
+    {id:'mapping',icon:'table-2',label:'Equipment mapping',count:system.pairs.length},
+  ];
+  return `<div class="compare-detail-tabs" role="tablist" aria-label="Project comparison views">${tabs.map(tab=>`<button class="compare-detail-tab ${active===tab.id?'active':''}" type="button" data-compare-detail-tab="${tab.id}" role="tab" aria-selected="${active===tab.id}">${ic(tab.icon)}<span>${esc(tab.label)}</span><b>${tab.count.toLocaleString()}</b></button>`).join('')}</div>`;
+}
+function comparisonDetailPanel(system){
+  const active=S.comparison.detailTab||'hierarchy';
+  if(active==='differences')return `<section class="compare-subview compare-observations" role="tabpanel"><div class="compare-section-title"><div><b>System differences</b><span>Counts compare equipment meaning and nesting patterns, not Building.</span></div><span>${system.observations.length.toLocaleString()} observations</span></div>${comparisonObservations(system)}</section>`;
+  if(active==='mapping')return `<section class="compare-subview compare-mapping" role="tabpanel"><div class="compare-section-title"><div><b>Side-by-side equipment mapping</b><span>Matched rows remain visible for context; filter to focus on changes.</span></div><span id="comparePairCount"></span></div><div class="compare-pair-toolbar"><div class="searchbox">${ic('search')}<input id="compareRowSearch" aria-label="Search mapped equipment" placeholder="Search tags, descriptions, parents" value="${esc(S.comparison.rowSearch)}"></div><select id="compareRowFilter" aria-label="Filter mappings"><option value="different" ${S.comparison.rowFilter==='different'?'selected':''}>Differences only</option><option value="all" ${S.comparison.rowFilter==='all'?'selected':''}>All mappings</option><option value="changed" ${S.comparison.rowFilter==='changed'?'selected':''}>Changed pairs</option><option value="target-only" ${S.comparison.rowFilter==='target-only'?'selected':''}>Target only</option><option value="reference-only" ${S.comparison.rowFilter==='reference-only'?'selected':''}>Reference only</option><option value="aligned" ${S.comparison.rowFilter==='aligned'?'selected':''}>Aligned pairs</option></select></div><div class="compare-pair-wrap" id="comparePairWrap"><div id="comparePairs"></div></div></section>`;
+  return `<section class="compare-subview compare-tree-section" role="tabpanel"><div class="compare-section-title"><div><b>Synchronized hierarchy</b><span>Open either side to reveal both matched branches. Rows and scrolling stay aligned.</span></div><span id="compareTreeCount"></span><div class="compare-tree-actions"><button class="btn ghost sm" id="compareTreeCollapse" type="button">${ic('chevrons-up')}Collapse</button><button class="btn ghost sm" id="compareTreeExpand" type="button">${ic('list-tree')}Expand all</button></div></div><div class="compare-tree-grid"><div class="compare-tree-head"><b>Registry to audit</b><span>Alignment</span><b>Completed project</b></div><div class="compare-tree-wrap" id="compareTreeWrap"><div id="compareTreeRows"></div></div></div></section>`;
+}
 function renderComparisonDetail(){
   const system=selectedComparisonSystem(),detail=$('#compareDetail');if(!detail||!system)return;const types=comparisonSystemTypes(system);
-  detail.innerHTML=`<div class="compare-detail-head"><div><span class="eyebrow">UPN ${esc(system.upn)}</span><h3>${esc(stripSystemUpn(system.label))}</h3><p>Building values are excluded. Equipment is paired by tag core and semantic role.</p></div><span class="comparison-pill ${system.status}">${comparisonStatusLabel(system.status)}</span></div>
+  detail.innerHTML=`<div class="compare-detail-head"><div><span class="eyebrow">UPN ${esc(system.upn)}</span><h3>${esc(stripSystemUpn(system.label))}</h3><p>Building values are excluded. Equipment is aligned by neutral tag identity, meaning, and hierarchy context.</p></div><span class="comparison-pill ${system.status}">${comparisonStatusLabel(system.status)}</span></div>
   <div class="compare-counts">${countCard('Equipment',system.targetRows,system.referenceRows)}${countCard('Headers',system.targetHeaders,system.referenceHeaders)}${countCard('I&C / Controls',system.targetControls,system.referenceControls)}<div><span>Pattern findings</span><b>${system.observations.length.toLocaleString()} <small>observed</small></b><b>${(types.hierarchy+types.headers+types.controls).toLocaleString()} <small>nesting</small></b></div></div>
-  <section class="compare-tree-section"><div class="compare-section-title"><div><b>Synchronized hierarchy</b><span>Open either side to reveal both matched branches. Rows and scrolling stay aligned.</span></div><span id="compareTreeCount"></span><div class="compare-tree-actions"><button class="btn ghost sm" id="compareTreeCollapse" type="button">${ic('chevrons-up')}Collapse</button><button class="btn ghost sm" id="compareTreeExpand" type="button">${ic('list-tree')}Expand all</button></div></div><div class="compare-tree-grid"><div class="compare-tree-head"><b>Registry to audit</b><span>Alignment</span><b>Completed project</b></div><div class="compare-tree-wrap" id="compareTreeWrap"><div id="compareTreeRows"></div></div></div></section>
-  <section class="compare-observations"><div class="compare-section-title"><div><b>System differences</b><span>Counts compare equipment meaning and nesting patterns, not Building.</span></div></div>${comparisonObservations(system)}</section>
-  <section class="compare-mapping"><div class="compare-section-title"><div><b>Side-by-side equipment mapping</b><span>Matched rows remain visible for context; filter to focus on changes.</span></div><span id="comparePairCount"></span></div><div class="compare-pair-toolbar"><div class="searchbox">${ic('search')}<input id="compareRowSearch" aria-label="Search mapped equipment" placeholder="Search tags, descriptions, parents" value="${esc(S.comparison.rowSearch)}"></div><select id="compareRowFilter" aria-label="Filter mappings"><option value="different" ${S.comparison.rowFilter==='different'?'selected':''}>Differences only</option><option value="all" ${S.comparison.rowFilter==='all'?'selected':''}>All mappings</option><option value="changed" ${S.comparison.rowFilter==='changed'?'selected':''}>Changed pairs</option><option value="target-only" ${S.comparison.rowFilter==='target-only'?'selected':''}>Target only</option><option value="reference-only" ${S.comparison.rowFilter==='reference-only'?'selected':''}>Reference only</option><option value="aligned" ${S.comparison.rowFilter==='aligned'?'selected':''}>Aligned pairs</option></select></div><div class="compare-pair-wrap" id="comparePairWrap"><div id="comparePairs"></div></div></section>`;
+  ${comparisonDetailTabs(system)}<div class="compare-detail-body">${comparisonDetailPanel(system)}</div>`;
   wireComparisonDetail();
 }
 function wireComparisonDetail(){
+  $$('[data-compare-detail-tab]').forEach(button=>button.onclick=()=>{S.comparison.detailTab=button.dataset.compareDetailTab;renderComparisonDetail();});
   const search=$('#compareRowSearch'),filter=$('#compareRowFilter'),wrap=$('#comparePairWrap');if(search)search.oninput=event=>{S.comparison.rowSearch=event.target.value;if(wrap)wrap.scrollTop=0;renderComparisonPairs();};if(filter)filter.onchange=event=>{S.comparison.rowFilter=event.target.value;if(wrap)wrap.scrollTop=0;renderComparisonPairs();};
-  wireComparisonTree();
+  if($('#compareTreeWrap'))wireComparisonTree();
   if(wrap){wrap.scrollTop=S.comparison.pairScrollTop||0;let frame=0;wrap.onscroll=()=>{S.comparison.pairScrollTop=wrap.scrollTop;if(frame)return;frame=requestAnimationFrame(()=>{frame=0;renderComparisonPairs();});};requestAnimationFrame(renderComparisonPairs);}
 }
 
@@ -432,7 +445,7 @@ export function renderComparisonResult(navigate){
 }
 
 function renderSystemList(){const list=$('#compareSystemList');if(!list)return;list.innerHTML=systemListHtml();wireSystemButtons();}
-function wireSystemButtons(){$$('[data-compare-upn]').forEach(button=>button.onclick=()=>{S.comparison.selectedUpn=button.dataset.compareUpn;S.comparison.pairScrollTop=0;renderSystemList();renderComparisonDetail();});}
+function wireSystemButtons(){$$('[data-compare-upn]').forEach(button=>button.onclick=()=>{S.comparison.selectedUpn=button.dataset.compareUpn;S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;renderSystemList();renderComparisonDetail();});}
 function wireComparisonResult(navigate){
   teardownAuditFilters();wireResultTabs(navigate);$('#compareBack').onclick=()=>{S.homeMode='compare';navigate('upload');};$('#exportComparison').onclick=exportSsmComparisonXlsx;$('#compareFullscreen').onclick=()=>{S.comparison.fullscreen=!S.comparison.fullscreen;renderComparisonResult(navigate);};
   $('#compareSystemSearch').oninput=event=>{S.comparison.systemSearch=event.target.value;renderSystemList();};$('#compareSystemFilter').onchange=event=>{S.comparison.systemFilter=event.target.value;renderSystemList();};$('#compareSystemSort').onchange=event=>{S.comparison.systemSort=event.target.value;renderSystemList();};wireSystemButtons();

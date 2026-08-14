@@ -65,6 +65,45 @@ test('project comparison recognizes instruments nested within non-controls disci
   assert.ok(system.observations.some(item=>item.type==='controls'&&item.subject.includes('TEMPERATURE TRANSMITTER')));
 });
 
+test('project comparison aligns repeated electrical branches by neutral identity and topology',()=>{
+  const target=snapshot([
+    equipment({building:'A1',tag:'A1-XFM-A-01',parent:'603 Example System',description:'Electrical Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'A1',tag:'A1-XFM-B-02',parent:'603 Example System',description:'Electrical Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'A1',tag:'A1-LVS-A-01',parent:'A1-XFM-A-01',description:'Low Voltage Switchgear',classification:'SWG',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'A1',tag:'A1-LVS-B-02',parent:'A1-XFM-B-02',description:'Low Voltage Switchgear',classification:'SWG',upn:'603',discipline:'ELECTRICAL'}),
+  ],'target');
+  const reference=snapshot([
+    equipment({building:'Z9',tag:'Z9-TRANSFORMER-A-02',parent:'603 Example System',description:'Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'Z9',tag:'Z9-TRANSFORMER-Z-01',parent:'603 Example System',description:'Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'Z9',tag:'Z9-SWITCHGEAR-A-02',parent:'Z9-TRANSFORMER-A-02',description:'Unit Substation Switchgear',classification:'SWG',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'Z9',tag:'Z9-SWITCHGEAR-Z-01',parent:'Z9-TRANSFORMER-Z-01',description:'Unit Substation Switchgear',classification:'SWG',upn:'603',discipline:'ELECTRICAL'}),
+  ],'reference');
+  const system=compareSsmRegistries(target,reference).systems[0],first=system.pairs.find(pair=>pair.target&&pair.target.tag==='A1-XFM-A-01'),second=system.pairs.find(pair=>pair.target&&pair.target.tag==='A1-XFM-B-02');
+  assert.equal(first.reference.tag,'Z9-TRANSFORMER-Z-01');
+  assert.equal(second.reference.tag,'Z9-TRANSFORMER-A-02');
+  assert.equal(first.matchReason,'Same equipment type, parent type, and neutral tag identity');
+  assert.equal(system.pairSummary.targetOnly,0);
+  assert.equal(system.pairSummary.referenceOnly,0);
+});
+
+test('project comparison normalizes common FMS network nomenclature without tag equality',()=>{
+  const target=snapshot([
+    equipment({building:'A1',tag:'A1-NET-01',parent:'650 Example System',description:'Stratix Enclosure',classification:'STRATIX ENCLOSURE',upn:'650',discipline:'FACILITIES MONITORING SYSTEM'}),
+    equipment({building:'A1',tag:'A1-SW-01',parent:'A1-NET-01',description:'Cisco Switch',classification:'CISCO SWITCH',upn:'650',discipline:'FACILITIES MONITORING SYSTEM'}),
+    equipment({building:'A1',tag:'A1-OIT-01',parent:'A1-NET-01',description:'Operator Interface Terminal',classification:'OIT',upn:'650',discipline:'FACILITIES MONITORING SYSTEM'}),
+  ],'target');
+  const reference=snapshot([
+    equipment({building:'B2',tag:'B2-BAY-01',parent:'650 Example System',description:'FMS Bay Stratix Panel',classification:'BSTX',upn:'650',discipline:'I&C'}),
+    equipment({building:'B2',tag:'B2-STX-01',parent:'B2-BAY-01',description:'Startix Switch',classification:'STX',upn:'650',discipline:'I&C'}),
+    equipment({building:'B2',tag:'B2-HMI-01',parent:'B2-BAY-01',description:'HMI Touchscreen',classification:'HMI',upn:'650',discipline:'I&C'}),
+  ],'reference');
+  const system=compareSsmRegistries(target,reference).systems[0];
+  assert.equal(system.pairSummary.targetOnly,0);
+  assert.equal(system.pairSummary.referenceOnly,0);
+  assert.ok(system.pairs.some(pair=>pair.target?.semanticRole==='Industrial network switch'&&pair.reference?.semanticRole==='Industrial network switch'));
+  assert.ok(system.pairs.some(pair=>pair.target?.semanticRole==='Operator interface'&&pair.reference?.semanticRole==='Operator interface'));
+});
+
 test('project comparison builds one synchronized tree from paired hierarchy branches',()=>{
   const target=snapshot([
     equipment({building:'A1',tag:'A1-MAH-01',parent:'101 Example System',description:'Makeup Air Handler'}),

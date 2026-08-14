@@ -11,18 +11,40 @@ const CLASSIFICATION_FAMILIES=new Map(Object.entries({
   AIT:'Analyzer transmitter',AT:'Analyzer transmitter',
   TCV:'Control valve',CV:'Control valve',FV:'Control valve',
   TFRM:'Transformer',DP:'Distribution panel',DTP:'Distribution panel',BRP:'Branch panel',
+  GIS:'Gas-insulated switchgear','SWG-GIS':'Gas-insulated switchgear',
+  MVSUB:'Medium-voltage substation',LVSUB:'Low-voltage substation',CB:'Circuit breaker',
+  BAT:'Battery system',MBAT:'Battery monitoring system',CHRG:'Battery charger',
+  UPS:'Uninterruptible power supply','UPS-10':'Uninterruptible power supply',
   RIO:'Remote I/O panel',PLC:'Programmable logic controller',LCP:'Local control panel',
+  OIT:'Operator interface',HMI:'Operator interface',GTW:'Network gateway',RACK:'Equipment rack',
+  STX:'Industrial network switch','CISCO SWITCH':'Industrial network switch',
+  BSTX:'Industrial network switch panel','STRATIX ENCLOSURE':'Industrial network switch enclosure',
   PMP:'Pump',LAT:'Lateral',MAIN:'Main distribution',HS:'Hand switch',
   ZSO:'Position switch',ZSC:'Position switch',QS:'Current switch',QL:'Status indicator',
   XV:'On/off valve',TK:'Tank',FDU:'Fiber distribution unit','FDU ENCLOSURE':'Fiber distribution unit enclosure',
 }));
 const DESCRIPTION_FAMILIES=[
+  [/GAS[- ]INSULATED SWITCHGEAR|\bGIS\b/,'Gas-insulated switchgear'],
+  [/MEDIUM[- ]VOLTAGE SUBSTATION|\bMVSS\b/,'Medium-voltage substation'],
+  [/LOW[- ]VOLTAGE SUBSTATION|\bLVSS\b/,'Low-voltage substation'],
   [/\bREMOTE\s*I\/?O\b|\bRIO\b/,'Remote I/O panel'],
   [/PROGRAMMABLE LOGIC CONTROLLER|\bPLC\b/,'Programmable logic controller'],
+  [/OPERATOR INTERFACE|\bOIT\b|\bHMI\b/,'Operator interface'],
+  [/STRATIX|STARTIX|INDUSTRIAL NETWORK SWITCH|CISCO SWITCH/,'Industrial network switch'],
+  [/PROFIBUS GATEWAY|NETWORK GATEWAY|SEGMENT COUPLER/,'Network gateway'],
   [/VARIABLE FREQUENCY DRIVE|ADJUSTABLE[- ]VARIABLE FREQUENCY DRIVE|\bVFD\b/,'Variable frequency drive'],
+  [/FAULT CURRENT LIMITER/,'Fault current limiter'],
   [/\bTRANSFORMER\b/,'Transformer'],
+  [/\bSWITCHGEAR\b|\bSWITCHBOARD\b/,'Switchgear'],
+  [/\bCIRCUIT BREAKER\b/,'Circuit breaker'],
+  [/\bDISCONNECT(?:OR)?(?: SWITCH)?\b/,'Disconnect switch'],
   [/\bDISTRIBUTION PANEL\b/,'Distribution panel'],
   [/\bBRANCH (?:CIRCUIT )?PANEL\b/,'Branch panel'],
+  [/\bLIGHTING FIXTURE\b/,'Lighting fixture'],
+  [/\bBATTERY CHARGER\b/,'Battery charger'],
+  [/\bBATTERY (?:CABINET|RACK|SYSTEM)\b/,'Battery system'],
+  [/\bUNINTERRUPTIBLE POWER SUPPLY\b|(?:^|\s)UPS(?:\s|$)|LIGHTING INVERTER/,'Uninterruptible power supply'],
+  [/DIESEL (?:ENGINE )?GENERATOR|EMERGENCY GENERATOR/,'Emergency generator'],
   [/TEMPERATURE (?:ELEMENT )?(?:INDICATING )?TRANSMITTER/,'Temperature transmitter'],
   [/FLOW (?:INDICATING )?TRANSMITTER/,'Flow transmitter'],
   [/PRESSURE (?:DIFF(?:ERENTIAL)? )?(?:INDICATING )?TRANSMITTER/,'Pressure transmitter'],
@@ -69,9 +91,13 @@ function isControls(row){
 function classificationFamily(row){const key=auditNormId(row&&row.equipmentClassification);return CLASSIFICATION_FAMILIES.get(key)||key;}
 function semanticRole(row){
   if(isHeader(row))return 'Organizational header';
-  const classification=classificationFamily(row);if(classification&&CLASSIFICATION_FAMILIES.has(auditNormId(row&&row.equipmentClassification)))return classification;
   const description=auditNormId(row&&row.equipmentDescription);for(const [pattern,label] of DESCRIPTION_FAMILIES)if(pattern.test(description))return label;
+  const classification=classificationFamily(row);if(classification&&CLASSIFICATION_FAMILIES.has(auditNormId(row&&row.equipmentClassification)))return classification;
   return classification||displayRole(row);
+}
+function tagIdentityKey(row){
+  const tag=buildingNeutralTag(row),upn=systemKey(row),tokens=tag.match(/\d+[A-Z]*/g)||[],useful=tokens.filter(token=>token!==upn);
+  return useful.slice(-3).join('|');
 }
 function sortedMode(values){
   const counts=new Map(),display=new Map();for(const value of values){const key=auditNormId(value);if(!key)continue;normalizedMapCount(counts,key);if(!display.has(key))display.set(key,clean(value));}
@@ -92,13 +118,15 @@ export function auditRegistryModel(snapshot){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),upn=systemKey(row),parentRow=rowsById.get(parentId)||generatedHeaders.get(`${upn}|${parentId}`);
     const source=row._source||{},key=`${clean(source.sheet)}:${source.row||0}:${id}`;
     const semantic=semanticRole(row),parentSemantic=parentRow?semanticRole(parentRow):'System / external root';
-    const node={row,key,id,upn,tag:clean(row.equipmentId),coreTag:buildingNeutralTag(row),role:displayRole(row),roleKey:roleKey(row),semanticRole:semantic,semanticRoleKey:auditNormId(semantic),classification:clean(row.equipmentClassification),classificationKey:auditNormId(row.equipmentClassification),classificationFamilyKey:auditNormId(classificationFamily(row)),discipline:clean(row.discipline),disciplineKind:disciplineKind(row),isControls:isControls(row),isHeader:isHeader(row),isSyntheticHeader:!!row._synthetic,parentId,parentRow,parentRole:parentRow?displayRole(parentRow):'System / external root',parentRoleKey:parentRow?roleKey(parentRow):'SYSTEM / EXTERNAL ROOT',parentSemanticRole:parentSemantic,parentSemanticRoleKey:auditNormId(parentSemantic),childCount:(childrenById.get(id)||[]).length,depth:0,underHeader:false,headerName:'',dependencyRoles:[],dependencyRoleKey:''};
+    const node={row,key,id,upn,tag:clean(row.equipmentId),coreTag:buildingNeutralTag(row),identityKey:tagIdentityKey(row),role:displayRole(row),roleKey:roleKey(row),semanticRole:semantic,semanticRoleKey:auditNormId(semantic),classification:clean(row.equipmentClassification),classificationKey:auditNormId(row.equipmentClassification),classificationFamilyKey:auditNormId(classificationFamily(row)),discipline:clean(row.discipline),disciplineKind:disciplineKind(row),isControls:isControls(row),isHeader:isHeader(row),isSyntheticHeader:!!row._synthetic,parentId,parentRow,parentRole:parentRow?displayRole(parentRow):'System / external root',parentRoleKey:parentRow?roleKey(parentRow):'SYSTEM / EXTERNAL ROOT',parentSemanticRole:parentSemantic,parentSemanticRoleKey:auditNormId(parentSemantic),childCount:(childrenById.get(id)||[]).length,childSemanticRoleKey:'',ancestorSemanticPathKey:'',depth:0,underHeader:false,headerName:'',dependencyRoles:[],dependencyRoleKey:''};
     nodeByRow.set(row,node);mapPush(systems,upn,node);
   }
   for(const node of nodeByRow.values()){
-    const seen=new Set([node.id]),roles=[];let current=node.parentRow,depth=0;
-    while(current&&depth<100){const parentNode=nodeByRow.get(current);if(!parentNode||seen.has(parentNode.id))break;seen.add(parentNode.id);depth++;roles.push(parentNode.role);if(parentNode.isHeader&&!node.underHeader){node.underHeader=true;node.headerName=parentNode.tag;}current=parentNode.parentRow;}
+    const seen=new Set([node.id]),roles=[],semanticRoles=[];let current=node.parentRow,depth=0;
+    while(current&&depth<100){const parentNode=nodeByRow.get(current);if(!parentNode||seen.has(parentNode.id))break;seen.add(parentNode.id);depth++;roles.push(parentNode.role);semanticRoles.push(parentNode.semanticRoleKey);if(parentNode.isHeader&&!node.underHeader){node.underHeader=true;node.headerName=parentNode.tag;}current=parentNode.parentRow;}
     node.depth=depth;node.path=[...roles.reverse(),node.role];
+    node.ancestorSemanticPathKey=semanticRoles.reverse().join('>');
+    node.childSemanticRoleKey=(childrenById.get(node.id)||[]).map(child=>nodeByRow.get(child)).filter(Boolean).map(child=>child.semanticRoleKey).sort(natCmp).join(';');
     const dependencyRows=auditSplitReferences(node.row.dependencies).filter(value=>!/^N\/?A$/i.test(value)).map(reference=>rowsById.get(auditNormId(reference))||null);
     node.dependencyRoles=dependencyRows.map(linked=>linked?displayRole(linked):'External dependency').sort(natCmp);
     node.dependencyRoleKey=dependencyRows.map(linked=>auditNormId(linked?semanticRole(linked):'External dependency')).sort(natCmp).join(';');
@@ -106,7 +134,7 @@ export function auditRegistryModel(snapshot){
   return {rows,nodes:[...nodeByRow.values()],systems,rowsById};
 }
 
-function nodeSort(left,right){return natCmp(left.semanticRole,right.semanticRole)||natCmp(left.parentSemanticRole,right.parentSemanticRole)||natCmp(left.role,right.role)||natCmp(left.coreTag,right.coreTag)||natCmp(left.tag,right.tag);}
+function nodeSort(left,right){return natCmp(left.semanticRole,right.semanticRole)||natCmp(left.parentSemanticRole,right.parentSemanticRole)||natCmp(left.ancestorSemanticPathKey,right.ancestorSemanticPathKey)||natCmp(left.childSemanticRoleKey,right.childSemanticRoleKey)||natCmp(left.dependencyRoleKey,right.dependencyRoleKey)||natCmp(left.identityKey,right.identityKey)||natCmp(left.role,right.role)||natCmp(left.coreTag,right.coreTag)||natCmp(left.tag,right.tag);}
 function pairNodes(targetNodes,referenceNodes){
   const target=[...targetNodes].sort(nodeSort),reference=[...referenceNodes].sort(nodeSort),targetOpen=new Set(target),referenceOpen=new Set(reference),pairs=[];
   const pairPass=(keyFor,reason)=>{
@@ -119,8 +147,12 @@ function pairNodes(targetNodes,referenceNodes){
     }
   };
   pairPass(node=>node.coreTag&&`TAG|${node.coreTag}`,'Same equipment tag after Building removal');
+  pairPass(node=>node.identityKey?`TYPE-PARENT-ID|${node.semanticRoleKey}|${node.parentSemanticRoleKey}|${node.identityKey}`:'','Same equipment type, parent type, and neutral tag identity');
+  pairPass(node=>node.childSemanticRoleKey||node.dependencyRoleKey?`TYPE-CONTEXT|${node.semanticRoleKey}|${node.parentSemanticRoleKey}|${node.childSemanticRoleKey}|${node.dependencyRoleKey}|${Number(node.underHeader)}`:'','Same equipment type and hierarchy context');
   pairPass(node=>`FULL|${node.semanticRoleKey}|${node.classificationFamilyKey}|${node.parentSemanticRoleKey}|${Number(node.isHeader)}`,'Same equipment type and parent type');
   pairPass(node=>`TYPE-PARENT|${node.semanticRoleKey}|${node.parentSemanticRoleKey}`,'Same equipment type and parent type');
+  pairPass(node=>node.ancestorSemanticPathKey?`TYPE-PATH|${node.semanticRoleKey}|${node.ancestorSemanticPathKey}`:'','Same equipment type and upstream equipment path');
+  pairPass(node=>node.identityKey?`TYPE-ID|${node.semanticRoleKey}|${node.identityKey}`:'','Same equipment type and neutral tag identity');
   pairPass(node=>node.semanticRoleKey&&node.semanticRoleKey!==auditNormId(EMPTY_ROLE)?`TYPE|${node.semanticRoleKey}`:'','Same equipment type');
   pairPass(node=>node.classificationFamilyKey?`CLASS-PARENT|${node.classificationFamilyKey}|${node.parentSemanticRoleKey}`:'','Same classification family and parent type');
   pairPass(node=>node.classificationFamilyKey?`CLASS|${node.classificationFamilyKey}`:'','Same classification family');

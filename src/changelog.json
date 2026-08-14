@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.5.0",
+    "date": "2026-08-14",
+    "type": "feature",
+    "notes": "- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"
+  },
+  {
     "version": "1.4.0",
     "date": "2026-08-14",
     "type": "feature",

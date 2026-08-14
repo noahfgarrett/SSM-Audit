@@ -13,7 +13,7 @@ export function resetSession(){
 }
 
 export function resetComparison(){
-  S.comparison={targetName:'',targetSnapshot:null,referenceName:'',referenceSnapshot:null,result:null,targetError:'',referenceError:'',selectedUpn:'',systemSearch:'',systemFilter:'different',systemSort:'upn-asc',rowSearch:'',rowFilter:'different',pairScrollTop:0,treeScrollTop:0,treeExpandedByUpn:{},fullscreen:false};
+  S.comparison={targetName:'',targetSnapshot:null,referenceName:'',referenceSnapshot:null,result:null,targetError:'',referenceError:'',selectedUpn:'',systemSearch:'',systemFilter:'different',systemSort:'upn-asc',detailTab:'hierarchy',rowSearch:'',rowFilter:'different',pairScrollTop:0,treeScrollTop:0,treeExpandedByUpn:{},fullscreen:false};
 }
 
 resetSession();
