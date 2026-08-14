@@ -9,8 +9,8 @@ const headers=EXTO_REV21_COLUMNS.map(column=>column.header)
 const index=Object.fromEntries(EXTO_REV21_COLUMNS.map(column=>[column.field,column.index]))
 function row(values){const cells=new Array(headers.length).fill('');for(const [field,value] of Object.entries(values))cells[index[field]]=value;return cells;}
 function snapshot(values,name){return auditSnapshotFromAoa([headers,...values],{file:`${name}.xlsx`,sheet:'Registry'});}
-function equipment({building,tag,parent,description,upn='101',discipline='MECHANICAL DRY',classification='',dependencies=''}){
-  return row({building,equipmentId:tag,closestParent:parent,closestParentStatus:'NEW',equipmentDescription:description,equipmentClassification:classification,dependencies,upn,discipline,systemName:`${upn} Example System`});
+function equipment({building,tag,parent,description,upn='101',discipline='MECHANICAL DRY',classification='',dependencies='',systemName=`${upn} Example System`}){
+  return row({building,equipmentId:tag,closestParent:parent,closestParentStatus:'NEW',equipmentDescription:description,equipmentClassification:classification,dependencies,upn,discipline,systemName});
 }
 
 test('project comparison aligns equivalent hierarchies while excluding Building',()=>{
@@ -145,6 +145,49 @@ test('project comparison keeps target-only and completed-project-only systems ex
   assert.deepEqual(result.systems.map(system=>[system.upn,system.status]),[['101','target-only'],['111','reference-only']]);
   assert.equal(result.summary.targetOnlySystems,1);
   assert.equal(result.summary.referenceOnlySystems,1);
+});
+
+test('project comparison treats the assigned UPN as authoritative when System Name conflicts',()=>{
+  const target=snapshot([equipment({building:'A1',tag:'A1-RIO-01',parent:'603 Incorrect System',description:'Remote I/O Panel',classification:'RIO',upn:'650',discipline:'FACILITIES MONITORING SYSTEM',systemName:'603 Incorrect System'})],'target');
+  const reference=snapshot([equipment({building:'B1',tag:'B1-RIO-01',parent:'650 Facility Management System',description:'Remote I/O Panel',classification:'RIO',upn:'650',discipline:'FACILITIES MONITORING SYSTEM',systemName:'650 Facility Management System'})],'reference');
+  const result=compareSsmRegistries(target,reference);
+  assert.deepEqual(result.systems.map(system=>system.upn),['650']);
+  assert.equal(result.summary.systems,1);
+});
+
+test('project comparison flags same-type equipment moved between paired parent branches',()=>{
+  const target=snapshot([
+    equipment({building:'A',tag:'A-XFM-01',parent:'603 Example System',description:'Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'A',tag:'A-XFM-02',parent:'603 Example System',description:'Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'A',tag:'A-PNL-01',parent:'A-XFM-01',description:'Distribution Panel',classification:'DP',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'A',tag:'A-PNL-02',parent:'A-XFM-02',description:'Distribution Panel',classification:'DP',upn:'603',discipline:'ELECTRICAL'}),
+  ],'target');
+  const reference=snapshot([
+    equipment({building:'B',tag:'B-XFM-01',parent:'603 Example System',description:'Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'B',tag:'B-XFM-02',parent:'603 Example System',description:'Transformer',classification:'TFRM',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'B',tag:'B-PNL-01',parent:'B-XFM-02',description:'Distribution Panel',classification:'DP',upn:'603',discipline:'ELECTRICAL'}),
+    equipment({building:'B',tag:'B-PNL-02',parent:'B-XFM-01',description:'Distribution Panel',classification:'DP',upn:'603',discipline:'ELECTRICAL'}),
+  ],'reference');
+  const system=compareSsmRegistries(target,reference).systems[0],panels=system.pairs.filter(pair=>pair.target?.semanticRole==='Distribution panel');
+  assert.equal(system.status,'different');
+  assert.equal(panels.length,2);
+  assert.ok(panels.every(pair=>pair.status==='changed'&&pair.placementMismatch));
+  assert.ok(panels.every(pair=>pair.differences.includes('Closest Parent differs')));
+});
+
+test('project comparison keeps parent cycles visible and marks them as changed',()=>{
+  const target=snapshot([
+    equipment({building:'A',tag:'A-EQ-01',parent:'A-EQ-02',description:'Pump',classification:'PMP'}),
+    equipment({building:'A',tag:'A-EQ-02',parent:'A-EQ-01',description:'Pump',classification:'PMP'}),
+  ],'target');
+  const reference=snapshot([
+    equipment({building:'B',tag:'B-EQ-01',parent:'101 Example System',description:'Pump',classification:'PMP'}),
+    equipment({building:'B',tag:'B-EQ-02',parent:'101 Example System',description:'Pump',classification:'PMP'}),
+  ],'reference');
+  const system=compareSsmRegistries(target,reference).systems[0],cyclePairs=system.pairs.filter(pair=>pair.cycle);
+  assert.equal(system.status,'different');
+  assert.equal(cyclePairs.length,2);
+  assert.ok(cyclePairs.every(pair=>pair.status==='changed'&&system.treeRoots.includes(pair.id)));
 });
 
 test('project comparison is deterministic and handles large flat registries efficiently',()=>{

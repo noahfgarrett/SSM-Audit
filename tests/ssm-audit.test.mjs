@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
-import { auditSnapshotFromAoa } from '../src/audit/model.js'
+import { auditMergeSnapshots, auditSnapshotFromAoa } from '../src/audit/model.js'
 import { auditCyclePaths, auditItemMasterCanonicalCandidates, auditMilestoneBranchCandidates, auditMilestoneCohortCandidates, auditMilestoneLevelIssues, runSsmAudit, SSM_AUDIT_RULES, SSM_AUDIT_SOURCES } from '../src/audit/engine.js'
 
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
@@ -72,12 +72,61 @@ test('SSM Audit produces explainable structural and dependency findings', () => 
   assert.ok(!found.has('dependency.literal-na'))
   assert.ok(found.has('parent.self'))
   assert.ok(found.has('parent.cross-upn'))
-  assert.ok(found.has('parent.cross-discipline'))
+  assert.ok(!found.has('parent.cross-discipline'))
   assert.ok(found.has('metadata.ic-discipline'))
   const ic = result.findings.find(finding => finding.rule.id === 'metadata.ic-discipline')
   assert.match(ic.actual, /650/)
   assert.match(ic.recommendation, /UPN 650/)
   assert.ok(ic.why && ic.expected && ic.rule.standardRef && ic.fingerprint)
+})
+
+test('multi-sheet imports remove only exact duplicate rows and preserve conflicts', () => {
+  const first=auditSnapshotFromAoa([headers,row({equipmentId:'B1-EQ-01',closestParent:'101 System',upn:'101',discipline:'MECHANICAL WET',systemName:'101 System'})],{file:'synthetic.xlsx',sheet:'Registry'})
+  const repeated=auditSnapshotFromAoa([headers,row({equipmentId:'B1-EQ-01',closestParent:'101 System',upn:'101',discipline:'MECHANICAL WET',systemName:'101 System'})],{file:'synthetic.xlsx',sheet:'Registry Copy'})
+  const conflict=auditSnapshotFromAoa([headers,row({equipmentId:'B1-EQ-01',closestParent:'B1-OTHER',upn:'101',discipline:'MECHANICAL WET',systemName:'101 System'})],{file:'synthetic.xlsx',sheet:'Changed Phase'})
+  const merged=auditMergeSnapshots([first,repeated,conflict],'synthetic.xlsx')
+  assert.equal(merged.rows.length,2)
+  assert.equal(merged.source.ignoredDuplicateRows,1)
+  assert.equal(runSsmAudit(merged).findings.filter(finding=>finding.rule.id==='identity.duplicate-equipment-id').length,2)
+})
+
+test('cross-discipline controls children are allowed while other crossings remain reviewable', () => {
+  const snapshot=auditSnapshotFromAoa([
+    headers,
+    row({equipmentId:'B1-MAH-01',closestParent:'101 Example System',closestParentStatus:'NEW',upn:'101',discipline:'MECHANICAL DRY',systemName:'101 Example System',equipmentDescription:'Makeup Air Handler'}),
+    row({equipmentId:'B1-TET-01',closestParent:'B1-MAH-01',upn:'101',discipline:'FACILITIES MONITORING SYSTEM',systemName:'101 Example System',equipmentDescription:'Temperature Transmitter'}),
+    row({equipmentId:'B1-PUMP-01',closestParent:'B1-MAH-01',upn:'101',discipline:'MECHANICAL WET',systemName:'101 Example System',equipmentDescription:'Centrifugal Pump'}),
+  ],{file:'synthetic.xlsx',sheet:'Registry'})
+  const crossings=runSsmAudit(snapshot).findings.filter(finding=>finding.rule.id==='parent.cross-discipline')
+  assert.deepEqual(crossings.map(finding=>finding.equipmentId),['B1-PUMP-01'])
+  assert.equal(crossings[0].severity,'warning')
+})
+
+test('SSM Audit rejects a populated System Name that does not begin with the assigned UPN', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'B1-PUMP-01', closestParent: '101 Example System', closestParentStatus: 'NEW', upn: '101', discipline: 'MECHANICAL WET', systemName: 'Chilled Water System', equipmentDescription: 'Centrifugal Pump' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const findings = runSsmAudit(snapshot).findings.filter(finding => finding.rule.id === 'metadata.system-upn-mismatch')
+  assert.equal(findings.length, 1)
+  assert.match(findings[0].why, /does not identify/)
+})
+
+test('SSM Audit recognizes common Instrumentation and Controls discipline wording', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'B1-RIO650-01', closestParent: '650 Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'Instrumentation and Controls', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  assert.ok(rules(runSsmAudit(snapshot)).has('metadata.ic-discipline'))
+})
+
+test('SSM Audit accepts explicitly external parent and dependency paths', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'B1-RIO650-01', closestParent: 'OTHER-PROJECT-PANEL', closestParentStatus: 'EXISTING', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel', dependencies: 'OTHER-PROJECT-PLC', dependencyProject: 'Other project' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const found = rules(runSsmAudit(snapshot))
+  for (const ruleId of ['parent.unresolved','dependency.unresolved','dependency.control-link-missing','dependency.control-electrical-path','dependency.rio-controller-path']) assert.ok(!found.has(ruleId),ruleId)
 })
 
 test('post-upload audit omits import completeness and vocabulary rules', () => {

@@ -43,7 +43,7 @@ test('single-registry hierarchy materializes New parent references as visible he
 
 test('single-registry hierarchy keeps unresolved parents visible at the assigned system root',()=>{
   const hierarchy=buildSsmHierarchy(snapshot([
-    equipment({tag:'B1-PUMP-01',parent:'B1-MISSING-HEADER',description:'Centrifugal Pump'}),
+    equipment({tag:'B1-PUMP-01',parent:'B1-MISSING-HEADER',description:'Centrifugal Pump',status:'Unknown'}),
   ]));
   const pump=equipmentNode(hierarchy,'B1-PUMP-01'),system=hierarchy.nodeByKey.get(pump.parentKey);
   assert.equal(pump.unresolvedParent,true);
@@ -81,4 +81,32 @@ test('single-registry hierarchy handles large registries without recursive paren
   const started=performance.now(),hierarchy=buildSsmHierarchy(snapshot(values)),elapsed=performance.now()-started;
   assert.equal(hierarchy.summary.equipment,count);
   assert.ok(elapsed<3000,`hierarchy build took ${elapsed.toFixed(0)}ms`);
+});
+
+test('single-registry hierarchy counts a deeply nested branch without overflowing the stack',()=>{
+  const values=[],count=20000;
+  for(let position=0;position<count;position++)values.push(equipment({tag:`B1-EQ-${String(position).padStart(5,'0')}`,parent:position?`B1-EQ-${String(position-1).padStart(5,'0')}`:'101 Example System',description:'Equipment'}));
+  const hierarchy=buildSsmHierarchy(snapshot(values)),building=hierarchy.nodeByKey.get(hierarchy.rootKeys[0]);
+  assert.equal(hierarchy.summary.equipment,count);
+  assert.equal(building.equipmentCount,count);
+});
+
+test('single-registry hierarchy accepts an Existing parent outside the local registry',()=>{
+  const hierarchy=buildSsmHierarchy(snapshot([
+    equipment({tag:'B1-PUMP-01',parent:'OTHER-PROJECT-PARENT',description:'Centrifugal Pump',status:'Existing'}),
+  ])),pump=equipmentNode(hierarchy,'B1-PUMP-01');
+  assert.equal(pump.unresolvedParent,false);
+  assert.equal(hierarchy.summary.unresolvedParents,0);
+  assert.equal(hierarchy.nodeByKey.get(pump.parentKey).type,'system');
+});
+
+test('duplicate Equipment IDs receive only findings from their own source row',()=>{
+  const target=snapshot([
+    equipment({tag:'B1-DUPLICATE',parent:'101 Example System',description:'Pump'}),
+    equipment({tag:'B1-DUPLICATE',parent:'101 Example System',description:'Pump'}),
+  ]),findings=target.rows.map((item,index)=>({equipmentId:item.equipmentId,severity:'warning',why:`Finding ${index+1}`,sheet:item._source.sheet,row:item._source.row}));
+  const hierarchy=buildSsmHierarchy(target,findings),duplicates=[...hierarchy.nodeByKey.values()].filter(node=>node.type==='equipment'&&node.tag==='B1-DUPLICATE'),building=hierarchy.nodeByKey.get(hierarchy.rootKeys[0]);
+  assert.equal(duplicates.length,2);
+  assert.deepEqual(duplicates.map(node=>node.findingCount),[1,1]);
+  assert.equal(building.findingCount,2);
 });

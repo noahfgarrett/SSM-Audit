@@ -6,6 +6,7 @@ import { SSM_AUDIT_RULES } from './engine.js'
 
 function addSheet(workbook,sheet,name){XLSX.utils.book_append_sheet(workbook,sheet,name);}
 function printable(value){return typeof value==='string'?value:JSON.stringify(value);}
+const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'Commissioning Logic'},EXPORT_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'},EXPORT_CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Registry consistency',headers:'Headers / Rollups'};
 
 export function exportSsmAuditXlsx(){
   const result=S.session&&S.session.result;if(!result){toast('Run an SSM Audit first');return;}
@@ -26,24 +27,24 @@ export function exportSsmAuditXlsx(){
   const summarySheet=XLSX.utils.aoa_to_sheet(summaryRows);
   summarySheet['!cols']=[{wch:24},{wch:72}];styleHeaderRow(summarySheet);addSheet(workbook,summarySheet,'Audit Summary');
 
-  const findingHeaders=['Severity','Confidence','Category','Rule Source','Rule','Rule ID','Equipment ID','Sheet','Row','Field','Why flagged','Found','Expected','Recommended correction','Fingerprint'];
+  const findingHeaders=['Severity','Confidence','Category','Rule Source','Check','Equipment ID','Sheet','Row','Field','Why flagged','Found','Expected','Recommended correction'];
   const findingRows=result.findings.map(finding=>[
-    finding.severity.toUpperCase(),finding.rule.confidence,finding.category,finding.rule.source,finding.rule.title,finding.rule.id,finding.equipmentId,finding.sheet,finding.row,finding.field,finding.why,
-    printable(finding.actual),printable(finding.expected),finding.recommendation,finding.fingerprint,
+    finding.severity.toUpperCase(),EXPORT_CONFIDENCE_LABELS[finding.rule.confidence]||finding.rule.confidence,EXPORT_CATEGORY_LABELS[finding.category]||finding.category,EXPORT_SOURCE_LABELS[finding.rule.source]||finding.rule.source,finding.rule.title,finding.equipmentId,finding.sheet,finding.row,finding.field,finding.why,
+    printable(finding.actual),printable(finding.expected),finding.recommendation,
   ]);
   const findingsSheet=XLSX.utils.aoa_to_sheet([findingHeaders,...findingRows]);
-  findingsSheet['!cols']=[{wch:11},{wch:18},{wch:18},{wch:20},{wch:32},{wch:34},{wch:28},{wch:22},{wch:9},{wch:25},{wch:58},{wch:45},{wch:45},{wch:58},{wch:12}];
-  styleHeaderRow(findingsSheet);findingsSheet['!autofilter']={ref:`A1:O${Math.max(1,findingRows.length+1)}`};addSheet(workbook,findingsSheet,'Findings');
+  findingsSheet['!cols']=[{wch:11},{wch:18},{wch:22},{wch:22},{wch:32},{wch:28},{wch:22},{wch:9},{wch:25},{wch:58},{wch:45},{wch:45},{wch:58}];
+  styleHeaderRow(findingsSheet);findingsSheet['!autofilter']={ref:`A1:M${Math.max(1,findingRows.length+1)}`};addSheet(workbook,findingsSheet,'Findings');
 
-  const byRule=new Map(Object.values(SSM_AUDIT_RULES).map(rule=>[rule.id,{rule,blocker:0,error:0,warning:0,info:0,total:0}]));
+  const byRule=new Map(Object.values(SSM_AUDIT_RULES).filter(rule=>rule.enabled).map(rule=>[rule.id,{rule,blocker:0,error:0,warning:0,info:0,total:0}]));
   for(const finding of result.findings){
     const entry=byRule.get(finding.rule.id)||{rule:finding.rule,blocker:0,error:0,warning:0,info:0,total:0};
     entry[finding.severity]++;entry.total++;byRule.set(finding.rule.id,entry);
   }
-  const ruleRows=[['Rule Source','Rule','Status','Confidence','Rule Statement','Rule ID','Category','Blockers','Errors','Warnings','Advisories','Total'],
-    ...[...byRule.values()].sort((a,b)=>Number(b.rule.enabled)-Number(a.rule.enabled)||b.total-a.total||a.rule.id.localeCompare(b.rule.id)).map(entry=>[entry.rule.source,entry.rule.title,entry.rule.enabled?'Enabled':'Disabled',entry.rule.confidence,entry.rule.statement+(entry.rule.disabledReason?` ${entry.rule.disabledReason}`:''),entry.rule.id,entry.rule.category,entry.blocker,entry.error,entry.warning,entry.info,entry.total])];
-  const rulesSheet=XLSX.utils.aoa_to_sheet(ruleRows);rulesSheet['!cols']=[{wch:20},{wch:32},{wch:12},{wch:18},{wch:70},{wch:40},{wch:20},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11}];
-  styleHeaderRow(rulesSheet);rulesSheet['!autofilter']={ref:`A1:L${Math.max(1,ruleRows.length)}`};addSheet(workbook,rulesSheet,'Rule Summary');
+  const ruleRows=[['Rule Source','Check','Confidence','Rule Statement','Category','Blockers','Errors','Warnings','Advisories','Total'],
+    ...[...byRule.values()].sort((a,b)=>b.total-a.total||a.rule.id.localeCompare(b.rule.id)).map(entry=>[EXPORT_SOURCE_LABELS[entry.rule.source]||entry.rule.source,entry.rule.title,EXPORT_CONFIDENCE_LABELS[entry.rule.confidence]||entry.rule.confidence,entry.rule.statement,EXPORT_CATEGORY_LABELS[entry.rule.category]||entry.rule.category,entry.blocker,entry.error,entry.warning,entry.info,entry.total])];
+  const rulesSheet=XLSX.utils.aoa_to_sheet(ruleRows);rulesSheet['!cols']=[{wch:22},{wch:32},{wch:18},{wch:70},{wch:22},{wch:11},{wch:11},{wch:11},{wch:11},{wch:11}];
+  styleHeaderRow(rulesSheet);rulesSheet['!autofilter']={ref:`A1:J${Math.max(1,ruleRows.length)}`};addSheet(workbook,rulesSheet,'Rule Summary');
 
   const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   downloadBlob(`${base}-Audit.xlsx`,workbookBlob(workbook));toast('SSM Audit report exported');
@@ -77,9 +78,9 @@ export function exportSsmComparisonXlsx(){
   for(const system of result.systems)for(const item of system.observations)differenceRows.push([system.upn,item.type,item.title,item.subject,item.target,item.reference]);
   const differenceSheet=XLSX.utils.aoa_to_sheet(differenceRows);differenceSheet['!cols']=[{wch:12},{wch:20},{wch:38},{wch:72},{wch:18},{wch:24}];styleHeaderRow(differenceSheet);differenceSheet['!autofilter']={ref:`A1:F${Math.max(1,differenceRows.length)}`};addSheet(workbook,differenceSheet,'Observed Differences');
 
-  const pairRows=[['UPN','Status','Match Basis','Target Equipment ID','Target Description','Target Parent Type','Target Header','Target Dependencies','Completed Project Equipment ID','Completed Project Description','Completed Project Parent Type','Completed Project Header','Completed Project Dependencies','Differences']];
-  for(const system of result.systems)for(const pair of system.pairs){const target=pair.target,reference=pair.reference;pairRows.push([system.upn,pair.status,pair.matchReason,target&&target.tag||'',target&&target.role||'',target&&target.parentRole||'',target&&target.headerName||'',target&&target.dependencyRoles.join('; ')||'',reference&&reference.tag||'',reference&&reference.role||'',reference&&reference.parentRole||'',reference&&reference.headerName||'',reference&&reference.dependencyRoles.join('; ')||'',pair.differences.join('; ')]);}
-  const pairSheet=XLSX.utils.aoa_to_sheet(pairRows);pairSheet['!cols']=[{wch:12},{wch:20},{wch:38},{wch:30},{wch:34},{wch:34},{wch:30},{wch:40},{wch:36},{wch:34},{wch:34},{wch:30},{wch:40},{wch:54}];styleHeaderRow(pairSheet);pairSheet['!autofilter']={ref:`A1:N${Math.max(1,pairRows.length)}`};addSheet(workbook,pairSheet,'Equipment Mapping');
+  const pairRows=[['UPN','Status','Match Basis','Target Equipment ID','Target Description','Target Parent ID','Target Parent Type','Target Header','Target Dependencies','Completed Project Equipment ID','Completed Project Description','Completed Project Parent ID','Completed Project Parent Type','Completed Project Header','Completed Project Dependencies','Placement Mismatch','Parent Cycle','Differences']];
+  for(const system of result.systems)for(const pair of system.pairs){const target=pair.target,reference=pair.reference;pairRows.push([system.upn,pair.status,pair.matchReason,target&&target.tag||'',target&&target.role||'',target&&target.parentId||'',target&&target.parentRole||'',target&&target.headerName||'',target&&target.dependencyRoles.join('; ')||'',reference&&reference.tag||'',reference&&reference.role||'',reference&&reference.parentId||'',reference&&reference.parentRole||'',reference&&reference.headerName||'',reference&&reference.dependencyRoles.join('; ')||'',pair.placementMismatch?'Yes':'No',pair.cycle?'Yes':'No',pair.differences.join('; ')]);}
+  const pairSheet=XLSX.utils.aoa_to_sheet(pairRows);pairSheet['!cols']=[{wch:12},{wch:20},{wch:38},{wch:30},{wch:34},{wch:30},{wch:34},{wch:30},{wch:40},{wch:36},{wch:34},{wch:36},{wch:34},{wch:30},{wch:40},{wch:20},{wch:14},{wch:54}];styleHeaderRow(pairSheet);pairSheet['!autofilter']={ref:`A1:R${Math.max(1,pairRows.length)}`};addSheet(workbook,pairSheet,'Equipment Mapping');
 
   const base=clean(comparison.targetName).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   downloadBlob(`${base}-Project-Comparison.xlsx`,workbookBlob(workbook));toast('Project comparison exported');

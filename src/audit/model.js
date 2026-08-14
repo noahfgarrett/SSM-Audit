@@ -44,6 +44,18 @@ export function auditSnapshotFromAoa(aoa,source={}){
     headerRow,fields:Object.freeze({...detected.fields}),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries),rows:Object.freeze(rows)});
 }
 
+export function auditMergeSnapshots(snapshots,fileName){
+  const rows=[],seenRows=new Set();let ignoredDuplicateRows=0;
+  for(const snapshot of snapshots)for(const row of snapshot.rows){
+    const signature=EXTO_REV21_COLUMNS.map(column=>auditNormId(row[column.field])).join('\u001f');
+    if(seenRows.has(signature)){ignoredDuplicateRows++;continue;}
+    seenRows.add(signature);rows.push(row);
+  }
+  const missingHeaders=[...new Set(snapshots.flatMap(snapshot=>snapshot.missingHeaders))],missingHeaderEntries=snapshots.flatMap(snapshot=>snapshot.missingHeaderEntries);
+  return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(fileName),sheets:Object.freeze(snapshots.map(snapshot=>snapshot.source.sheet)),ignoredDuplicateRows}),
+    snapshots:Object.freeze(snapshots),rows:Object.freeze(rows),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries)});
+}
+
 export async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,report){
   const snapshots=[],names=workbook&&workbook.SheetNames||[];
   for(let index=0;index<names.length;index++){
@@ -56,10 +68,7 @@ export async function auditSnapshotFromWorkbook(workbook,fileName,checkpoint,rep
     if(checkpoint)await checkpoint();
   }
   if(!snapshots.length)throw new Error('No Cx Registry tab with Equipment ID, Closest Parent, UPN, and Discipline headers was found');
-  const rows=snapshots.flatMap(snapshot=>snapshot.rows),missingHeaders=[...new Set(snapshots.flatMap(snapshot=>snapshot.missingHeaders))];
-  const missingHeaderEntries=snapshots.flatMap(snapshot=>snapshot.missingHeaderEntries);
-  return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(fileName),sheets:Object.freeze(snapshots.map(snapshot=>snapshot.source.sheet))}),
-    snapshots:Object.freeze(snapshots),rows:Object.freeze(rows),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries)});
+  return auditMergeSnapshots(snapshots,fileName);
 }
 
 export function auditFingerprint(value){

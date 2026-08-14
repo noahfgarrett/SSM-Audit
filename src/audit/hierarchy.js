@@ -14,13 +14,14 @@ function groupIdentity(node){
 function sourceOrder(node){const source=node.row&&node.row._source||{};return `${clean(source.sheet)}\u0001${String(source.row||0).padStart(10,'0')}\u0001${node.tag}`;}
 function parentCandidate(item,candidates){
   const available=(candidates||[]).filter(candidate=>candidate.key!==item.key);if(!available.length)return null;
+  if(available.length>1)return null;
   return [...available].sort((left,right)=>{
     const score=candidate=>(candidate.systemKey===item.systemKey?8:0)+(candidate.upn===item.upn?4:0)+(candidate.buildingKey===item.buildingKey?2:0)+(candidate.disciplineKey===item.disciplineKey?1:0)+(candidate.isSyntheticHeader?0:.25);
     return score(right)-score(left)||natCmp(sourceOrder(left),sourceOrder(right));
   })[0];
 }
-function hierarchyNodeFromRegistry(node,findingsByTag){
-  const group=groupIdentity(node),row=node.row||{},dependencies=auditSplitReferences(row.dependencies).filter(reference=>!/^N\/?A$/i.test(reference)),findings=findingsByTag.get(node.id)||[];
+function hierarchyNodeFromRegistry(node,findingsBySource,findingsWithoutSource){
+  const group=groupIdentity(node),row=node.row||{},source=row._source||{},sourceKey=`${node.id}|${auditNormId(source.sheet)}|${source.row||0}`,dependencies=auditSplitReferences(row.dependencies).filter(reference=>!/^N\/?A$/i.test(reference)),findings=findingsBySource.get(sourceKey)||findingsWithoutSource.get(node.id)||[];
   return {...group,key:`equipment|${node.key}`,type:'equipment',tag:clean(node.tag),label:clean(node.tag),description:clean(node.role),classification:clean(node.classification),normalizedTag:node.id,closestParent:clean(row.closestParent),closestParentStatus:clean(row.closestParentStatus),dependencies,isHeader:!!node.isHeader,isSyntheticHeader:!!node.isSyntheticHeader,source:row._source||{},children:[],parentKey:'',unresolvedParent:false,cycleBreak:false,findings:[...findings],findingCount:findings.length,equipmentCount:node.isSyntheticHeader?0:1,dependencyCount:dependencies.length,searchKey:auditNormId([node.tag,node.role,node.classification,row.building,row.discipline,row.upn,row.systemName,row.closestParent,dependencies.join(' ')].join(' '))};
 }
 function groupNode(key,type,label,metadata={}){return {key,type,label,description:type==='building'?'Building':type==='discipline'?'Discipline':'System Name',children:[],parentKey:'',equipmentCount:0,findingCount:0,dependencyCount:0,searchKey:auditNormId([label,metadata.upn].join(' ')),...metadata};}
@@ -40,22 +41,21 @@ function parentCycleKeys(equipment,desiredParents){
   }
   return cycles;
 }
-function annotateCounts(nodeByKey,key,visiting=new Set()){
-  const node=nodeByKey.get(key);if(!node||visiting.has(key))return {equipment:0,findings:0,dependencies:0};visiting.add(key);
-  let equipment=node.type==='equipment'&&!node.isSyntheticHeader?1:0,findings=node.type==='equipment'?node.findings.length:0,dependencies=node.type==='equipment'?node.dependencies.length:0;
-  for(const childKey of node.children){const child=annotateCounts(nodeByKey,childKey,visiting);equipment+=child.equipment;findings+=child.findings;dependencies+=child.dependencies;}
-  visiting.delete(key);node.equipmentCount=equipment;node.findingCount=findings;node.dependencyCount=dependencies;return {equipment,findings,dependencies};
+function annotateCounts(nodeByKey,rootKeys){
+  const order=[],seen=new Set(),stack=[...rootKeys];
+  while(stack.length){const key=stack.pop(),node=nodeByKey.get(key);if(!node||seen.has(key))continue;seen.add(key);order.push(key);for(const childKey of node.children)stack.push(childKey);}
+  for(let index=order.length-1;index>=0;index--){const node=nodeByKey.get(order[index]);let equipment=node.type==='equipment'&&!node.isSyntheticHeader?1:0,findings=node.type==='equipment'?node.findings.length:0,dependencies=node.type==='equipment'?node.dependencies.length:0;for(const childKey of node.children){const child=nodeByKey.get(childKey);if(!child)continue;equipment+=child.equipmentCount||0;findings+=child.findingCount||0;dependencies+=child.dependencyCount||0;}node.equipmentCount=equipment;node.findingCount=findings;node.dependencyCount=dependencies;}
 }
 
 export function buildSsmHierarchy(snapshot,findings=[]){
-  const registry=auditRegistryModel(snapshot),findingsByTag=new Map();
-  for(const finding of findings){const key=auditNormId(finding.equipmentId);if(!key)continue;const list=findingsByTag.get(key)||[];list.push(finding);findingsByTag.set(key,list);}
-  const equipment=registry.nodes.map(node=>hierarchyNodeFromRegistry(node,findingsByTag)),nodeByKey=new Map(equipment.map(node=>[node.key,node])),equipmentByTag=new Map();
+  const registry=auditRegistryModel(snapshot),findingsBySource=new Map(),findingsWithoutSource=new Map();
+  for(const finding of findings){const id=auditNormId(finding.equipmentId);if(!id)continue;const target=finding.sheet&&finding.row?findingsBySource:findingsWithoutSource,key=finding.sheet&&finding.row?`${id}|${auditNormId(finding.sheet)}|${finding.row}`:id,list=target.get(key)||[];list.push(finding);target.set(key,list);}
+  const equipment=registry.nodes.map(node=>hierarchyNodeFromRegistry(node,findingsBySource,findingsWithoutSource)),nodeByKey=new Map(equipment.map(node=>[node.key,node])),equipmentByTag=new Map();
   for(const node of equipment){const list=equipmentByTag.get(node.normalizedTag)||[];list.push(node);equipmentByTag.set(node.normalizedTag,list);}
   const desiredParents=new Map();
   for(const node of equipment){
     const parentId=auditNormId(node.closestParent),systemId=auditNormId(node.systemName);if(!parentId||parentId===systemId)continue;
-    const parent=parentCandidate(node,equipmentByTag.get(parentId));if(parent)desiredParents.set(node.key,parent);else node.unresolvedParent=true;
+    const parent=parentCandidate(node,equipmentByTag.get(parentId));if(parent)desiredParents.set(node.key,parent);else if(auditNormId(node.closestParentStatus)!=='EXISTING')node.unresolvedParent=true;
   }
   const cycleKeys=parentCycleKeys(equipment,desiredParents);
   const buildings=new Map(),disciplines=new Map(),systems=new Map();
@@ -74,7 +74,7 @@ export function buildSsmHierarchy(snapshot,findings=[]){
   for(const node of systems.values())node.children.sort((left,right)=>equipmentSort(nodeByKey.get(left),nodeByKey.get(right)));
   for(const node of disciplines.values())node.children.sort((left,right)=>groupSort(nodeByKey.get(left),nodeByKey.get(right)));
   for(const node of buildings.values())node.children.sort((left,right)=>groupSort(nodeByKey.get(left),nodeByKey.get(right)));
-  const rootKeys=[...buildings.values()].sort(groupSort).map(node=>node.key);for(const key of rootKeys)annotateCounts(nodeByKey,key);
+  const rootKeys=[...buildings.values()].sort(groupSort).map(node=>node.key);annotateCounts(nodeByKey,rootKeys);
   const summary={rows:registry.rows.length,equipment:equipment.filter(node=>!node.isSyntheticHeader).length,generatedHeaders:equipment.filter(node=>node.isSyntheticHeader).length,buildings:buildings.size,disciplines:disciplines.size,systems:systems.size,dependencies:equipment.reduce((total,node)=>total+node.dependencies.length,0),findings:findings.length,unresolvedParents:equipment.filter(node=>node.unresolvedParent).length,cycleBreaks:equipment.filter(node=>node.cycleBreak).length};
   return Object.freeze({schemaVersion:SSM_HIERARCHY_SCHEMA_VERSION,standard:'Registry SSM hierarchy',rootKeys:Object.freeze(rootKeys),nodeByKey,summary:Object.freeze(summary),groups:Object.freeze({buildings:Object.freeze([...buildings.values()].sort(groupSort)),disciplines:Object.freeze([...disciplines.values()].sort(groupSort)),systems:Object.freeze([...systems.values()].sort(groupSort))})});
 }

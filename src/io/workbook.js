@@ -14,16 +14,17 @@ function cellValue(cell){
 }
 export async function sheetAoaAsync(sheet,onChunk){
   if(!sheet||!sheet['!ref'])return {aoa:[],rowNums:[]};
-  if(Array.isArray(sheet)){
+  const dense=Array.isArray(sheet)?sheet:Array.isArray(sheet['!data'])?sheet['!data']:null;
+  if(dense){
     const aoa=[],rowNums=[];
-    for(let start=0;start<sheet.length;start+=DENSE_ROW_CHUNK){
-      const end=Math.min(start+DENSE_ROW_CHUNK,sheet.length);
+    for(let start=0;start<dense.length;start+=DENSE_ROW_CHUNK){
+      const end=Math.min(start+DENSE_ROW_CHUNK,dense.length);
       for(let rowIndex=start;rowIndex<end;rowIndex++){
-        const cells=sheet[rowIndex];if(!cells)continue;
+        const cells=dense[rowIndex];if(!cells)continue;
         const row=cells.map(cellValue);
         if(row.some(value=>value!=='')){aoa.push(row);rowNums.push(rowIndex);}
       }
-      if(onChunk&&end<sheet.length)await onChunk(end,sheet.length);
+      if(onChunk&&end<dense.length)await onChunk(end,dense.length);
     }
     return {aoa,rowNums};
   }

@@ -68,8 +68,9 @@ function displayRole(row){return clean(row&&row.equipmentDescription)||clean(row
 function roleKey(row){return auditNormId(displayRole(row));}
 function isHeader(row){return /^HEADER$/i.test(clean(row&&row.equipmentDescription));}
 function systemKey(row){
+  const assigned=auditNormId(row&&row.upn);if(assigned)return assigned;
   const match=clean(row&&row.systemName).match(/^([0-9]{3,4})(?:\s|$)/);if(match)return match[1];
-  return auditNormId(row&&row.upn)||'UNASSIGNED';
+  return 'UNASSIGNED';
 }
 function stripLeadingSystemNumber(value){return clean(value).replace(/^\s*[0-9]{3,4}\s*[-:]?\s*/,'').replace(/\s+/g,' ').trim();}
 function buildingNeutralTag(row){
@@ -196,6 +197,12 @@ function pairTree(pairs){
     pair.childrenIds=[];
     delete pair.targetParentPair;
     delete pair.referenceParentPair;
+  }
+  const cycleIds=new Set(),done=new Set();
+  for(const start of pairs){if(done.has(start.id))continue;const path=[],positions=new Map();let current=start;while(current&&!done.has(current.id)){if(positions.has(current.id)){for(let index=positions.get(current.id);index<path.length;index++)cycleIds.add(path[index].id);break;}positions.set(current.id,path.length);path.push(current);current=pairById.get(current.parentPairId);}for(const pair of path)done.add(pair.id);}
+  for(const pair of pairs){
+    if(pair.placementMismatch){if(!pair.differences.includes('Closest Parent differs'))pair.differences.push('Closest Parent differs');if(pair.status==='aligned')pair.status='changed';}
+    if(cycleIds.has(pair.id)){pair.cycle=true;pair.parentPairId='';if(!pair.differences.includes('Parent cycle detected'))pair.differences.push('Parent cycle detected');if(pair.status==='aligned')pair.status='changed';}
   }
   for(const pair of pairs){const parent=pairById.get(pair.parentPairId);if(parent)parent.childrenIds.push(pair.id);}
   const sortPairs=(leftId,rightId)=>nodeSort(pairById.get(leftId).target||pairById.get(leftId).reference,pairById.get(rightId).target||pairById.get(rightId).reference);

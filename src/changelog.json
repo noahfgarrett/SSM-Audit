@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.5.1",
+    "date": "2026-08-14",
+    "type": "fix",
+    "notes": "- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"
+  },
+  {
     "version": "1.5.0",
     "date": "2026-08-14",
     "type": "feature",
