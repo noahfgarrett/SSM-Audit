@@ -6,6 +6,7 @@ export const MODULES=[
   'src/exto/rev21-contract.js',
   'src/audit/model.js',
   'src/audit/engine.js',
+  'src/audit/compare.js',
   'src/core/download.js',
   'src/ui/icons.js',
   'src/ui/feedback.js',

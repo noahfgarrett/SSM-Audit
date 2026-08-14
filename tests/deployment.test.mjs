@@ -6,6 +6,15 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 const root=resolve(new URL('..',import.meta.url).pathname)
+test('release versions stay synchronized and changelog describes active behavior only',()=>{
+  const packageJson=JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'))
+  const versionSource=readFileSync(resolve(root,'src/version.js'),'utf8')
+  const changelog=JSON.parse(readFileSync(resolve(root,'src/changelog.json'),'utf8'))
+  assert.match(versionSource,new RegExp(`APP_VERSION=['\"]${packageJson.version.replace(/\./g,'\\.')}['\"]`))
+  assert.equal(changelog[0].version,packageJson.version)
+  assert.doesNotMatch(changelog.map(entry=>entry.notes).join('\n'),/\b(?:disabled|inactive|milestones?|item masters?)\b/i)
+})
+
 test('single-file build is offline-ready and pinned to its own updater',()=>{
   execFileSync(process.execPath,['build/build.mjs'],{cwd:root,stdio:'pipe'})
   const html=readFileSync(resolve(root,'SSM-Audit.html'),'utf8')

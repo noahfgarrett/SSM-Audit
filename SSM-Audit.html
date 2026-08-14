@@ -1214,10 +1214,14 @@ body.visual-trainer-fullscreen{overflow:hidden}
 .audit-import.err .ficon.audit{background:#fdecea;border-color:#efc5c1;color:var(--danger)}
 
 #view:has(.audit-shell){max-width:1480px;padding-top:18px}
-.audit-shell{height:calc(100dvh - 138px);min-height:560px;display:grid;grid-template-rows:auto auto auto auto minmax(320px,1fr);background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
+.audit-shell{height:calc(100dvh - 138px);min-height:560px;display:grid;grid-template-rows:auto auto auto auto auto minmax(320px,1fr);background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
 .audit-shell.fullscreen{position:fixed;inset:8px;z-index:60;height:auto;min-height:0;border-radius:6px;box-shadow:var(--shadow-lg)}
 body.audit-fullscreen{overflow:hidden}
 .audit-head{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 14px;border-bottom:1px solid var(--border)}
+.result-tabs{display:flex;align-items:center;gap:2px;min-height:42px;padding:0 11px;border-bottom:1px solid var(--border);background:var(--surface-2);overflow-x:auto}
+.result-tab{position:relative;display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:0 11px;border:0;background:transparent;color:var(--ink-2);font:620 12.5px var(--sans);white-space:nowrap;cursor:pointer}
+.result-tab .ic{width:15px;height:15px;color:var(--ink-3)}.result-tab b{min-width:20px;padding:2px 5px;border-radius:5px;background:var(--surface-3);font:700 10px var(--mono);text-align:center}
+.result-tab:hover{color:var(--ink)}.result-tab.active{color:var(--accent-700)}.result-tab.active .ic{color:var(--accent)}.result-tab.active::after{content:"";position:absolute;left:9px;right:9px;bottom:0;height:2px;background:var(--accent)}.result-tab.active b{background:var(--accent-100);color:var(--accent-700)}
 .audit-title{display:flex;align-items:center;gap:10px;min-width:0}
 .audit-title>div{min-width:0}
 .audit-title h2{margin:1px 0 0;font-size:17px;letter-spacing:0}
@@ -1312,6 +1316,7 @@ body.audit-fullscreen{overflow:hidden}
   .audit-table th:nth-child(4),.audit-table td:nth-child(4),.audit-table th:nth-child(5),.audit-table td:nth-child(5){display:none}
   .audit-table{min-width:610px}
   .audit-table th:nth-child(2){width:43%}.audit-table th:nth-child(3){width:32%}
+  #view:has(.compare-shell){padding:10px 8px 48px}.compare-shell{height:calc(100dvh - 116px)}.compare-shell .audit-title{flex-basis:210px}.compare-workspace{grid-template-columns:238px minmax(0,1fr)}.compare-pair{grid-template-columns:150px minmax(175px,1fr) minmax(175px,1fr)}
 }
 @media (max-width:600px){
   .audit-import{align-items:flex-start;flex-wrap:wrap}
@@ -1370,16 +1375,47 @@ body.audit-fullscreen{overflow:hidden}
 .audit-fullscreen .topbar,.audit-fullscreen .version-link{display:none}.audit-fullscreen #view{padding:0;max-width:none}
 .drawer[tabindex]:focus{outline:none}
 
+/* Project comparison */
+.workspace-tabs{display:flex;align-items:center;gap:3px;margin-bottom:22px;border-bottom:1px solid var(--border)}
+.workspace-tab{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:0;background:transparent;color:var(--ink-2);font:620 13px var(--sans);cursor:pointer}
+.workspace-tab .ic{width:16px;height:16px;color:var(--ink-3)}.workspace-tab:hover{background:rgba(255,255,255,.55);color:var(--ink)}.workspace-tab.active{color:var(--accent-700)}.workspace-tab.active .ic{color:var(--accent)}.workspace-tab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--accent)}
+.compare-upload-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.compare-upload-slot{position:relative;min-height:284px;padding:64px 26px 26px;border:1px dashed var(--border-strong);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s}
+.compare-upload-slot:hover,.compare-upload-slot.dragging{border-color:var(--accent);background:var(--tint);box-shadow:inset 0 0 0 1px var(--accent)}.compare-upload-slot:focus-visible{outline:0;box-shadow:var(--ring)}
+.compare-upload-slot.ready{border-style:solid;border-left:3px solid var(--ok);cursor:default}.compare-upload-slot.ready:hover{border-color:var(--border-strong);border-left-color:var(--ok);background:var(--surface);box-shadow:none}.compare-upload-slot.error{border-color:#efc5c1;background:#fff8f7}
+.compare-slot-label{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid var(--border);text-align:left;background:var(--surface-2)}.compare-slot-label>span{display:grid;place-items:center;width:28px;height:28px;background:var(--panel);color:#fff;font:700 10px var(--mono)}.compare-slot-label b,.compare-slot-label small{display:block}.compare-slot-label b{font-size:12px}.compare-slot-label small{margin-top:1px;color:var(--ink-3);font-size:10.5px}
+.compare-ready-icon{width:50px;height:50px;display:grid;place-items:center;margin-bottom:15px;border:1px solid var(--border);background:var(--surface-2);color:var(--accent-700)}.compare-upload-slot.ready .compare-ready-icon{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}.compare-upload-slot.error .compare-ready-icon{border-color:#efc5c1;background:#fdecea;color:var(--danger)}.compare-ready-icon .ic{width:24px;height:24px}
+.compare-upload-slot h3{max-width:100%;margin:0;font-size:15px;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-upload-slot p{min-height:37px;margin:7px 0 15px;color:var(--ink-3);font-size:12px;line-height:1.5}.compare-slot-actions{display:flex;align-items:center;gap:8px}.compare-slot-actions .xbtn{margin:0}
+.compare-runbar{display:flex;align-items:center;gap:18px;margin-top:14px;padding:14px 16px;border:1px solid var(--border);background:var(--surface-2)}.compare-runbar>.btn{margin-left:auto;flex:0 0 auto}.compare-method{display:flex;align-items:flex-start;gap:9px;min-width:0;color:var(--ink-2);font-size:11.5px}.compare-method .ic{width:16px;height:16px;flex:0 0 16px;color:#315b8a}.compare-method b{color:var(--ink)}
+#view:has(.compare-shell){max-width:1600px;padding-top:18px}.compare-shell{height:calc(100dvh - 138px);min-height:590px;display:grid;grid-template-rows:auto auto auto minmax(0,1fr);border:1px solid var(--border);border-radius:8px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden}.compare-shell.fullscreen{position:fixed;inset:8px;z-index:60;height:auto;min-height:0;border-radius:6px;box-shadow:var(--shadow-lg)}
+.compare-building-note{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px;border:1px solid #cbd8e9;background:#eff5fb;color:#315b8a;font:650 10.5px var(--mono);white-space:nowrap}.compare-building-note .ic{width:14px;height:14px}
+.compare-summary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border-bottom:1px solid var(--border);background:var(--surface)}.compare-summary>div{min-width:0;padding:10px 13px;border-right:1px solid var(--border)}.compare-summary>div:last-child{border-right:0}.compare-summary span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-3);font-size:9.5px;text-transform:uppercase}.compare-summary b{display:block;margin-top:2px;color:var(--ink);font:700 19px var(--mono)}.compare-summary .difference b{color:var(--warn)}.compare-summary .aligned b{color:var(--ok)}
+.compare-workspace{min-height:0;display:grid;grid-template-columns:292px minmax(0,1fr)}.compare-system-panel{min-height:0;display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--surface-2)}.compare-system-tools{padding:10px;border-bottom:1px solid var(--border)}.compare-system-tools .searchbox,.compare-pair-toolbar .searchbox{display:flex;align-items:center;gap:7px;height:36px;padding:0 9px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface)}.compare-system-tools .searchbox:focus-within,.compare-pair-toolbar .searchbox:focus-within{border-color:var(--accent-400);box-shadow:var(--ring)}.compare-system-tools .searchbox .ic,.compare-pair-toolbar .searchbox .ic{width:14px;height:14px;color:var(--ink-3)}.compare-system-tools input,.compare-pair-toolbar input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--ink);font:12px var(--sans)}.compare-system-tools>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;margin-top:6px}.compare-system-tools select,.compare-pair-toolbar select{min-width:0;height:34px;padding:0 24px 0 7px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink-2);font:10.5px var(--sans)}
+.compare-system-list{min-height:0;overflow:auto;padding:5px}.compare-system{width:100%;min-height:56px;display:grid;grid-template-columns:42px minmax(0,1fr) 32px;align-items:center;gap:7px;padding:7px;border:1px solid transparent;border-bottom-color:var(--border);background:transparent;color:var(--ink);text-align:left;cursor:pointer}.compare-system:hover{background:var(--surface)}.compare-system.active{border-color:var(--accent-300);background:var(--tint)}.compare-upn{display:grid;place-items:center;height:30px;background:var(--panel);color:#fff;font:700 10px var(--mono)}.compare-system-copy{min-width:0}.compare-system-copy b,.compare-system-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-system-copy b{font-size:11.5px}.compare-system-copy small{margin-top:2px;color:var(--ink-3);font-size:9.5px}.compare-system-status{display:grid;place-items:center;min-width:26px;height:24px;border:1px solid #ecd0a7;background:var(--warn-bg);color:var(--warn);font:700 9.5px var(--mono)}.compare-system-status.aligned{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}.compare-system-status.target-only,.compare-system-status.reference-only{border-color:#cbd8e9;background:#eff5fb;color:#315b8a}.compare-system-status .ic{width:13px;height:13px}.compare-empty{padding:24px 13px;color:var(--ink-3);font-size:11.5px;text-align:center}
+.compare-detail{min-width:0;min-height:0;overflow:auto;background:var(--surface)}.compare-detail-head{display:flex;align-items:flex-start;gap:15px;padding:15px 18px;border-bottom:1px solid var(--border)}.compare-detail-head>div{min-width:0;flex:1}.compare-detail-head h3{margin:2px 0 3px;font-size:18px;letter-spacing:0}.compare-detail-head p{margin:0;color:var(--ink-3);font-size:11.5px}.comparison-pill{display:inline-flex;align-items:center;justify-content:center;min-width:74px;height:24px;padding:0 7px;border:1px solid #ecd0a7;background:var(--warn-bg);color:var(--warn);font:700 9px var(--mono);text-transform:uppercase;white-space:nowrap}.comparison-pill.aligned{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}.comparison-pill.target-only,.comparison-pill.reference-only{border-color:#cbd8e9;background:#eff5fb;color:#315b8a}
+.compare-counts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--border);background:var(--surface-2)}.compare-counts>div{padding:9px 12px;border-right:1px solid var(--border)}.compare-counts>div:last-child{border-right:0}.compare-counts span{display:block;margin-bottom:2px;color:var(--ink-3);font-size:9px;text-transform:uppercase}.compare-counts b{display:inline-block;margin-right:8px;color:var(--ink);font:700 13px var(--mono)}.compare-counts b+ b{color:var(--ink-2)}.compare-counts small{font:500 8.5px var(--sans);color:var(--ink-3)}
+.compare-observations,.compare-mapping,.compare-tree-section{border-bottom:1px solid var(--border)}.compare-section-title{display:flex;align-items:flex-end;gap:12px;padding:11px 18px;border-bottom:1px solid var(--border);background:var(--surface)}.compare-section-title>div{min-width:0;flex:1}.compare-section-title b,.compare-section-title span{display:block}.compare-section-title b{font-size:12.5px}.compare-section-title span{margin-top:2px;color:var(--ink-3);font-size:10px}.compare-section-title>span{flex:0 0 auto;font:10px var(--mono)}
+.compare-tree-actions{display:flex;align-items:center;gap:5px}.compare-tree-actions .btn{height:28px;padding:0 8px;font-size:9.5px}.compare-tree-actions .ic{width:13px;height:13px}.compare-tree-grid{min-width:0;overflow-x:auto}.compare-tree-head,.compare-tree-row{display:grid;grid-template-columns:minmax(190px,1fr) 100px minmax(190px,1fr);min-width:480px}.compare-tree-head{height:32px;align-items:center;border-bottom:1px solid var(--border);background:var(--surface-2);color:var(--ink-3);font:700 8.5px var(--mono);text-transform:uppercase}.compare-tree-head b{padding:0 12px}.compare-tree-head b:last-child{text-align:right}.compare-tree-head span{text-align:center}.compare-tree-wrap{height:312px;min-width:480px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;background:var(--surface)}.compare-tree-row{height:52px;border-bottom:1px solid var(--border)}.compare-tree-row:hover{background:#fbfcfe}.compare-tree-cell{min-width:0;display:flex;align-items:center;padding:6px 9px 6px calc(9px + var(--tree-depth) * 13px);border-right:1px solid var(--border)}.compare-tree-cell.reference{border-right:0;border-left:1px solid var(--border);background:rgba(49,91,138,.018)}.compare-tree-cell.missing{gap:6px;color:var(--ink-3);font-size:9.5px;background:repeating-linear-gradient(135deg,var(--surface) 0 10px,var(--surface-2) 10px 20px)}.compare-tree-toggle,.compare-tree-toggle-spacer{width:24px;height:24px;flex:0 0 24px;margin-right:3px}.compare-tree-toggle{display:grid;place-items:center;border:0;border-radius:4px;background:transparent;color:var(--ink-3);cursor:pointer}.compare-tree-toggle:hover{background:var(--tint);color:var(--accent-700)}.compare-tree-toggle:focus-visible{outline:0;box-shadow:var(--ring)}.compare-tree-toggle .ic{width:14px;height:14px;transition:transform .15s}.compare-tree-toggle.open .ic{transform:rotate(90deg)}.compare-tree-rail{width:3px;height:30px;flex:0 0 3px;margin-right:8px;background:var(--accent-400)}.compare-tree-cell.reference .compare-tree-rail{background:#8ca9ca}.compare-tree-copy{min-width:0}.compare-tree-copy b,.compare-tree-copy small,.compare-tree-copy>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-tree-copy b{font:650 10.5px var(--mono)}.compare-tree-copy small{margin-top:1px;color:var(--ink-2);font-size:9.5px}.compare-tree-copy>span{margin-top:1px;color:var(--ink-3);font-size:8.5px}.compare-tree-state{min-width:0;display:grid;grid-template-columns:8px minmax(0,1fr);align-content:center;column-gap:6px;padding:5px 7px;text-align:left}.compare-tree-state-mark{grid-row:1/3;width:8px;height:8px;align-self:center;border-radius:50%;background:var(--warn)}.compare-tree-state b,.compare-tree-state small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-tree-state b{font:700 8.5px var(--mono);text-transform:uppercase}.compare-tree-state small{color:var(--ink-3);font-size:8px}.compare-tree-row.aligned .compare-tree-state-mark{background:var(--ok)}.compare-tree-row.target-only .compare-tree-state-mark,.compare-tree-row.reference-only .compare-tree-state-mark{background:#315b8a}.compare-tree-row.placement-mismatch .compare-tree-state{box-shadow:inset 0 -2px 0 #e4a348}.compare-tree-spacer{width:100%}
+.compare-observation-list{max-height:164px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:var(--surface-2)}.compare-observation{min-height:52px;display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:8px;padding:7px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}.compare-observation:nth-child(even){border-right:0}.compare-observation>span{display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--border);background:var(--surface);color:var(--accent-700)}.compare-observation>span .ic{width:14px;height:14px}.compare-observation>div{min-width:0}.compare-observation b,.compare-observation small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-observation b{font-size:10.5px}.compare-observation small{margin-top:2px;color:var(--ink-3);font-size:9px}.compare-observation code{max-width:92px;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2);font-size:9px}.compare-aligned-note{display:flex;align-items:center;gap:8px;padding:14px 18px;color:var(--ok);font-size:11.5px}.compare-aligned-note .ic{width:16px;height:16px}.compare-more{grid-column:1/-1;margin:0;padding:8px 12px;color:var(--ink-3);font-size:10px;text-align:center}
+.compare-pair-toolbar{display:grid;grid-template-columns:minmax(250px,1fr) 190px;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface-2)}.compare-pair-wrap{height:330px;overflow:auto;overscroll-behavior:contain}.compare-pair{min-height:76px;display:grid;grid-template-columns:220px minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}.compare-pair-status{min-width:0;padding:10px;border-right:1px solid var(--border);background:var(--surface-2)}.compare-pair-status b,.compare-pair-status small{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-pair-status b{font-size:10.5px}.compare-pair-status small{color:var(--ink-3);font-size:9px}.compare-side{min-width:0;border-right:1px solid var(--border)}.compare-side:last-child{border-right:0}.compare-side-label{padding:4px 9px;border-bottom:1px solid var(--border);color:var(--ink-3);font:700 8.5px var(--mono);text-transform:uppercase}.compare-node{padding:7px 9px}.compare-node-main{position:relative;display:flex;align-items:center;min-width:0;padding-left:calc(var(--node-depth) * 7px)}.compare-node-line{width:4px;height:28px;margin-right:7px;background:var(--accent-300)}.compare-side.reference .compare-node-line{background:#9db5d1}.compare-node-main>div{min-width:0}.compare-node-main b,.compare-node-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.compare-node-main b{font:650 10.5px var(--mono)}.compare-node-main small{margin-top:2px;color:var(--ink-2);font-size:9.5px}.compare-node dl{display:grid;grid-template-columns:58px minmax(0,1fr);gap:2px 5px;margin:5px 0 0 11px;font-size:8.5px}.compare-node dt{color:var(--ink-3)}.compare-node dd{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}.compare-node.missing{height:100%;display:grid;place-items:center;color:var(--ink-3);font-size:10px;background:repeating-linear-gradient(135deg,var(--surface) 0 10px,var(--surface-2) 10px 20px)}.compare-pair-spacer{width:100%}
+.copy-tag{padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left}
+
+/* Plain-language rules reference */
+.rules-shell{max-width:1180px;margin:0 auto}.rules-heading{margin-bottom:16px}.rules-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--border);background:var(--surface)}.rules-overview>div{min-width:0;padding:16px 18px;border-right:1px solid var(--border)}.rules-overview>div:last-child{border-right:0}.rules-overview span{display:block;color:var(--ink-3);font:700 9px var(--mono);text-transform:uppercase}.rules-overview b{display:block;margin-top:3px;color:var(--ink);font:700 24px var(--mono)}.rules-overview p{margin:3px 0 0;color:var(--ink-3);font-size:10.5px;line-height:1.45}.rules-note{display:flex;align-items:flex-start;gap:9px;margin-top:10px;padding:11px 13px;border-left:3px solid #6f95bd;background:#eff5fb;color:#315b8a;font-size:11px}.rules-note .ic{width:15px;height:15px;flex:0 0 15px}.rules-note b{color:#284c73}.rules-toolbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px 190px auto;align-items:center;gap:8px;margin-top:16px;padding:10px;border:1px solid var(--border);background:var(--surface-2)}.rules-toolbar .searchbox{display:flex;align-items:center;gap:8px;height:38px;min-width:0;padding:0 10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface)}.rules-toolbar .searchbox:focus-within{border-color:var(--accent-400);box-shadow:var(--ring)}.rules-toolbar .searchbox .ic{width:15px;height:15px;flex:0 0 15px;color:var(--ink-3)}.rules-toolbar input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--ink);font:12px var(--sans)}.rules-toolbar select{height:38px;min-width:0;padding:0 28px 0 9px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);color:var(--ink-2);font:12px var(--sans)}.rules-toolbar>span{min-width:84px;color:var(--ink-3);font:10px var(--mono);text-align:right}.rule-catalog{display:grid;gap:12px;margin-top:12px;padding-bottom:40px}.rule-source-section{border:1px solid var(--border);background:var(--surface)}.rule-source-section>header{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:62px;padding:10px 13px;border-bottom:1px solid var(--border);background:var(--surface-2)}.rule-source-section>header>span{display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--border);background:var(--surface);color:var(--accent-700)}.rule-source-section>header .ic{width:16px;height:16px}.rule-source-section>header h3{margin:0;font-size:13px;letter-spacing:0}.rule-source-section>header p{margin:2px 0 0;color:var(--ink-3);font-size:10.5px;line-height:1.4}.rule-source-section>header>b{display:grid;place-items:center;min-width:28px;height:24px;padding:0 6px;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);font:700 10px var(--mono)}.rule-reference-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:11px;min-height:68px;padding:10px 13px;border-bottom:1px solid var(--border)}.rule-reference-row:last-child{border-bottom:0}.rule-reference-row:hover{background:#fbfcfe}.rule-reference-icon{display:grid;place-items:center;width:32px;height:32px;border-left:3px solid var(--accent-400);background:var(--surface-2);color:var(--accent-700)}.rule-reference-icon .ic{width:15px;height:15px}.rule-reference-row h4{margin:0;color:var(--ink);font-size:11.5px;letter-spacing:0}.rule-reference-row p{margin:3px 0 0;color:var(--ink-2);font-size:10.5px;line-height:1.45}.rule-reference-tags{display:flex;align-items:center;justify-content:flex-end;gap:5px;max-width:290px}.rule-reference-tags span{display:inline-flex;align-items:center;min-height:23px;padding:3px 7px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--ink-3);font:650 8.5px var(--mono);text-transform:uppercase;white-space:nowrap}.rule-reference-tags .confidence-required{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}.rule-reference-tags .confidence-strong{border-color:#cbd8e9;background:#eff5fb;color:#315b8a}.rule-reference-tags .confidence-description-rated{border-color:#ecd0a7;background:var(--warn-bg);color:var(--warn)}.rule-reference-empty{min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed var(--border-strong);background:var(--surface);color:var(--ink-3);text-align:center}.rule-reference-empty .ic{width:24px;height:24px;margin-bottom:10px}.rule-reference-empty b{color:var(--ink);font-size:13px}.rule-reference-empty span{margin-top:3px;font-size:11px}.guide-rules-link{margin-top:14px}
+
 @media(max-width:800px){
   .topbar-in{padding-left:12px;padding-right:12px}.lotus-logo{max-width:180px;height:58px}.brand .tag{display:none}
   #view{padding:20px 14px 56px}.upload-grid{grid-template-columns:1fr}.privacy-panel{min-height:auto}.coverage-band{grid-template-columns:1fr}.coverage-band>div{border-right:0;border-bottom:1px solid var(--border)}.coverage-band>div:last-child{border-bottom:0}
-  .guide-card{grid-template-columns:170px minmax(0,1fr)}.guide-main{padding:26px 22px}
+  .compare-upload-grid{grid-template-columns:1fr}.compare-upload-slot{min-height:250px}.compare-workspace{grid-template-columns:238px minmax(0,1fr)}.compare-system-tools>div:last-child{grid-template-columns:1fr}.compare-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.compare-summary>div:nth-child(3){border-right:0}.compare-summary>div:nth-child(-n+3){border-bottom:1px solid var(--border)}.compare-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.compare-counts>div:nth-child(2){border-right:0}.compare-counts>div:nth-child(-n+2){border-bottom:1px solid var(--border)}.compare-observation-list{grid-template-columns:1fr}.compare-observation{border-right:0}.compare-pair{grid-template-columns:160px minmax(240px,1fr) minmax(240px,1fr)}.compare-pair-wrap{overflow:auto}.compare-pair-toolbar{grid-template-columns:minmax(0,1fr) 170px}
+  .guide-card{grid-template-columns:170px minmax(0,1fr)}.guide-main{padding:26px 22px}.rules-toolbar{grid-template-columns:minmax(0,1fr) minmax(150px,190px)}.rules-toolbar .searchbox{grid-column:1/-1}.rules-toolbar>span{text-align:left}.rule-reference-row{grid-template-columns:32px minmax(0,1fr)}.rule-reference-tags{grid-column:2;justify-content:flex-start;max-width:none}
 }
 @media(max-width:560px){
   .lotus-logo{max-width:132px;height:52px}.brand h1{font-size:14px}.top-actions .btn{width:38px;padding:0;justify-content:center}.top-actions .btn span{display:none}
   .screen-heading{flex-wrap:wrap}.screen-heading h2{font-size:23px}.dropzone{min-height:270px;padding:25px 18px}
-  .guide-card{display:block}.guide-side{padding:12px;display:flex;overflow-x:auto}.guide-side h2{display:none}.guide-side button{width:auto;white-space:nowrap}.guide-main{height:calc(100% - 57px);padding:24px 18px}
+  .workspace-tabs{overflow-x:auto}.workspace-tab{flex:1;justify-content:center;white-space:nowrap}.compare-runbar{align-items:stretch;flex-direction:column}.compare-runbar>.btn{margin-left:0;justify-content:center}.compare-shell{height:calc(100dvh - 105px)}.compare-shell.fullscreen{inset:3px}.compare-building-note{order:4}.compare-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.compare-summary>div:nth-child(odd){border-right:1px solid var(--border)}.compare-summary>div:nth-child(even){border-right:0}.compare-summary>div:nth-child(-n+4){border-bottom:1px solid var(--border)}.compare-workspace{display:block;overflow:auto}.compare-system-panel{height:210px;border-right:0;border-bottom:1px solid var(--border)}.compare-system-tools{display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:6px}.compare-system-tools>div:last-child{grid-template-columns:1fr 1fr;margin-top:0}.compare-detail{overflow:visible}.compare-pair-toolbar{grid-template-columns:1fr}.compare-pair-wrap{height:370px}.compare-pair{min-width:670px}.compare-detail-head h3{font-size:15px}.compare-detail-head p{display:none}
+  .guide-card{display:block}.guide-side{padding:12px;display:flex;overflow-x:auto}.guide-side h2{display:none}.guide-side button{width:auto;white-space:nowrap}.guide-main{height:calc(100% - 57px);padding:24px 18px}.rules-overview{grid-template-columns:1fr}.rules-overview>div{border-right:0;border-bottom:1px solid var(--border)}.rules-overview>div:last-child{border-bottom:0}.rules-toolbar{grid-template-columns:1fr}.rules-toolbar .searchbox{grid-column:auto}.rules-toolbar>span{text-align:left}.rule-source-section>header{grid-template-columns:34px minmax(0,1fr) auto}.rule-source-section>header p{display:none}.rule-reference-row{padding:10px}.rule-reference-tags{flex-wrap:wrap}.rule-reference-tags span{white-space:normal}
 }
+@media(pointer:coarse){.workspace-tab,.result-tab,.compare-system{min-height:44px}.compare-system-tools select,.compare-pair-toolbar select{min-height:44px}}
 
 </style>
 </head>
@@ -1391,7 +1427,7 @@ body.audit-fullscreen{overflow:hidden}
       <img class="lotus-logo" alt="LotusWorks" src="data:image/png;base64,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NFflaOSaPNmehCkDcWVNiRuDQiNJirvGdetisFyNo5L7ZMuIeGSauFDYstfOeDY3xJymquJ0nGxxGNQRLgRbkg3pyb26LS7xOMdqHOWnRRRxFlF/CpN2+WFxwT5Z4vQQL6ZwfX3Yt00i3LERyRsP5bl9Nd2G4V6uM5alx4Vl6SOSseRGxa/zo/IXDhpYOh66Koq4fp8ID4PN7DJ6XjXu9PmNwtxRWZL7CmRM+QnDGg79xt4ggG9nZYdem1M4KNk0J+vUbNl8gBd4QzPss1DfJ0Lz+WeJ5e6ZOHRoNSGk+HanCziYXUCTOJgFa7XpIc58tm3UvTnmylkeOuS2nSYzaugrCBWGlutpqjXviQENjswkM6gvHuJWhk2cyDU00hC3tPQHId9xQvaix48vQ8VWN3DcEM9e/ZyZL7pP5Y3PNfWks23YTL+dbvkwKruOGuejxoqHjq3cXpzpcGTaAffhSjtprnpicMX2wmClZ5xmCZdh30T/zS8O+zodx46uVL6u13+aa3EWd3b05FIinhSGMKOS15cmhSFE2lz/fpOiIuNXVRFXXHtEo75vztWidr4aW104QG8oXQq739Uf5Lk4YyUzPT/NBrD204OH+vKyL6YqEUeQk4ZSQaoI6XS3F4a+1RdXqo4UNexEY7Mf7+sT1XR8dEVdK1vNymw9Jmrp7SSZ33f3PfIYuJ1FIEVgktNx4uHLxf+qmXbsbDyB/xoEmlzxTpuySm4+hKq/Nc3L7pvZ0Wp87f67NpCNbSotXxoJS+u2DvR6sFW6Qrs/pb9njMEUaZfrnWhzAN8uw4eAxDnRSNwZQs1kkn8W+2iyQqIw9o8iLpR3nO6IiqS6xN9QiFYDt1sREHZrbH+TyHCIKNaGQFwylNf+JkXfbcWkjYELVpa8lnP2O0VWudHJ5tRWMqs9U9xm6fu7LZHfGxH0RCC4DvrC78VrJ/wFQ/BOgJX26lhcMiQyGyRRaEgPLO01uDaAAI4ExiZotszh+K4SLxTnqs6lJxj8ddiguccEjvVlBStPTjQkrsHRvmsmTpxYn5fgXYDAH4wAdhmf9OA3uSQw+4NT3quSo+lRp1u+jRZ6UBf+E90xY7/IrhJG/4m5CJIOEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBAIEAgQCBD4UxD4f290+2tbx1Z3AAAAAElFTkSuQmCC">
       <div><h1>SSM Audit</h1><span class="tag">registry&nbsp;in&nbsp;&rarr;&nbsp;findings&nbsp;out</span></div>
     </div>
-    <div class="top-actions"><button class="btn ghost" id="headerGuide" type="button"></button></div>
+    <div class="top-actions"><button class="btn ghost" id="headerRules" type="button"></button><button class="btn ghost" id="headerGuide" type="button"></button></div>
   </div>
 </header>
 <main id="view" aria-live="polite"></main>
@@ -1461,7 +1497,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added strict L1/L2 milestone completeness plus semantic phase, capacity, and percentage checks\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Added the future standardized Item Master check to the rule catalog and reports in a clearly disabled state until the approved VF standard is supplied\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1472,13 +1508,16 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.3.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
 const S={
   screen:'upload',
+  homeMode:'audit',
+  rules:{search:'',source:'all',category:'all'},
   session:null,
+  comparison:null,
   updateInfo:null,
   updateModalDismissed:false,
 };
@@ -1487,7 +1526,12 @@ function resetSession(){
   S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null};
 }
 
+function resetComparison(){
+  S.comparison={targetName:'',targetSnapshot:null,referenceName:'',referenceSnapshot:null,result:null,targetError:'',referenceError:'',selectedUpn:'',systemSearch:'',systemFilter:'different',systemSort:'upn-asc',rowSearch:'',rowFilter:'different',pairScrollTop:0,treeScrollTop:0,treeExpandedByUpn:{},fullscreen:false};
+}
+
 resetSession();
+resetComparison();
 
 /* src/io/workbook.js */
 function readArrayBuffer(file){
@@ -1692,9 +1736,12 @@ const SSM_AUDIT_RULES=Object.freeze({
   systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name matches UPN','System Name and UPN must identify the same system.'),
   icDiscipline:auditRule('metadata.ic-discipline','registry','metadata','Approved controls mapping','I&C equipment must map to the approved controls discipline and tag-derived UPN.'),
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','Consistent UPN grouping','One UPN should map to one System Name and Discipline.'),
-  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','When a project uses milestones, every equipment row must include both L1 Milestone Parent and L2 Milestone.'),
-  milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','Aligned milestone intent','L1 and L2 milestone intent must not conflict on an explicit phase, capacity, or percentage target.'),
-  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone meaning','One L2 milestone should map to one consistent L1 milestone intent.'),
+  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','When a project uses milestones, every equipment row must include both L1 Milestone Parent and L2 Milestone.',{enabled:false,confidence:'pending',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','Aligned milestone intent','L1 and L2 milestone intent must not conflict on an explicit phase, capacity, or percentage target.',{enabled:false,confidence:'pending',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone meaning','One L2 milestone should map to one consistent L1 milestone intent.',{enabled:false,confidence:'pending',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneCohort:auditRule('milestone.local-cohort-outlier','sop','milestones','Local milestone cohort','Comparable assets in one building and system should use a consistent milestone pair.',{enabled:false,confidence:'strong',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneLevel:auditRule('milestone.level-field-mismatch','sop','milestones','Milestone level placement','L1 and L2 milestone identifiers must appear in their corresponding fields.',{enabled:false,confidence:'strong',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneBranch:auditRule('milestone.branch-outlier','sop','milestones','Branch milestone alignment','An equipment branch should use a consistent milestone pair unless an approved exception applies.',{enabled:false,confidence:'strong',disabledReason:'Milestone audit criteria are awaiting validation.'}),
   itemMasterStandard:auditRule('item-master.standardized-assignment','registry','item-masters','Standardized Item Master','Item Master assignments should match the approved VF standard by equipment meaning, not by project prefix.',{enabled:false,confidence:'pending',disabledReason:'Waiting for the approved VF Item Master standard.'}),
   headerDependency:auditRule('header.has-dependency','sop','headers','Header groups only','An organizational header should not carry unexplained dependencies.'),
   unusedHeader:auditRule('header.unused','sop','headers','Header has children','An organizational header must group at least one child.'),
@@ -1761,6 +1808,42 @@ function auditMilestoneConflict(l1,l2){
   if(left.includes('capacity')&&right.includes('enabling')||left.includes('enabling')&&right.includes('capacity'))return 'capacity versus enabling';
   return '';
 }
+function auditMilestonePairParts(row){
+  const parent=clean(row&&row.milestoneParent),milestone=clean(row&&row.milestone);if(!parent||!milestone)return null;
+  return {key:`${auditNormId(parent)} => ${auditNormId(milestone)}`,parent,milestone};
+}
+function auditLooksLikeMilestoneLevel(value,level){return new RegExp(`(?:^|[-_\\s])L${level}[-_\\s]+(?:M\\d+[-_\\s]+)?\\d`,'i').test(clean(value));}
+function auditMilestoneLevelIssues(row){
+  const issues=[];
+  if(auditLooksLikeMilestoneLevel(row&&row.milestoneParent,2))issues.push({row,field:'L1 Milestone Parent',actual:clean(row.milestoneParent),expected:'L1 milestone identifier',foundLevel:'L2'});
+  if(auditLooksLikeMilestoneLevel(row&&row.milestone,1))issues.push({row,field:'L2 Milestone',actual:clean(row.milestone),expected:'L2 milestone identifier',foundLevel:'L1'});
+  return issues;
+}
+function auditMilestoneCohortCandidates(rows,{minimumPeers=10,minimumAgreement=.95}={}){
+  const groups=new Map(),result=[];
+  for(const row of rows||[]){const parts=auditMilestonePairParts(row),cohort=[row&&row.building,row&&row.upn,row&&row.equipmentDescription].map(auditNormId);if(!parts||cohort.some(value=>!value))continue;
+    const key=cohort.join('|'),entry=groups.get(key)||{rows:[],counts:new Map(),representatives:new Map()};entry.rows.push(row);entry.counts.set(parts.key,(entry.counts.get(parts.key)||0)+1);if(!entry.representatives.has(parts.key))entry.representatives.set(parts.key,parts);groups.set(key,entry);}
+  for(const entry of groups.values())for(const row of entry.rows){const current=auditMilestonePairParts(row),peerCount=entry.rows.length-1;if(peerCount<minimumPeers)continue;
+    let expectedKey='',agreementCount=0;for(const [pairKey,count] of entry.counts){const peerMatches=count-(pairKey===current.key?1:0);if(peerMatches>agreementCount||peerMatches===agreementCount&&natCmp(pairKey,expectedKey)<0){expectedKey=pairKey;agreementCount=peerMatches;}}
+    if(!expectedKey||expectedKey===current.key||agreementCount/peerCount<minimumAgreement)continue;const expected=entry.representatives.get(expectedKey);result.push({row,peerCount,agreementCount,expectedParent:expected.parent,expectedMilestone:expected.milestone});}
+  return result;
+}
+function auditMilestoneBranchCandidates(rows,{minimumPeers=5,minimumAgreement=.95}={}){
+  const rowsById=new Map(),children=new Map(),result=[];
+  for(const row of rows||[]){const id=auditNormId(row&&row.equipmentId);if(id&&!rowsById.has(id))rowsById.set(id,row);const parentId=auditNormId(row&&row.closestParent);if(parentId){const list=children.get(parentId)||[];list.push(row);children.set(parentId,list);}}
+  for(const row of rows||[]){const current=auditMilestonePairParts(row),parent=rowsById.get(auditNormId(row&&row.closestParent)),parentPair=auditMilestonePairParts(parent);if(!current||!parentPair||current.key===parentPair.key)continue;
+    const partition=[row&&row.building,row&&row.upn,row&&row.discipline].map(auditNormId),parentPartition=[parent&&parent.building,parent&&parent.upn,parent&&parent.discipline].map(auditNormId);if(partition.some(value=>!value)||partition.some((value,index)=>value!==parentPartition[index]))continue;
+    const peers=(children.get(auditNormId(row.closestParent))||[]).filter(peer=>peer!==row&&auditMilestonePairParts(peer)&&[peer.building,peer.upn,peer.discipline].map(auditNormId).every((value,index)=>value===partition[index]));if(peers.length<minimumPeers)continue;
+    const agreementCount=peers.filter(peer=>auditMilestonePairParts(peer).key===parentPair.key).length;if(agreementCount/peers.length<minimumAgreement)continue;result.push({row,parent,peerCount:peers.length,agreementCount,expectedParent:parentPair.parent,expectedMilestone:parentPair.milestone});
+  }
+  return result;
+}
+function auditItemMasterTokens(value){return clean(value).toUpperCase().replace(/[^A-Z0-9]+/g,' ').split(/\s+/).filter(Boolean);}
+function auditItemMasterCanonicalCandidates(value,canonicalValues){
+  const input=auditItemMasterTokens(value),matches=[];if(!input.length)return matches;
+  for(const canonicalValue of canonicalValues||[]){const canonical=auditItemMasterTokens(canonicalValue);if(canonical.length<2||!/^VF\d*$/.test(canonical[0]))continue;const body=canonical.slice(1);if(input.length<body.length)continue;const suffix=input.slice(-body.length);if(body.every((token,index)=>token===suffix[index]))matches.push(clean(canonicalValue));}
+  return [...new Set(matches)].sort(natCmp);
+}
 function auditReachableFrom(seeds,edges){
   const reached=new Set(seeds),queue=[...seeds];
   for(let index=0;index<queue.length;index++)for(const next of edges.get(queue[index])||[])if(!reached.has(next)){reached.add(next);queue.push(next);}
@@ -1788,23 +1871,23 @@ function auditCyclePaths(nodes,edges){
 
 function runSsmAudit(snapshot){
   const rows=snapshot&&snapshot.rows||[],findings=[];let checks=0;
-  const add=(rule,severity,row,details)=>findings.push(auditFinding(rule,severity,row,details));
+  const add=(rule,severity,row,details)=>{if(rule.enabled)findings.push(auditFinding(rule,severity,row,details));};
   const rowsById=new Map(),duplicates=new Map();
   for(const row of rows){const key=auditNormId(row.equipmentId);if(!key)continue;if(rowsById.has(key)){const list=duplicates.get(key)||[rowsById.get(key)];list.push(row);duplicates.set(key,list);}else rowsById.set(key,row);}
   for(const list of duplicates.values())for(const row of list){checks++;add(SSM_AUDIT_RULES.duplicateId,'blocker',row,{field:'Equipment ID',why:'Equipment IDs must be unique in one SSM register.',actual:row.equipmentId,expected:'One row per Equipment ID',recommendation:'Merge duplicate records or assign the correct unique equipment tag.'});}
   const children=new Map(),parentEdges=new Map(),precedenceEdges=new Map(),generatedHeaders=new Map(),nodes=new Set(rowsById.keys());
   const addEdge=(map,from,to)=>{if(!from||!to)return;const set=map.get(from)||new Set();set.add(to);map.set(from,set);};
-  const upnGroups=new Map(),milestoneGroups=new Map(),projectUsesMilestones=rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
+  const upnGroups=new Map(),milestoneGroups=new Map(),milestonePairEnabled=SSM_AUDIT_RULES.milestonePair.enabled,milestoneIntentEnabled=SSM_AUDIT_RULES.milestoneIntent.enabled,milestoneConsistencyEnabled=SSM_AUDIT_RULES.milestoneInconsistent.enabled,projectUsesMilestones=milestonePairEnabled&&rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
     if(/^I\s*(?:&|AND)\s*C$/i.test(clean(row.discipline))){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'I&C does not match the allowed Cx discipline mapping.',actual:`${row.discipline}; tag UPN candidates: ${candidates.join(', ')||'none'}`,expected:'FACILITIES MONITORING SYSTEM with one tag-derived UPN',recommendation:candidates.length===1?`Use UPN ${candidates[0]} and its allowed System Name.`:'Resolve the tag-derived UPN before assigning Discipline and System Name.'});}
     if(row.systemName&&row.upn){checks++;const match=extoRev21Norm(row.systemName).match(/^([0-9]+)(?:\s|$)/),systemUpn=match&&match[1];if(systemUpn&&extoRev21Norm(systemUpn)!==extoRev21Norm(row.upn))add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',why:'System Name identifies a different UPN than the row assignment.',actual:`UPN ${row.upn}; System ${row.systemName}`,expected:`System Name beginning with UPN ${row.upn}`,recommendation:'Correct the UPN or select the System Name assigned to that UPN.'});}
     if(projectUsesMilestones){checks++;if(!clean(row.milestone)||!clean(row.milestoneParent))add(SSM_AUDIT_RULES.milestonePair,'error',row,{field:'Milestones',why:'This project uses milestones, but this equipment does not have a complete L1/L2 pair.',actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone populated',recommendation:'Assign the equipment to its governing L1 milestone and corresponding L2 milestone.'});}
-    if(row.milestone&&row.milestoneParent){
-      const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;
-      if(conflict)add(SSM_AUDIT_RULES.milestoneIntent,'warning',row,{field:'Milestones',why:`The milestone pair has conflicting intent: ${conflict}.`,actual:`L1: ${row.milestoneParent}; L2: ${row.milestone}`,expected:'L1 and L2 milestones with compatible phase and capacity intent',recommendation:'Confirm the equipment belongs to the same startup phase represented by both milestones.'});
-      const key=auditNormId(row.milestone),entry=milestoneGroups.get(key)||{row,parents:new Map()};
-      const intent=auditMilestoneIntentKey(row.milestoneParent),values=entry.parents.get(intent)||new Set();values.add(clean(row.milestoneParent));entry.parents.set(intent,values);milestoneGroups.set(key,entry);
+    if(row.milestone&&row.milestoneParent&&(milestoneIntentEnabled||milestoneConsistencyEnabled)){
+      if(milestoneIntentEnabled){const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;
+        if(conflict)add(SSM_AUDIT_RULES.milestoneIntent,'warning',row,{field:'Milestones',why:`The milestone pair has conflicting intent: ${conflict}.`,actual:`L1: ${row.milestoneParent}; L2: ${row.milestone}`,expected:'L1 and L2 milestones with compatible phase and capacity intent',recommendation:'Confirm the equipment belongs to the same startup phase represented by both milestones.'});}
+      if(milestoneConsistencyEnabled){const key=auditNormId(row.milestone),entry=milestoneGroups.get(key)||{row,parents:new Map()};
+        const intent=auditMilestoneIntentKey(row.milestoneParent),values=entry.parents.get(intent)||new Set();values.add(clean(row.milestoneParent));entry.parents.set(intent,values);milestoneGroups.set(key,entry);}
     }
     const upn=auditNormId(row.upn);if(upn){const group=upnGroups.get(upn)||{systems:new Set(),disciplines:new Set(),wbs:new Set(),rows:[]};if(row.systemName)group.systems.add(auditNormId(row.systemName));if(row.discipline)group.disciplines.add(auditNormId(row.discipline));if(row.wbs)group.wbs.add(auditNormId(row.wbs));group.rows.push(row);upnGroups.set(upn,group);}
     checks++;if(!parentId)add(SSM_AUDIT_RULES.blankParent,'blocker',row,{field:'Closest Parent',why:'This equipment has no structural parent or System Name root.',expected:'Equipment parent or the row System Name',recommendation:'Assign the correct same-UPN parent; use System Name for a root.'});
@@ -1838,6 +1921,10 @@ function runSsmAudit(snapshot){
     const meaningful=[...entry.parents].filter(([intent])=>intent!=='unclassified');checks++;
     if(meaningful.length>1)add(SSM_AUDIT_RULES.milestoneInconsistent,'error',entry.row,{field:'Milestone Parent',why:'The same L2 milestone maps to conflicting L1 milestone meanings.',actual:meaningful.map(([intent])=>intent).join('; '),expected:'One consistent L1 phase and readiness intent per L2 milestone',recommendation:'Review the affected milestone assignments by meaning rather than milestone number.'});
   }
+  const milestoneCohortRows=new Set();
+  if(SSM_AUDIT_RULES.milestoneLevel.enabled)for(const row of rows)for(const issue of auditMilestoneLevelIssues(row)){checks++;add(SSM_AUDIT_RULES.milestoneLevel,'error',row,{field:issue.field,why:`${issue.field} contains an identifier formatted for ${issue.foundLevel}.`,actual:issue.actual,expected:issue.expected,recommendation:'Move the milestone to the corresponding field and confirm the paired assignment.'});}
+  if(SSM_AUDIT_RULES.milestoneCohort.enabled)for(const candidate of auditMilestoneCohortCandidates(rows)){checks++;milestoneCohortRows.add(candidate.row);add(SSM_AUDIT_RULES.milestoneCohort,'warning',candidate.row,{field:'Milestones',why:`This assignment differs from ${candidate.agreementCount.toLocaleString()} comparable assets in the same building and system.`,actual:`L1: ${candidate.row.milestoneParent}; L2: ${candidate.row.milestone}`,expected:`L1: ${candidate.expectedParent}; L2: ${candidate.expectedMilestone}`,recommendation:'Review this row against its local building, UPN, and equipment-description cohort.'});}
+  if(SSM_AUDIT_RULES.milestoneBranch.enabled)for(const candidate of auditMilestoneBranchCandidates(rows)){if(milestoneCohortRows.has(candidate.row))continue;checks++;add(SSM_AUDIT_RULES.milestoneBranch,'warning',candidate.row,{field:'Milestones',why:`The parent and ${candidate.agreementCount.toLocaleString()} sibling assets use the same milestone pair, but this equipment differs.`,actual:`L1: ${candidate.row.milestoneParent}; L2: ${candidate.row.milestone}`,expected:`L1: ${candidate.expectedParent}; L2: ${candidate.expectedMilestone}`,recommendation:'Confirm the branch assignment and align this row when no documented exception applies.',relatedEquipmentId:candidate.parent.equipmentId});}
   for(const cycle of auditCyclePaths(nodes,parentEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.parentCycle,'blocker',row,{field:'Closest Parent',why:'The Closest Parent chain contains a cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic parent hierarchy',recommendation:'Break the cycle by correcting at least one Closest Parent.'});}
   for(const cycle of auditCyclePaths(nodes,precedenceEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.precedenceCycle,'blocker',row,{field:'Dependencies',why:'Parent and dependency relationships create a startup sequence cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic commissioning sequence',recommendation:'Review the involved parent/dependency links and break the circular gating logic.'});}
   for(const row of rows){if(!auditIsOrganizationalHeader(row))continue;const id=auditNormId(row.equipmentId),childCount=(children.get(id)||[]).length;
@@ -1866,6 +1953,220 @@ function runSsmAudit(snapshot){
   const source=Object.fromEntries(SSM_AUDIT_SOURCES.map(item=>[item.id,findings.filter(finding=>finding.rule.source===item.id).length]));
   return Object.freeze({schemaVersion:1,standard:SSM_AUDIT_STANDARD,rows:Object.freeze([...rows]),findings:Object.freeze(findings),
     summary:Object.freeze({rows:rows.length,checks,findings:findings.length,severity:Object.freeze(severity),category:Object.freeze(category),source:Object.freeze(source),status:severity.blocker?'blocked':severity.error||severity.warning?'review':'ready'})});
+}
+
+/* src/audit/compare.js */
+const SSM_COMPARISON_SCHEMA_VERSION=1;
+const EMPTY_ROLE='Unclassified equipment';
+const CLASSIFICATION_FAMILIES=new Map(Object.entries({
+  'AFD-VFD':'Variable frequency drive',VFD:'Variable frequency drive',
+  TET:'Temperature transmitter',TT:'Temperature transmitter',TIT:'Temperature transmitter',
+  FIT:'Flow transmitter',FT:'Flow transmitter',PIT:'Pressure transmitter',PT:'Pressure transmitter',
+  PDIT:'Differential pressure transmitter',PDT:'Differential pressure transmitter',
+  AIT:'Analyzer transmitter',AT:'Analyzer transmitter',
+  TCV:'Control valve',CV:'Control valve',FV:'Control valve',
+  TFRM:'Transformer',DP:'Distribution panel',DTP:'Distribution panel',BRP:'Branch panel',
+  RIO:'Remote I/O panel',PLC:'Programmable logic controller',LCP:'Local control panel',
+  PMP:'Pump',LAT:'Lateral',MAIN:'Main distribution',HS:'Hand switch',
+  ZSO:'Position switch',ZSC:'Position switch',QS:'Current switch',QL:'Status indicator',
+  XV:'On/off valve',TK:'Tank',FDU:'Fiber distribution unit','FDU ENCLOSURE':'Fiber distribution unit enclosure',
+}));
+const DESCRIPTION_FAMILIES=[
+  [/\bREMOTE\s*I\/?O\b|\bRIO\b/,'Remote I/O panel'],
+  [/PROGRAMMABLE LOGIC CONTROLLER|\bPLC\b/,'Programmable logic controller'],
+  [/VARIABLE FREQUENCY DRIVE|ADJUSTABLE[- ]VARIABLE FREQUENCY DRIVE|\bVFD\b/,'Variable frequency drive'],
+  [/\bTRANSFORMER\b/,'Transformer'],
+  [/\bDISTRIBUTION PANEL\b/,'Distribution panel'],
+  [/\bBRANCH (?:CIRCUIT )?PANEL\b/,'Branch panel'],
+  [/TEMPERATURE (?:ELEMENT )?(?:INDICATING )?TRANSMITTER/,'Temperature transmitter'],
+  [/FLOW (?:INDICATING )?TRANSMITTER/,'Flow transmitter'],
+  [/PRESSURE (?:DIFF(?:ERENTIAL)? )?(?:INDICATING )?TRANSMITTER/,'Pressure transmitter'],
+  [/ANALY(?:ZER|TICAL) (?:INDICATING )?TRANSMITTER/,'Analyzer transmitter'],
+  [/CONTROL VALVE|FLOW VALVE/,'Control valve'],
+  [/SOLENOID VALVE|ON\/OFF VALVE/,'On/off valve'],
+  [/\bPUMP\b/,'Pump'],
+  [/\bLATERAL\b/,'Lateral'],
+  [/MAIN DISTRIBUTION/,'Main distribution'],
+  [/DISTRIBUTION PIPING|DISTRTIBUTION PIPING/,'Distribution piping'],
+  [/\bHAND SWITCH\b/,'Hand switch'],
+  [/POSITION SWITCH/,'Position switch'],
+  [/CURRENT SWITCH/,'Current switch'],
+  [/STATUS INDICATOR/,'Status indicator'],
+  [/FIBER OPTIC DISTRIBUTION UNIT|\bFDU\b/,'Fiber distribution unit'],
+];
+
+function mapPush(map,key,value){const list=map.get(key)||[];list.push(value);map.set(key,list);}
+function normalizedMapCount(map,key,amount=1){map.set(key,(map.get(key)||0)+amount);}
+function displayRole(row){return clean(row&&row.equipmentDescription)||clean(row&&row.equipmentClassification)||EMPTY_ROLE;}
+function roleKey(row){return auditNormId(displayRole(row));}
+function isHeader(row){return /^HEADER$/i.test(clean(row&&row.equipmentDescription));}
+function systemKey(row){
+  const match=clean(row&&row.systemName).match(/^([0-9]{3,4})(?:\s|$)/);if(match)return match[1];
+  return auditNormId(row&&row.upn)||'UNASSIGNED';
+}
+function stripLeadingSystemNumber(value){return clean(value).replace(/^\s*[0-9]{3,4}\s*[-:]?\s*/,'').replace(/\s+/g,' ').trim();}
+function buildingNeutralTag(row){
+  const id=auditNormId(row&&row.equipmentId),building=auditNormId(row&&row.building);if(!id||!building)return id;
+  const aliases=[building,...building.match(/[A-Z0-9]+/g)||[]].filter(value=>value.length>1).sort((a,b)=>b.length-a.length);
+  for(const alias of aliases){const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),neutral=id.replace(new RegExp(`^${escaped}(?:\\s*[-_/:.]\\s*|\\s+)`),'');if(neutral!==id)return neutral;}
+  return id;
+}
+function disciplineKind(row){
+  const discipline=auditNormId(row&&row.discipline),upn=systemKey(row);
+  if(upn==='650'||/FACILITIES MONITORING|INSTRUMENTATION|(?:^|\s)I\s*(?:&|AND)\s*C(?:\s|$)/.test(discipline))return 'Controls / I&C';
+  return clean(row&&row.discipline)||'Unassigned discipline';
+}
+function isControls(row){
+  if(disciplineKind(row)==='Controls / I&C')return true;
+  const description=auditNormId(row&&row.equipmentDescription);
+  return /REMOTE\s*I\/?O|\bRIO\b|\bPLC\b|PROGRAMMABLE LOGIC CONTROLLER|I\/?O CLUSTER|CONTROL PANEL|FMS (?:CABINET|CONTROLLER)|\bTRANSMITTER\b|\bSENSOR\b|\bINSTRUMENT\b|\bANALYZER\b|CONTROL VALVE|POSITION (?:SWITCH|INDICATOR)|LIMIT SWITCH|FLOW SWITCH|PRESSURE SWITCH|TEMPERATURE ELEMENT|HUMIDITY ELEMENT|STATUS INDICATOR|CURRENT SWITCH/.test(description);
+}
+function classificationFamily(row){const key=auditNormId(row&&row.equipmentClassification);return CLASSIFICATION_FAMILIES.get(key)||key;}
+function semanticRole(row){
+  if(isHeader(row))return 'Organizational header';
+  const classification=classificationFamily(row);if(classification&&CLASSIFICATION_FAMILIES.has(auditNormId(row&&row.equipmentClassification)))return classification;
+  const description=auditNormId(row&&row.equipmentDescription);for(const [pattern,label] of DESCRIPTION_FAMILIES)if(pattern.test(description))return label;
+  return classification||displayRole(row);
+}
+function sortedMode(values){
+  const counts=new Map(),display=new Map();for(const value of values){const key=auditNormId(value);if(!key)continue;normalizedMapCount(counts,key);if(!display.has(key))display.set(key,clean(value));}
+  const winner=[...counts].sort((a,b)=>b[1]-a[1]||natCmp(a[0],b[0]))[0];return winner&&display.get(winner[0])||'';
+}
+
+function registryModel(snapshot){
+  const rows=snapshot&&snapshot.rows||[],rowsById=new Map(),childrenById=new Map(),generatedHeaders=new Map();
+  for(const row of rows){const id=auditNormId(row.equipmentId);if(id&&!rowsById.has(id))rowsById.set(id,row);}
+  for(const row of rows){
+    const parent=auditNormId(row.closestParent),upn=systemKey(row);if(parent)mapPush(childrenById,parent,row);
+    if(!parent||rowsById.has(parent)||auditNormId(row.closestParentStatus)!=='NEW'||parent===auditNormId(row.systemName))continue;
+    const key=`${upn}|${parent}`;if(generatedHeaders.has(key))continue;
+    generatedHeaders.set(key,{building:clean(row.building),discipline:clean(row.discipline),upn:clean(row.upn),systemName:clean(row.systemName),equipmentId:clean(row.closestParent),equipmentDescription:'HEADER',equipmentClassification:'HEADER',closestParent:clean(row.systemName),closestParentStatus:'New',dependencies:'',_source:row._source,_synthetic:true});
+  }
+  const nodeByRow=new Map(),systems=new Map();
+  for(const row of [...rows,...generatedHeaders.values()]){
+    const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),upn=systemKey(row),parentRow=rowsById.get(parentId)||generatedHeaders.get(`${upn}|${parentId}`);
+    const source=row._source||{},key=`${clean(source.sheet)}:${source.row||0}:${id}`;
+    const semantic=semanticRole(row),parentSemantic=parentRow?semanticRole(parentRow):'System / external root';
+    const node={row,key,id,upn,tag:clean(row.equipmentId),coreTag:buildingNeutralTag(row),role:displayRole(row),roleKey:roleKey(row),semanticRole:semantic,semanticRoleKey:auditNormId(semantic),classification:clean(row.equipmentClassification),classificationKey:auditNormId(row.equipmentClassification),classificationFamilyKey:auditNormId(classificationFamily(row)),discipline:clean(row.discipline),disciplineKind:disciplineKind(row),isControls:isControls(row),isHeader:isHeader(row),isSyntheticHeader:!!row._synthetic,parentId,parentRow,parentRole:parentRow?displayRole(parentRow):'System / external root',parentRoleKey:parentRow?roleKey(parentRow):'SYSTEM / EXTERNAL ROOT',parentSemanticRole:parentSemantic,parentSemanticRoleKey:auditNormId(parentSemantic),childCount:(childrenById.get(id)||[]).length,depth:0,underHeader:false,headerName:'',dependencyRoles:[],dependencyRoleKey:''};
+    nodeByRow.set(row,node);mapPush(systems,upn,node);
+  }
+  for(const node of nodeByRow.values()){
+    const seen=new Set([node.id]),roles=[];let current=node.parentRow,depth=0;
+    while(current&&depth<100){const parentNode=nodeByRow.get(current);if(!parentNode||seen.has(parentNode.id))break;seen.add(parentNode.id);depth++;roles.push(parentNode.role);if(parentNode.isHeader&&!node.underHeader){node.underHeader=true;node.headerName=parentNode.tag;}current=parentNode.parentRow;}
+    node.depth=depth;node.path=[...roles.reverse(),node.role];
+    const dependencyRows=auditSplitReferences(node.row.dependencies).filter(value=>!/^N\/?A$/i.test(value)).map(reference=>rowsById.get(auditNormId(reference))||null);
+    node.dependencyRoles=dependencyRows.map(linked=>linked?displayRole(linked):'External dependency').sort(natCmp);
+    node.dependencyRoleKey=dependencyRows.map(linked=>auditNormId(linked?semanticRole(linked):'External dependency')).sort(natCmp).join(';');
+  }
+  return {rows,nodes:[...nodeByRow.values()],systems,rowsById};
+}
+
+function nodeSort(left,right){return natCmp(left.semanticRole,right.semanticRole)||natCmp(left.parentSemanticRole,right.parentSemanticRole)||natCmp(left.role,right.role)||natCmp(left.coreTag,right.coreTag)||natCmp(left.tag,right.tag);}
+function pairNodes(targetNodes,referenceNodes){
+  const target=[...targetNodes].sort(nodeSort),reference=[...referenceNodes].sort(nodeSort),targetOpen=new Set(target),referenceOpen=new Set(reference),pairs=[];
+  const pairPass=(keyFor,reason)=>{
+    const left=new Map(),right=new Map();
+    for(const node of target)if(targetOpen.has(node)){const key=keyFor(node);if(key)mapPush(left,key,node);}
+    for(const node of reference)if(referenceOpen.has(node)){const key=keyFor(node);if(key)mapPush(right,key,node);}
+    for(const key of [...left.keys()].filter(value=>right.has(value)).sort(natCmp)){
+      const targets=left.get(key).sort(nodeSort),references=right.get(key).sort(nodeSort),count=Math.min(targets.length,references.length);
+      for(let index=0;index<count;index++){const targetNode=targets[index],referenceNode=references[index];targetOpen.delete(targetNode);referenceOpen.delete(referenceNode);pairs.push(comparePair(targetNode,referenceNode,reason));}
+    }
+  };
+  pairPass(node=>node.coreTag&&`TAG|${node.coreTag}`,'Same equipment tag after Building removal');
+  pairPass(node=>`FULL|${node.semanticRoleKey}|${node.classificationFamilyKey}|${node.parentSemanticRoleKey}|${Number(node.isHeader)}`,'Same equipment type and parent type');
+  pairPass(node=>`TYPE-PARENT|${node.semanticRoleKey}|${node.parentSemanticRoleKey}`,'Same equipment type and parent type');
+  pairPass(node=>node.semanticRoleKey&&node.semanticRoleKey!==auditNormId(EMPTY_ROLE)?`TYPE|${node.semanticRoleKey}`:'','Same equipment type');
+  pairPass(node=>node.classificationFamilyKey?`CLASS-PARENT|${node.classificationFamilyKey}|${node.parentSemanticRoleKey}`:'','Same classification family and parent type');
+  pairPass(node=>node.classificationFamilyKey?`CLASS|${node.classificationFamilyKey}`:'','Same classification family');
+  for(const node of [...targetOpen].sort(nodeSort))pairs.push(comparePair(node,null,'Only in target'));
+  for(const node of [...referenceOpen].sort(nodeSort))pairs.push(comparePair(null,node,'Only in completed project'));
+  const rank={changed:0,'target-only':1,'reference-only':2,aligned:3};
+  return pairs.sort((a,b)=>rank[a.status]-rank[b.status]||nodeSort(a.target||a.reference,b.target||b.reference));
+}
+function comparePair(target,reference,matchReason){
+  if(!reference)return {target,reference:null,status:'target-only',matchReason,differences:['Only in target']};
+  if(!target)return {target:null,reference,status:'reference-only',matchReason,differences:['Only in completed project']};
+  const differences=[];
+  if(target.semanticRoleKey!==reference.semanticRoleKey)differences.push('Equipment type differs');
+  if(target.parentSemanticRoleKey!==reference.parentSemanticRoleKey)differences.push('Parent equipment type differs');
+  if(target.underHeader!==reference.underHeader)differences.push('Organizational header usage differs');
+  if(target.disciplineKind!==reference.disciplineKind)differences.push('Discipline placement differs');
+  if(target.dependencyRoleKey!==reference.dependencyRoleKey)differences.push('Dependency equipment types differ');
+  return {target,reference,status:differences.length?'changed':'aligned',matchReason,differences};
+}
+
+function pairTree(pairs){
+  const targetById=new Map(),referenceById=new Map();
+  for(const pair of pairs){
+    if(pair.target&&!targetById.has(pair.target.id))targetById.set(pair.target.id,pair);
+    if(pair.reference&&!referenceById.has(pair.reference.id))referenceById.set(pair.reference.id,pair);
+  }
+  for(let index=0;index<pairs.length;index++){
+    const pair=pairs[index],targetParent=pair.target&&targetById.get(pair.target.parentId),referenceParent=pair.reference&&referenceById.get(pair.reference.parentId);
+    pair.id=`pair-${index}`;
+    pair.targetParentPair=targetParent||null;
+    pair.referenceParentPair=referenceParent||null;
+  }
+  const pairById=new Map(pairs.map(pair=>[pair.id,pair]));
+  for(const pair of pairs){
+    const targetParentId=pair.targetParentPair&&pair.targetParentPair.id||'',referenceParentId=pair.referenceParentPair&&pair.referenceParentPair.id||'';
+    pair.targetParentPairId=targetParentId;
+    pair.referenceParentPairId=referenceParentId;
+    pair.parentPairId=pair.target?targetParentId:referenceParentId;
+    if(pair.parentPairId===pair.id)pair.parentPairId='';
+    pair.placementMismatch=!!(pair.target&&pair.reference&&targetParentId!==referenceParentId);
+    pair.childrenIds=[];
+    delete pair.targetParentPair;
+    delete pair.referenceParentPair;
+  }
+  for(const pair of pairs){const parent=pairById.get(pair.parentPairId);if(parent)parent.childrenIds.push(pair.id);}
+  const sortPairs=(leftId,rightId)=>nodeSort(pairById.get(leftId).target||pairById.get(leftId).reference,pairById.get(rightId).target||pairById.get(rightId).reference);
+  for(const pair of pairs)pair.childrenIds.sort(sortPairs);
+  const roots=pairs.filter(pair=>!pairById.has(pair.parentPairId)).sort((left,right)=>nodeSort(left.target||left.reference,right.target||right.reference)).map(pair=>pair.id);
+  return {roots};
+}
+
+function nodeCounts(nodes,keyFor){const counts=new Map();for(const node of nodes)normalizedMapCount(counts,keyFor(node));return counts;}
+function countObservations(type,title,left,right,subjectLabel){
+  const observations=[],keys=new Set([...left.keys(),...right.keys()]);
+  for(const key of [...keys].sort(natCmp)){const target=left.get(key)||0,reference=right.get(key)||0;if(target===reference)continue;observations.push({type,title,subject:subjectLabel(key),target,reference});}
+  return observations;
+}
+function headerPlacementObservations(targetNodes,referenceNodes){
+  const summarize=nodes=>{const groups=new Map();for(const node of nodes){if(node.isHeader)continue;const value=groups.get(node.semanticRoleKey)||{inside:0,outside:0};value[node.underHeader?'inside':'outside']++;groups.set(node.semanticRoleKey,value);}return groups;},target=summarize(targetNodes),reference=summarize(referenceNodes),observations=[];
+  const state=value=>!value.inside?'Not under a header':!value.outside?'Under a header':'Mixed header placement';
+  for(const role of [...target.keys()].filter(key=>reference.has(key)).sort(natCmp)){const targetState=state(target.get(role)),referenceState=state(reference.get(role));if(targetState===referenceState)continue;observations.push({type:'headers',title:'Organizational header use differs',subject:role,target:targetState,reference:referenceState});}
+  return observations;
+}
+function compareSystem(upn,targetNodes=[],referenceNodes=[]){
+  const pairs=pairNodes(targetNodes,referenceNodes),observations=[];
+  const tree=pairTree(pairs);
+  const targetActual=targetNodes.filter(node=>!node.isSyntheticHeader),referenceActual=referenceNodes.filter(node=>!node.isSyntheticHeader);
+  const targetNames=targetActual.map(node=>node.row.systemName),referenceNames=referenceActual.map(node=>node.row.systemName),targetName=sortedMode(targetNames),referenceName=sortedMode(referenceNames);
+  if(targetActual.length&&!referenceActual.length)observations.push({type:'coverage',title:'System occurs only in target',subject:`UPN ${upn}`,target:targetActual.length,reference:0});
+  else if(referenceActual.length&&!targetActual.length)observations.push({type:'coverage',title:'System occurs only in completed project',subject:`UPN ${upn}`,target:0,reference:referenceActual.length});
+  if(targetName&&referenceName&&auditNormId(stripLeadingSystemNumber(targetName))!==auditNormId(stripLeadingSystemNumber(referenceName)))observations.push({type:'system',title:'System descriptions differ',subject:`${targetName} / ${referenceName}`,target:targetName,reference:referenceName});
+  observations.push(...countObservations('role','Equipment mix differs',nodeCounts(targetNodes,node=>node.semanticRoleKey),nodeCounts(referenceNodes,node=>node.semanticRoleKey),key=>key));
+  observations.push(...countObservations('hierarchy','Hierarchy pattern differs',nodeCounts(targetNodes,node=>`${node.parentSemanticRoleKey} > ${node.semanticRoleKey}`),nodeCounts(referenceNodes,node=>`${node.parentSemanticRoleKey} > ${node.semanticRoleKey}`),key=>key));
+  observations.push(...headerPlacementObservations(targetNodes,referenceNodes));
+  observations.push(...countObservations('controls','I&C nesting differs',nodeCounts(targetNodes.filter(node=>node.isControls),node=>`${node.semanticRoleKey} > ${node.parentSemanticRoleKey}`),nodeCounts(referenceNodes.filter(node=>node.isControls),node=>`${node.semanticRoleKey} > ${node.parentSemanticRoleKey}`),key=>key));
+  const pairSummary={aligned:0,changed:0,targetOnly:0,referenceOnly:0};
+  for(const pair of pairs){if(pair.status==='target-only')pairSummary.targetOnly++;else if(pair.status==='reference-only')pairSummary.referenceOnly++;else pairSummary[pair.status]++;}
+  const targetHeaders=targetNodes.filter(node=>node.isHeader).length,referenceHeaders=referenceNodes.filter(node=>node.isHeader).length;
+  return {upn,label:targetName||referenceName||(upn==='UNASSIGNED'?'Unassigned UPN':`UPN ${upn}`),targetName,referenceName,targetRows:targetActual.length,referenceRows:referenceActual.length,targetHeaders,referenceHeaders,targetControls:targetActual.filter(node=>node.isControls).length,referenceControls:referenceActual.filter(node=>node.isControls).length,pairs,treeRoots:tree.roots,observations,pairSummary,status:!targetActual.length?'reference-only':!referenceActual.length?'target-only':observations.length||pairSummary.changed||pairSummary.targetOnly||pairSummary.referenceOnly?'different':'aligned',differenceCount:observations.length+pairSummary.changed+pairSummary.targetOnly+pairSummary.referenceOnly};
+}
+
+function compareSsmRegistries(targetSnapshot,referenceSnapshot){
+  const target=registryModel(targetSnapshot),reference=registryModel(referenceSnapshot),upns=new Set([...target.systems.keys(),...reference.systems.keys()]);
+  const systems=[...upns].sort(natCmp).map(upn=>compareSystem(upn,target.systems.get(upn)||[],reference.systems.get(upn)||[]));
+  const summary={systems:systems.length,alignedSystems:0,differentSystems:0,targetOnlySystems:0,referenceOnlySystems:0,targetRows:target.rows.length,referenceRows:reference.rows.length,alignedRows:0,changedRows:0,targetOnlyRows:0,referenceOnlyRows:0,observations:0};
+  for(const system of systems){if(system.status==='aligned')summary.alignedSystems++;else if(system.status==='target-only')summary.targetOnlySystems++;else if(system.status==='reference-only')summary.referenceOnlySystems++;else summary.differentSystems++;summary.alignedRows+=system.pairSummary.aligned;summary.changedRows+=system.pairSummary.changed;summary.targetOnlyRows+=system.pairSummary.targetOnly;summary.referenceOnlyRows+=system.pairSummary.referenceOnly;summary.observations+=system.observations.length;}
+  return Object.freeze({schemaVersion:SSM_COMPARISON_SCHEMA_VERSION,standard:'Building-neutral project comparison',summary:Object.freeze(summary),systems:Object.freeze(systems)});
+}
+
+function comparisonSystemTypes(system){
+  const counts={coverage:0,system:0,role:0,hierarchy:0,headers:0,controls:0};for(const item of system&&system.observations||[])counts[item.type]=(counts[item.type]||0)+1;return counts;
 }
 
 /* src/core/download.js */
@@ -1989,6 +2290,42 @@ function exportSsmAuditXlsx(){
   downloadBlob(`${base}-Audit.xlsx`,workbookBlob(workbook));toast('SSM Audit report exported');
 }
 
+function exportSsmComparisonXlsx(){
+  const comparison=S.comparison,result=comparison&&comparison.result;if(!result){toast('Compare two registries first');return;}
+  const workbook=XLSX.utils.book_new(),summary=result.summary;
+  const summaryRows=[
+    ['Project Comparison','Value'],
+    ['Method',result.standard],
+    ['Target registry',comparison.targetName],
+    ['Completed project reference',comparison.referenceName],
+    ['Systems compared',summary.systems],
+    ['Systems with differences',summary.differentSystems+summary.targetOnlySystems+summary.referenceOnlySystems],
+    ['Aligned systems',summary.alignedSystems],
+    ['Target rows',summary.targetRows],
+    ['Completed project rows',summary.referenceRows],
+    ['Aligned equipment pairs',summary.alignedRows],
+    ['Changed equipment pairs',summary.changedRows],
+    ['Target-only equipment',summary.targetOnlyRows],
+    ['Completed-project-only equipment',summary.referenceOnlyRows],
+    ['Building comparison','Excluded'],
+  ];
+  const summarySheet=XLSX.utils.aoa_to_sheet(summaryRows);summarySheet['!cols']=[{wch:34},{wch:80}];styleHeaderRow(summarySheet);addSheet(workbook,summarySheet,'Comparison Summary');
+
+  const systemRows=[['UPN','System','Status','Differences','Target Rows','Completed Project Rows','Target Headers','Completed Project Headers','Target I&C','Completed Project I&C'],...result.systems.map(system=>[system.upn,system.label,system.status,system.differenceCount,system.targetRows,system.referenceRows,system.targetHeaders,system.referenceHeaders,system.targetControls,system.referenceControls])];
+  const systemSheet=XLSX.utils.aoa_to_sheet(systemRows);systemSheet['!cols']=[{wch:12},{wch:58},{wch:22},{wch:13},{wch:13},{wch:22},{wch:15},{wch:24},{wch:12},{wch:22}];styleHeaderRow(systemSheet);systemSheet['!autofilter']={ref:`A1:J${Math.max(1,systemRows.length)}`};addSheet(workbook,systemSheet,'Systems');
+
+  const differenceRows=[['UPN','Difference Type','Finding','Pattern or Equipment Type','Target','Completed Project']];
+  for(const system of result.systems)for(const item of system.observations)differenceRows.push([system.upn,item.type,item.title,item.subject,item.target,item.reference]);
+  const differenceSheet=XLSX.utils.aoa_to_sheet(differenceRows);differenceSheet['!cols']=[{wch:12},{wch:20},{wch:38},{wch:72},{wch:18},{wch:24}];styleHeaderRow(differenceSheet);differenceSheet['!autofilter']={ref:`A1:F${Math.max(1,differenceRows.length)}`};addSheet(workbook,differenceSheet,'Observed Differences');
+
+  const pairRows=[['UPN','Status','Match Basis','Target Equipment ID','Target Description','Target Parent Type','Target Header','Target Dependencies','Completed Project Equipment ID','Completed Project Description','Completed Project Parent Type','Completed Project Header','Completed Project Dependencies','Differences']];
+  for(const system of result.systems)for(const pair of system.pairs){const target=pair.target,reference=pair.reference;pairRows.push([system.upn,pair.status,pair.matchReason,target&&target.tag||'',target&&target.role||'',target&&target.parentRole||'',target&&target.headerName||'',target&&target.dependencyRoles.join('; ')||'',reference&&reference.tag||'',reference&&reference.role||'',reference&&reference.parentRole||'',reference&&reference.headerName||'',reference&&reference.dependencyRoles.join('; ')||'',pair.differences.join('; ')]);}
+  const pairSheet=XLSX.utils.aoa_to_sheet(pairRows);pairSheet['!cols']=[{wch:12},{wch:20},{wch:38},{wch:30},{wch:34},{wch:34},{wch:30},{wch:40},{wch:36},{wch:34},{wch:34},{wch:30},{wch:40},{wch:54}];styleHeaderRow(pairSheet);pairSheet['!autofilter']={ref:`A1:N${Math.max(1,pairRows.length)}`};addSheet(workbook,pairSheet,'Equipment Mapping');
+
+  const base=clean(comparison.targetName).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  downloadBlob(`${base}-Project-Comparison.xlsx`,workbookBlob(workbook));toast('Project comparison exported');
+}
+
 /* src/update/update.js */
 function semver(value){return String(value||'').replace(/^v/i,'').split('.').map(part=>Number(part)||0);}
 function compareVersions(left,right){
@@ -2061,10 +2398,51 @@ function initUpdate(){
 
 /* src/ui/audit.js */
 const AUDIT_ROW_HEIGHT=48,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
+const COMPARE_ROW_HEIGHT=76,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
+const COMPARE_TREE_ROW_HEIGHT=52,COMPARE_TREE_OVERSCAN=10,COMPARE_TREE_MAX_ROWS=120;
 const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
+const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',headers:'Headers / Rollups'};
+const RULE_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
+const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.'};
 const SEVERITY_LABELS={blocker:'Blocker',error:'Error',warning:'Warning',info:'Advisory'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
 let auditOutsideHandler=null,auditEscapeHandler=null;
+
+function workspaceTabs(active){return `<div class="workspace-tabs" role="tablist" aria-label="SSM Audit tools"><button class="workspace-tab ${active==='audit'?'active':''}" type="button" data-workspace-mode="audit" role="tab" aria-selected="${active==='audit'}">${ic('check-check')}Audit Registry</button><button class="workspace-tab ${active==='compare'?'active':''}" type="button" data-workspace-mode="compare" role="tab" aria-selected="${active==='compare'}">${ic('square-stack')}Compare Projects</button><button class="workspace-tab ${active==='rules'?'active':''}" type="button" data-workspace-mode="rules" role="tab" aria-selected="${active==='rules'}">${ic('book-open')}Rules</button></div>`;}
+function wireWorkspaceTabs(navigate){$$('[data-workspace-mode]').forEach(button=>button.onclick=()=>{S.homeMode=button.dataset.workspaceMode;if(S.homeMode==='rules')navigate('rules');else if(S.homeMode==='compare'&&S.comparison.result)navigate('compare');else if(S.homeMode==='audit'&&S.session.result)navigate('audit');else renderUpload(navigate);});}
+
+function activeRuleCatalog(){return Object.values(SSM_AUDIT_RULES).filter(rule=>rule.enabled);}
+function ruleCatalogRows(){
+  const query=clean(S.rules.search).toUpperCase(),source=S.rules.source,category=S.rules.category;
+  return activeRuleCatalog().filter(rule=>(source==='all'||rule.source===source)&&(category==='all'||rule.category===category)&&(!query||[rule.title,rule.statement,SOURCE_LABELS[rule.source],RULE_CATEGORY_LABELS[rule.category]].join(' ').toUpperCase().includes(query)));
+}
+function ruleRow(rule){
+  const topic=RULE_CATEGORY_LABELS[rule.category]||'General',confidence=RULE_CONFIDENCE_LABELS[rule.confidence]||'Guidance';
+  return `<article class="rule-reference-row"><span class="rule-reference-icon">${ic(rule.category==='dependencies'?'git-branch':rule.category==='metadata'?'database':rule.category==='headers'?'folder-tree':'list-tree')}</span><div><h4>${esc(rule.title)}</h4><p>${esc(rule.statement)}</p></div><div class="rule-reference-tags"><span>${esc(topic)}</span><span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span></div></article>`;
+}
+function renderRuleCatalog(){
+  const rows=ruleCatalogRows(),container=$('#ruleCatalog'),count=$('#ruleResultCount');if(!container)return;
+  if(count)count.textContent=`${rows.length} of ${activeRuleCatalog().length} checks`;
+  if(!rows.length){container.innerHTML=`<div class="rule-reference-empty">${ic('search')}<b>No checks found</b><span>Try a broader search or choose All topics.</span></div>`;return;}
+  container.innerHTML=SSM_AUDIT_SOURCES.map(source=>{const matches=rows.filter(rule=>rule.source===source.id);if(!matches.length)return '';return `<section class="rule-source-section"><header><span>${ic(source.id==='sop'?'book-open':source.id==='logic'?'network':'check-check')}</span><div><h3>${esc(source.label)}</h3><p>${esc(RULE_SOURCE_DESCRIPTIONS[source.id]||source.description)}</p></div><b>${matches.length}</b></header><div>${matches.map(ruleRow).join('')}</div></section>`;}).join('');
+}
+function renderRules(navigate){
+  teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='rules';S.homeMode='rules';
+  const rules=activeRuleCatalog(),sources=new Set(rules.map(rule=>rule.source)),topics=new Set(rules.map(rule=>rule.category));
+  $('#view').innerHTML=`<section class="rules-shell">
+    ${workspaceTabs('rules')}
+    <div class="screen-heading rules-heading"><div><span class="eyebrow">Plain-language audit reference</span><h2>Rules used by SSM Audit</h2><p>See exactly what the app checks and why each relationship matters.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
+    <div class="rules-overview"><div><span>Checks in use</span><b>${rules.length}</b><p>Every check currently applied during an audit.</p></div><div><span>Governing sources</span><b>${sources.size}</b><p>Registry integrity, SSM requirements, and commissioning logic.</p></div><div><span>Review topics</span><b>${topics.size}</b><p>Hierarchy, dependencies, consistency, and headers.</p></div></div>
+    <div class="rules-note">${ic('info')}<span><b>Transparent by design.</b> Project comparisons provide context, but never create or change these rules.</span></div>
+    <div class="rules-toolbar"><div class="searchbox">${ic('search')}<input id="ruleSearch" aria-label="Search audit rules" placeholder="Search checks and explanations" value="${esc(S.rules.search)}"></div><select id="ruleSource" aria-label="Filter by rule source"><option value="all">All sources</option>${SSM_AUDIT_SOURCES.map(source=>`<option value="${esc(source.id)}" ${S.rules.source===source.id?'selected':''}>${esc(source.label)}</option>`).join('')}</select><select id="ruleCategory" aria-label="Filter by topic"><option value="all">All topics</option>${Object.entries(RULE_CATEGORY_LABELS).filter(([key])=>rules.some(rule=>rule.category===key)).map(([key,label])=>`<option value="${esc(key)}" ${S.rules.category===key?'selected':''}>${esc(label)}</option>`).join('')}</select><span id="ruleResultCount"></span></div>
+    <div class="rule-catalog" id="ruleCatalog"></div>
+  </section>`;
+  wireWorkspaceTabs(navigate);$('#openGuide').onclick=()=>document.dispatchEvent(new CustomEvent('ssm-audit:guide'));
+  $('#ruleSearch').oninput=event=>{S.rules.search=event.target.value;renderRuleCatalog();};
+  $('#ruleSource').onchange=event=>{S.rules.source=event.target.value;renderRuleCatalog();};
+  $('#ruleCategory').onchange=event=>{S.rules.category=event.target.value;renderRuleCatalog();};
+  renderRuleCatalog();
+}
 
 function importStatus(){
   const result=S.session.result,summary=result&&result.summary;
@@ -2074,8 +2452,11 @@ function importStatus(){
 }
 
 function renderUpload(navigate){
+  if(S.homeMode==='rules'){renderRules(navigate);return;}
+  if(S.homeMode==='compare'){renderComparisonUpload(navigate);return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='upload';
   $('#view').innerHTML=`<section class="upload-shell">
+    ${workspaceTabs('audit')}
     <div class="screen-heading"><div><span class="eyebrow">Registry Integrity + SSM Rules</span><h2>Audit an existing SSM</h2><p>Check a completed Cx Registry and receive an evidence-backed correction report.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
     <div class="upload-grid">
       <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a Cx Registry workbook">
@@ -2097,7 +2478,7 @@ function renderUpload(navigate){
       <div><span>03</span><b>Commissioning logic</b><p>Control sources, power paths, equipment roles, milestones, and headers.</p></div>
     </div>
   </section>`;
-  wireUpload(navigate);
+  wireWorkspaceTabs(navigate);wireUpload(navigate);
 }
 
 function chooseFile(){const input=$('#auditFile');if(input)input.click();}
@@ -2113,13 +2494,13 @@ function wireUpload(navigate){
     drop.ondrop=event=>{event.preventDefault();drop.classList.remove('dragging');const file=event.dataTransfer.files[0];if(file)addAuditTarget(file,navigate);};
   }
   const open=$('#openAuditResult');if(open)open.onclick=()=>navigate('audit');
-  const remove=$('#removeAuditTarget');if(remove)remove.onclick=()=>{resetSession();renderUpload(navigate);};
+  const remove=$('#removeAuditTarget');if(remove)remove.onclick=()=>{resetSession();clearComparisonTarget();renderUpload(navigate);};
   $('#openGuide').onclick=()=>document.dispatchEvent(new CustomEvent('ssm-audit:guide'));
 }
 
 async function addAuditTarget(file,navigate){
   if(!/\.(xlsx|xls)$/i.test(file.name)){toast('SSM Audit requires an Excel workbook');return;}
-  resetSession();S.session.name=file.name;
+  resetSession();clearComparisonTarget();S.session.name=file.name;
   try{
     await runWithProgress('Running SSM Audit',file.name,async(checkpoint,report)=>{
       const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();
@@ -2128,11 +2509,74 @@ async function addAuditTarget(file,navigate){
       report(.55,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       const result=runSsmAudit(snapshot);report(1,`${result.findings.length.toLocaleString()} findings`);
       S.session={...S.session,snapshot,result,error:''};
+      S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('audit');
   }catch(error){
     console.error('SSM Audit failed',error);S.session.error=error&&error.message||'Could not read this registry';S.session.snapshot=null;S.session.result=null;renderUpload(navigate);
   }
+}
+
+function clearComparisonTarget(){S.comparison.targetName='';S.comparison.targetSnapshot=null;S.comparison.targetError='';S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};}
+function clearComparisonReference(){S.comparison.referenceName='';S.comparison.referenceSnapshot=null;S.comparison.referenceError='';S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};}
+
+function comparisonSlot(side){
+  const target=side==='target',name=target?S.comparison.targetName:S.comparison.referenceName,snapshot=target?S.comparison.targetSnapshot:S.comparison.referenceSnapshot,error=target?S.comparison.targetError:S.comparison.referenceError;
+  const title=target?'Registry to audit':'Completed project reference',detail=target?'Receives the full SSM Audit and comparison findings.':'Used only for this side-by-side session.';
+  if(snapshot)return `<section class="compare-upload-slot ready" data-compare-side="${side}"><div class="compare-slot-label"><span>${target?'01':'02'}</span><div><b>${title}</b><small>${detail}</small></div></div><div class="compare-ready-icon">${ic(target?'check-check':'square-stack')}</div><h3>${esc(name)}</h3><p>${snapshot.rows.length.toLocaleString()} registry rows ready</p><div class="compare-slot-actions"><button class="btn sm" type="button" data-compare-replace="${side}">${ic('upload')}Replace</button><button class="xbtn icon-btn" type="button" data-compare-remove="${side}" aria-label="Remove ${esc(title)}">${ic('x')}</button></div></section>`;
+  return `<section class="compare-upload-slot ${error?'error':''}" data-compare-side="${side}" tabindex="0" role="button" aria-label="Choose ${esc(title)}"><div class="compare-slot-label"><span>${target?'01':'02'}</span><div><b>${title}</b><small>${detail}</small></div></div><div class="compare-ready-icon">${ic(error?'triangle-alert':'file-spreadsheet')}</div><h3>${error?'Could not read workbook':'Choose workbook'}</h3><p>${esc(error||'Drop an .xlsx or .xls file here, or browse this device.')}</p><button class="btn ${target?'primary':''} sm" type="button" data-compare-browse="${side}">${ic('upload')}Browse</button></section>`;
+}
+
+function renderComparisonUpload(navigate){
+  teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='upload';
+  if(!S.comparison.targetSnapshot&&S.session.snapshot){S.comparison.targetName=S.session.name;S.comparison.targetSnapshot=S.session.snapshot;}
+  const ready=!!(S.comparison.targetSnapshot&&S.comparison.referenceSnapshot);
+  $('#view').innerHTML=`<section class="upload-shell compare-upload-shell">
+    ${workspaceTabs('compare')}
+    <div class="screen-heading"><div><span class="eyebrow">Building-neutral registry comparison</span><h2>Compare project hierarchies</h2><p>Audit the target registry, align both projects by UPN, and inspect equipment nesting, header use, and I&amp;C placement side by side.</p></div><button class="btn ghost" id="openGuide">${ic('book-open')}Guide</button></div>
+    <div class="compare-upload-grid">${comparisonSlot('target')}${comparisonSlot('reference')}</div>
+    <div class="compare-runbar"><div class="compare-method">${ic('lock')}<span><b>Local and session-only</b> Building is excluded from matching. The reference never changes audit rules or future results.</span></div><button class="btn primary" id="runComparison" type="button" ${ready?'':'disabled'}>${ic('square-stack')}Compare registries</button></div>
+    <input id="compareTargetFile" type="file" accept=".xlsx,.xls" hidden><input id="compareReferenceFile" type="file" accept=".xlsx,.xls" hidden>
+    <div class="coverage-band compare-coverage"><div><span>01</span><b>UPN alignment</b><p>Maps corresponding systems without comparing project Building values.</p></div><div><span>02</span><b>Semantic nesting</b><p>Pairs equipment by tag core, description, classification, and parent role.</p></div><div><span>03</span><b>Project differences</b><p>Highlights hierarchy patterns, headers, dependencies, and I&amp;C placement.</p></div></div>
+  </section>`;
+  wireWorkspaceTabs(navigate);wireComparisonUpload(navigate);
+}
+
+function wireComparisonUpload(navigate){
+  const choose=side=>$('#compare'+(side==='target'?'Target':'Reference')+'File')?.click();
+  for(const side of ['target','reference']){
+    const input=$('#compare'+(side==='target'?'Target':'Reference')+'File'),slot=$(`[data-compare-side="${side}"]`),browse=$(`[data-compare-browse="${side}"]`),replace=$(`[data-compare-replace="${side}"]`),remove=$(`[data-compare-remove="${side}"]`);
+    if(input)input.onchange=()=>{const file=input.files[0];input.value='';if(file)addComparisonFile(file,side,navigate);};
+    if(browse)browse.onclick=event=>{event.stopPropagation();choose(side);};if(replace)replace.onclick=()=>choose(side);
+    if(remove)remove.onclick=()=>{if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();renderUpload(navigate);};
+    if(slot&&!slot.classList.contains('ready')){
+      slot.onclick=event=>{if(!event.target.closest('button'))choose(side);};slot.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();choose(side);}};
+      slot.ondragover=event=>{event.preventDefault();slot.classList.add('dragging');};slot.ondragleave=()=>slot.classList.remove('dragging');slot.ondrop=event=>{event.preventDefault();slot.classList.remove('dragging');const file=event.dataTransfer.files[0];if(file)addComparisonFile(file,side,navigate);};
+    }
+  }
+  $('#runComparison').onclick=()=>runComparison(navigate);$('#openGuide').onclick=()=>document.dispatchEvent(new CustomEvent('ssm-audit:guide'));
+}
+
+async function addComparisonFile(file,side,navigate){
+  if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook');return;}
+  const errorKey=side==='target'?'targetError':'referenceError';S.comparison[errorKey]='';
+  try{
+    let snapshot,auditResult;
+    await runWithProgress(side==='target'?'Loading registry to audit':'Loading completed project',file.name,async(checkpoint,report)=>{
+      const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
+      snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
+      report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
+    });
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,result:auditResult,error:''};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
+    S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
+  }catch(error){console.error('Registry comparison import failed',error);S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
+}
+
+async function runComparison(navigate){
+  if(!S.comparison.targetSnapshot||!S.comparison.referenceSnapshot){toast('Choose both registries first');return;}
+  await runWithProgress('Comparing project hierarchies','Building values are excluded',async(checkpoint,report)=>{report(.15,'Indexing target systems');await checkpoint();report(.38,'Aligning equipment by UPN and meaning');await checkpoint();const result=compareSsmRegistries(S.comparison.targetSnapshot,S.comparison.referenceSnapshot);S.comparison.result=result;const selected=result.systems.find(system=>system.status!=='aligned')||result.systems[0];S.comparison.selectedUpn=selected&&selected.upn||'';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};report(1,`${result.summary.systems.toLocaleString()} systems compared`);});
+  navigate('compare');
 }
 
 function filteredFindings(){
@@ -2168,6 +2612,7 @@ function renderAuditResult(navigate){
   S.screen='audit';const summary=result.summary,fullscreen=!!S.session.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
   $('#view').innerHTML=`<section id="auditShell" class="audit-shell ${fullscreen?'fullscreen':''}">
     <div class="audit-head"><button class="btn ghost" id="auditBack">${ic('arrow-left')}Files</button><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><span class="eyebrow">${esc(result.standard)}</span><h2>SSM Audit</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
+    <div class="result-tabs" role="tablist" aria-label="Registry results"><button class="result-tab active" type="button" role="tab" aria-selected="true">${ic('check-check')}Audit findings <b>${summary.findings.toLocaleString()}</b></button><button class="result-tab" id="openComparisonResult" type="button" role="tab" aria-selected="false">${ic('square-stack')}Project comparison${S.comparison.result?` <b>${(S.comparison.result.summary.differentSystems+S.comparison.result.summary.targetOnlySystems+S.comparison.result.summary.referenceOnlySystems).toLocaleString()}</b>`:''}</button></div>
     <div class="audit-summary"><div><span>Rows audited</span><b>${summary.rows.toLocaleString()}</b></div><div class="critical"><span>Blockers</span><b>${summary.severity.blocker.toLocaleString()}</b></div><div class="error"><span>Errors</span><b>${summary.severity.error.toLocaleString()}</b></div><div class="warning"><span>Warnings</span><b>${summary.severity.warning.toLocaleString()}</b></div><div><span>Advisories</span><b>${summary.severity.info.toLocaleString()}</b></div><div><span>Checks completed</span><b>${summary.checks.toLocaleString()}</b></div></div>
     <div class="audit-categories">${categoryTabs(summary)}</div>
     <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, rules, and explanations" value="${esc(S.session.search)}"></div><div class="audit-filter-wrap"><button class="btn audit-filter-button ${filterCount()?'active':''}" id="auditFilters" type="button" aria-expanded="${S.session.filterOpen?'true':'false'}">${ic('filter')}Filters <b id="auditFilterCount">${filterCount()||''}</b></button>${filterMenu(result)}</div><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
@@ -2199,7 +2644,8 @@ function setFilterOpen(open){S.session.filterOpen=!!open;const menu=$('#auditFil
 function teardownAuditFilters(){if(auditOutsideHandler)document.removeEventListener('pointerdown',auditOutsideHandler);if(auditEscapeHandler)document.removeEventListener('keydown',auditEscapeHandler);auditOutsideHandler=null;auditEscapeHandler=null;}
 function wireAuditResult(navigate){
   teardownAuditFilters();
-  $('#auditBack').onclick=()=>navigate('upload');$('#exportAudit').onclick=exportSsmAuditXlsx;
+  $('#auditBack').onclick=()=>{S.homeMode='audit';navigate('upload');};$('#exportAudit').onclick=exportSsmAuditXlsx;
+  $('#openComparisonResult').onclick=()=>{S.homeMode='compare';if(S.comparison.result)navigate('compare');else navigate('upload');};
   $('#auditFullscreen').onclick=()=>{S.session.fullscreen=!S.session.fullscreen;renderAuditResult(navigate);};
   $('#auditSearch').oninput=event=>{S.session.search=event.target.value;rerenderRows(true);};
   $('#auditSort').onchange=event=>{S.session.sort=event.target.value;rerenderRows(true);};
@@ -2212,29 +2658,126 @@ function wireAuditResult(navigate){
   const wrap=$('#auditTableWrap');wrap.scrollTop=S.session.scrollTop||0;let frame=0;wrap.onscroll=()=>{S.session.scrollTop=wrap.scrollTop;if(frame)return;frame=requestAnimationFrame(()=>{frame=0;renderRows();});};requestAnimationFrame(renderRows);
 }
 
+function comparisonSystems(){
+  const query=auditComparisonQuery(S.comparison.systemSearch),filter=S.comparison.systemFilter||'different',sort=S.comparison.systemSort||'upn-asc';let systems=S.comparison.result.systems.filter(system=>(filter==='all'||filter==='different'&&system.status!=='aligned'||system.status===filter)&&(!query||auditComparisonQuery([system.upn,system.label,system.targetName,system.referenceName].join(' ')).includes(query)));
+  systems=[...systems].sort((a,b)=>sort==='differences-desc'?(b.differenceCount-a.differenceCount||String(a.upn).localeCompare(String(b.upn),undefined,{numeric:true})):sort==='rows-desc'?(Math.max(b.targetRows,b.referenceRows)-Math.max(a.targetRows,a.referenceRows)||String(a.upn).localeCompare(String(b.upn),undefined,{numeric:true})):String(a.upn).localeCompare(String(b.upn),undefined,{numeric:true}));return systems;
+}
+function auditComparisonQuery(value){return clean(value).toUpperCase();}
+function comparisonStatusLabel(status){return status==='aligned'?'Aligned':status==='target-only'?'Target only':status==='reference-only'?'Reference only':'Different';}
+function selectedComparisonSystem(){return S.comparison.result.systems.find(system=>system.upn===S.comparison.selectedUpn)||S.comparison.result.systems[0];}
+function systemListHtml(){const systems=comparisonSystems();if(!systems.length)return '<div class="compare-empty">No systems match these filters.</div>';return systems.map(system=>`<button class="compare-system ${system.upn===S.comparison.selectedUpn?'active':''}" type="button" data-compare-upn="${esc(system.upn)}"><span class="compare-upn">${esc(system.upn)}</span><span class="compare-system-copy"><b>${esc(stripSystemUpn(system.label))}</b><small>${system.targetRows.toLocaleString()} target &middot; ${system.referenceRows.toLocaleString()} reference</small></span><span class="compare-system-status ${system.status}">${system.status==='aligned'?ic('check'):system.differenceCount.toLocaleString()}</span></button>`).join('');}
+function stripSystemUpn(value){return clean(value).replace(/^\s*[0-9]{3,4}\s*[-:]?\s*/,'')||clean(value);}
+function countCard(label,target,reference){return `<div><span>${esc(label)}</span><b>${Number(target).toLocaleString()} <small>target</small></b><b>${Number(reference).toLocaleString()} <small>reference</small></b></div>`;}
+function observationIcon(type){return type==='headers'?'folder-tree':type==='controls'?'network':type==='hierarchy'?'list-tree':type==='coverage'?'layers':'tag';}
+function comparisonObservations(system){
+  if(!system.observations.length)return '<div class="compare-aligned-note">'+ic('check-check')+'No system-level pattern differences were found after Building was excluded.</div>';
+  return `<div class="compare-observation-list">${system.observations.slice(0,80).map(item=>`<div class="compare-observation ${item.type}"><span>${ic(observationIcon(item.type))}</span><div><b>${esc(item.title)}</b><small>${esc(item.subject)}</small></div><code>${esc(item.target)} / ${esc(item.reference)}</code></div>`).join('')}${system.observations.length>80?`<p class="compare-more">${(system.observations.length-80).toLocaleString()} additional observations are included in the Excel export.</p>`:''}</div>`;
+}
+function treeExpansion(system){
+  const store=S.comparison.treeExpandedByUpn||(S.comparison.treeExpandedByUpn={});
+  if(!Array.isArray(store[system.upn]))store[system.upn]=[];
+  return new Set(store[system.upn]);
+}
+function setTreeExpansion(system,expanded){S.comparison.treeExpandedByUpn[system.upn]=[...expanded];}
+function comparisonTreeRows(system){
+  const byId=new Map(system.pairs.map(pair=>[pair.id,pair])),expanded=treeExpansion(system),rows=[],seen=new Set(),stack=[];
+  const addRoots=ids=>{for(let index=ids.length-1;index>=0;index--)stack.push({id:ids[index],depth:0});};
+  addRoots(system.treeRoots||[]);
+  const collect=()=>{while(stack.length){const item=stack.pop(),pair=byId.get(item.id);if(!pair||seen.has(pair.id))continue;seen.add(pair.id);rows.push({pair,depth:item.depth});if(expanded.has(pair.id)){for(let index=pair.childrenIds.length-1;index>=0;index--)stack.push({id:pair.childrenIds[index],depth:item.depth+1});}}};
+  collect();
+  if(!rows.length&&system.pairs.length){addRoots([system.pairs[0].id]);collect();}
+  return rows;
+}
+function comparisonTreeCell(pair,node,side,depth,expanded){
+  const hasChildren=pair.childrenIds.length>0,isExpanded=expanded.has(pair.id),label=isExpanded?'Collapse matching branches':'Expand matching branches';
+  const toggle=hasChildren?`<button class="compare-tree-toggle ${isExpanded?'open':''}" type="button" data-compare-tree-toggle="${esc(pair.id)}" aria-label="${label}" aria-expanded="${isExpanded}">${ic('chevron-right')}</button>`:'<span class="compare-tree-toggle-spacer"></span>';
+  if(!node)return `<div class="compare-tree-cell missing" style="--tree-depth:${Math.min(10,depth)}">${toggle}<span>Not present</span></div>`;
+  return `<div class="compare-tree-cell ${side}" style="--tree-depth:${Math.min(10,depth)}">${toggle}<span class="compare-tree-rail"></span><div class="compare-tree-copy"><b>${copyTagHtml(node.tag)}</b><small>${esc(node.role)}</small><span>Parent: ${esc(node.parentId||'System / external root')}</span></div></div>`;
+}
+function comparisonTreeRowHtml(item,expanded){
+  const pair=item.pair,detail=pair.differences[0]||'Aligned';
+  return `<div class="compare-tree-row ${pair.status} ${pair.placementMismatch?'placement-mismatch':''}" data-tree-pair="${esc(pair.id)}">${comparisonTreeCell(pair,pair.target,'target',item.depth,expanded)}<div class="compare-tree-state"><span class="compare-tree-state-mark"></span><b>${esc(comparisonStatusLabel(pair.status))}</b><small title="${esc(detail)}">${esc(detail)}</small></div>${comparisonTreeCell(pair,pair.reference,'reference',item.depth,expanded)}</div>`;
+}
+function renderComparisonTree(){
+  const wrap=$('#compareTreeWrap'),body=$('#compareTreeRows'),count=$('#compareTreeCount'),system=selectedComparisonSystem();if(!wrap||!body||!system)return;const rows=comparisonTreeRows(system);if(count)count.textContent=`${rows.length.toLocaleString()} visible of ${system.pairs.length.toLocaleString()}`;
+  const expanded=treeExpansion(system),visible=Math.min(COMPARE_TREE_MAX_ROWS,Math.max(16,Math.ceil(wrap.clientHeight/COMPARE_TREE_ROW_HEIGHT)+COMPARE_TREE_OVERSCAN*2)),start=Math.min(Math.max(0,rows.length-visible),Math.max(0,Math.floor(wrap.scrollTop/COMPARE_TREE_ROW_HEIGHT)-COMPARE_TREE_OVERSCAN)),end=Math.min(rows.length,start+visible),spacer=height=>height?`<div class="compare-tree-spacer" style="height:${height}px" aria-hidden="true"></div>`:'';
+  body.innerHTML=spacer(start*COMPARE_TREE_ROW_HEIGHT)+rows.slice(start,end).map(item=>comparisonTreeRowHtml(item,expanded)).join('')+spacer((rows.length-end)*COMPARE_TREE_ROW_HEIGHT);wireCopyTags(body);wireComparisonTreeToggles();
+}
+function wireComparisonTreeToggles(){
+  $$('[data-compare-tree-toggle]').forEach(button=>button.onclick=()=>{const system=selectedComparisonSystem(),expanded=treeExpansion(system),id=button.dataset.compareTreeToggle;if(expanded.has(id))expanded.delete(id);else expanded.add(id);setTreeExpansion(system,expanded);renderComparisonTree();});
+}
+function wireComparisonTree(){
+  const system=selectedComparisonSystem(),wrap=$('#compareTreeWrap');
+  $('#compareTreeExpand').onclick=()=>{setTreeExpansion(system,new Set(system.pairs.filter(pair=>pair.childrenIds.length).map(pair=>pair.id)));S.comparison.treeScrollTop=0;if(wrap)wrap.scrollTop=0;renderComparisonTree();};
+  $('#compareTreeCollapse').onclick=()=>{setTreeExpansion(system,new Set());S.comparison.treeScrollTop=0;if(wrap)wrap.scrollTop=0;renderComparisonTree();};
+  if(wrap){wrap.scrollTop=S.comparison.treeScrollTop||0;let frame=0;wrap.onscroll=()=>{S.comparison.treeScrollTop=wrap.scrollTop;if(frame)return;frame=requestAnimationFrame(()=>{frame=0;renderComparisonTree();});};requestAnimationFrame(renderComparisonTree);}
+}
+function pairVisible(pair){const filter=S.comparison.rowFilter||'different',query=auditComparisonQuery(S.comparison.rowSearch);if(filter!=='all'&&(filter==='different'?pair.status==='aligned':pair.status!==filter))return false;if(!query)return true;const nodes=[pair.target,pair.reference].filter(Boolean);return auditComparisonQuery(nodes.flatMap(node=>[node.tag,node.role,node.parentRole,node.classification,node.headerName,node.dependencyRoles.join(' ')]).join(' ')).includes(query);}
+function comparisonNodeHtml(node,side){if(!node)return `<div class="compare-node missing"><span>${side==='target'?'Not present in target':'Not present in completed project'}</span></div>`;return `<div class="compare-node"><div class="compare-node-main" style="--node-depth:${Math.min(6,node.depth)}"><span class="compare-node-line"></span><div><b>${copyTagHtml(node.tag)}</b><small>${esc(node.role)}</small></div></div><dl><dt>Parent type</dt><dd>${esc(node.parentRole)}</dd>${node.underHeader?`<dt>Header</dt><dd>${copyTagHtml(node.headerName)}</dd>`:''}<dt>Discipline</dt><dd>${esc(node.disciplineKind)}</dd>${node.dependencyRoles.length?`<dt>Dependencies</dt><dd>${esc(node.dependencyRoles.join('; '))}</dd>`:''}</dl></div>`;}
+function pairHtml(pair){return `<article class="compare-pair ${pair.status}" data-compare-pair><div class="compare-pair-status"><span class="comparison-pill ${pair.status}">${comparisonStatusLabel(pair.status)}</span><b>${esc(pair.differences.join(' · ')||'Same semantic placement')}</b><small>${esc(pair.matchReason)}</small></div><div class="compare-side target"><div class="compare-side-label">Target registry</div>${comparisonNodeHtml(pair.target,'target')}</div><div class="compare-side reference"><div class="compare-side-label">Completed project</div>${comparisonNodeHtml(pair.reference,'reference')}</div></article>`;}
+function renderComparisonPairs(){
+  const wrap=$('#comparePairWrap'),body=$('#comparePairs'),count=$('#comparePairCount');if(!wrap||!body)return;const system=selectedComparisonSystem(),pairs=system?system.pairs.filter(pairVisible):[];if(count)count.textContent=`${pairs.length.toLocaleString()} of ${(system&&system.pairs.length||0).toLocaleString()} mappings`;
+  const visible=Math.min(COMPARE_MAX_ROWS,Math.max(18,Math.ceil(wrap.clientHeight/COMPARE_ROW_HEIGHT)+COMPARE_OVERSCAN*2)),start=Math.min(Math.max(0,pairs.length-visible),Math.max(0,Math.floor(wrap.scrollTop/COMPARE_ROW_HEIGHT)-COMPARE_OVERSCAN)),end=Math.min(pairs.length,start+visible);
+  const spacer=height=>height?`<div class="compare-pair-spacer" style="height:${height}px" aria-hidden="true"></div>`:'';body.innerHTML=spacer(start*COMPARE_ROW_HEIGHT)+pairs.slice(start,end).map(pairHtml).join('')+spacer((pairs.length-end)*COMPARE_ROW_HEIGHT);wireCopyTags(body);
+}
+function renderComparisonDetail(){
+  const system=selectedComparisonSystem(),detail=$('#compareDetail');if(!detail||!system)return;const types=comparisonSystemTypes(system);
+  detail.innerHTML=`<div class="compare-detail-head"><div><span class="eyebrow">UPN ${esc(system.upn)}</span><h3>${esc(stripSystemUpn(system.label))}</h3><p>Building values are excluded. Equipment is paired by tag core and semantic role.</p></div><span class="comparison-pill ${system.status}">${comparisonStatusLabel(system.status)}</span></div>
+  <div class="compare-counts">${countCard('Equipment',system.targetRows,system.referenceRows)}${countCard('Headers',system.targetHeaders,system.referenceHeaders)}${countCard('I&C / Controls',system.targetControls,system.referenceControls)}<div><span>Pattern findings</span><b>${system.observations.length.toLocaleString()} <small>observed</small></b><b>${(types.hierarchy+types.headers+types.controls).toLocaleString()} <small>nesting</small></b></div></div>
+  <section class="compare-tree-section"><div class="compare-section-title"><div><b>Synchronized hierarchy</b><span>Open either side to reveal both matched branches. Rows and scrolling stay aligned.</span></div><span id="compareTreeCount"></span><div class="compare-tree-actions"><button class="btn ghost sm" id="compareTreeCollapse" type="button">${ic('chevrons-up')}Collapse</button><button class="btn ghost sm" id="compareTreeExpand" type="button">${ic('list-tree')}Expand all</button></div></div><div class="compare-tree-grid"><div class="compare-tree-head"><b>Registry to audit</b><span>Alignment</span><b>Completed project</b></div><div class="compare-tree-wrap" id="compareTreeWrap"><div id="compareTreeRows"></div></div></div></section>
+  <section class="compare-observations"><div class="compare-section-title"><div><b>System differences</b><span>Counts compare equipment meaning and nesting patterns, not Building.</span></div></div>${comparisonObservations(system)}</section>
+  <section class="compare-mapping"><div class="compare-section-title"><div><b>Side-by-side equipment mapping</b><span>Matched rows remain visible for context; filter to focus on changes.</span></div><span id="comparePairCount"></span></div><div class="compare-pair-toolbar"><div class="searchbox">${ic('search')}<input id="compareRowSearch" aria-label="Search mapped equipment" placeholder="Search tags, descriptions, parents" value="${esc(S.comparison.rowSearch)}"></div><select id="compareRowFilter" aria-label="Filter mappings"><option value="different" ${S.comparison.rowFilter==='different'?'selected':''}>Differences only</option><option value="all" ${S.comparison.rowFilter==='all'?'selected':''}>All mappings</option><option value="changed" ${S.comparison.rowFilter==='changed'?'selected':''}>Changed pairs</option><option value="target-only" ${S.comparison.rowFilter==='target-only'?'selected':''}>Target only</option><option value="reference-only" ${S.comparison.rowFilter==='reference-only'?'selected':''}>Reference only</option><option value="aligned" ${S.comparison.rowFilter==='aligned'?'selected':''}>Aligned pairs</option></select></div><div class="compare-pair-wrap" id="comparePairWrap"><div id="comparePairs"></div></div></section>`;
+  wireComparisonDetail();
+}
+function wireComparisonDetail(){
+  const search=$('#compareRowSearch'),filter=$('#compareRowFilter'),wrap=$('#comparePairWrap');if(search)search.oninput=event=>{S.comparison.rowSearch=event.target.value;if(wrap)wrap.scrollTop=0;renderComparisonPairs();};if(filter)filter.onchange=event=>{S.comparison.rowFilter=event.target.value;if(wrap)wrap.scrollTop=0;renderComparisonPairs();};
+  wireComparisonTree();
+  if(wrap){wrap.scrollTop=S.comparison.pairScrollTop||0;let frame=0;wrap.onscroll=()=>{S.comparison.pairScrollTop=wrap.scrollTop;if(frame)return;frame=requestAnimationFrame(()=>{frame=0;renderComparisonPairs();});};requestAnimationFrame(renderComparisonPairs);}
+}
+
+function renderComparisonResult(navigate){
+  const result=S.comparison&&S.comparison.result;if(!result){S.homeMode='compare';navigate('upload');return;}S.screen='compare';const summary=result.summary,fullscreen=!!S.comparison.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
+  $('#view').innerHTML=`<section id="compareShell" class="compare-shell ${fullscreen?'fullscreen':''}">
+    <div class="audit-head"><button class="btn ghost" id="compareBack">${ic('arrow-left')}Files</button><div class="audit-title"><span class="audit-title-icon">${ic('square-stack')}</span><div><span class="eyebrow">${esc(result.standard)}</span><h2>Project Comparison</h2><p>${esc(S.comparison.targetName)} &middot; ${esc(S.comparison.referenceName)}</p></div></div><span class="spacer"></span><span class="compare-building-note">${ic('layers')}Building ignored</span><button class="btn" id="exportComparison">${ic('file-down')}Export comparison</button><button class="btn icon-btn" id="compareFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
+    <div class="result-tabs" role="tablist" aria-label="Registry results"><button class="result-tab" id="openAuditFromCompare" type="button" role="tab" aria-selected="false">${ic('check-check')}Audit findings <b>${S.session.result.summary.findings.toLocaleString()}</b></button><button class="result-tab active" type="button" role="tab" aria-selected="true">${ic('square-stack')}Project comparison <b>${(summary.differentSystems+summary.targetOnlySystems+summary.referenceOnlySystems).toLocaleString()}</b></button></div>
+    <div class="compare-summary"><div><span>Systems compared</span><b>${summary.systems.toLocaleString()}</b></div><div class="difference"><span>Systems with differences</span><b>${(summary.differentSystems+summary.targetOnlySystems+summary.referenceOnlySystems).toLocaleString()}</b></div><div class="aligned"><span>Aligned systems</span><b>${summary.alignedSystems.toLocaleString()}</b></div><div><span>Changed pairs</span><b>${summary.changedRows.toLocaleString()}</b></div><div><span>Target only</span><b>${summary.targetOnlyRows.toLocaleString()}</b></div><div><span>Reference only</span><b>${summary.referenceOnlyRows.toLocaleString()}</b></div></div>
+    <div class="compare-workspace"><aside class="compare-system-panel"><div class="compare-system-tools"><div class="searchbox">${ic('search')}<input id="compareSystemSearch" aria-label="Search systems" placeholder="Find UPN or system" value="${esc(S.comparison.systemSearch)}"></div><div><select id="compareSystemFilter" aria-label="Filter systems"><option value="different" ${S.comparison.systemFilter==='different'?'selected':''}>Differences</option><option value="all" ${S.comparison.systemFilter==='all'?'selected':''}>All systems</option><option value="aligned" ${S.comparison.systemFilter==='aligned'?'selected':''}>Aligned</option><option value="target-only" ${S.comparison.systemFilter==='target-only'?'selected':''}>Target only</option><option value="reference-only" ${S.comparison.systemFilter==='reference-only'?'selected':''}>Reference only</option></select><select id="compareSystemSort" aria-label="Sort systems"><option value="upn-asc" ${S.comparison.systemSort==='upn-asc'?'selected':''}>UPN</option><option value="differences-desc" ${S.comparison.systemSort==='differences-desc'?'selected':''}>Most differences</option><option value="rows-desc" ${S.comparison.systemSort==='rows-desc'?'selected':''}>Most equipment</option></select></div></div><div class="compare-system-list" id="compareSystemList">${systemListHtml()}</div></aside><main class="compare-detail" id="compareDetail"></main></div>
+  </section>`;
+  wireComparisonResult(navigate);renderComparisonDetail();
+}
+
+function renderSystemList(){const list=$('#compareSystemList');if(!list)return;list.innerHTML=systemListHtml();wireSystemButtons();}
+function wireSystemButtons(){$$('[data-compare-upn]').forEach(button=>button.onclick=()=>{S.comparison.selectedUpn=button.dataset.compareUpn;S.comparison.pairScrollTop=0;renderSystemList();renderComparisonDetail();});}
+function wireComparisonResult(navigate){
+  teardownAuditFilters();$('#compareBack').onclick=()=>{S.homeMode='compare';navigate('upload');};$('#exportComparison').onclick=exportSsmComparisonXlsx;$('#openAuditFromCompare').onclick=()=>navigate('audit');$('#compareFullscreen').onclick=()=>{S.comparison.fullscreen=!S.comparison.fullscreen;renderComparisonResult(navigate);};
+  $('#compareSystemSearch').oninput=event=>{S.comparison.systemSearch=event.target.value;renderSystemList();};$('#compareSystemFilter').onchange=event=>{S.comparison.systemFilter=event.target.value;renderSystemList();};$('#compareSystemSort').onchange=event=>{S.comparison.systemSort=event.target.value;renderSystemList();};wireSystemButtons();
+}
+
 /* src/boot.js */
-const ruleGuide=()=>SSM_AUDIT_SOURCES.map(source=>`<h4>${esc(source.label)}</h4><ul>${Object.values(SSM_AUDIT_RULES).filter(rule=>rule.source===source.id).map(rule=>`<li class="${rule.enabled?'':'rule-disabled'}"><b>${esc(rule.title)}.</b> ${esc(rule.statement)} <span class="rule-confidence">${rule.enabled?esc(rule.confidence):'Disabled'}</span>${rule.disabledReason?`<small>${esc(rule.disabledReason)}</small>`:''}</li>`).join('')}</ul>`).join('');
+const ruleGuide=()=>'<p>Open the Rules workspace for a searchable, plain-language list of every check currently used by SSM Audit.</p><div class="guide-note">'+ic('info')+'Rules are grouped by governing source and review topic so they are easy to scan.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View audit rules</button>';
 const GUIDE_SECTIONS=[
   {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
   {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks an existing registry for internal integrity, SSM SOP requirements, and confidence-rated commissioning relationships.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and milestone completeness.</li><li>Dependencies, electrical and control paths, equipment-role patterns, and organizational headers.</li></ol><div class="guide-note">'+ic('info')+'Current upload-template vocabulary is checked before export in SSManagement, not against an already-uploaded registry.</div>'},
   {id:'rules',label:'Rule catalog',icon:'check-check',title:'Rules used by the audit',body:ruleGuide()},
   {id:'findings',label:'Understanding findings',icon:'triangle-alert',title:'Read each finding as evidence',body:'<p>Every finding identifies the rule, source row, observed value, expected result, recommended correction, and a stable fingerprint. Use filters to isolate one severity or category, then open a row for the complete explanation.</p>'},
   {id:'report',label:'Exporting results',icon:'file-down',title:'Create a resolution report',body:'<p>Export report creates an Excel workbook containing the audit summary, every finding, and a rule-level count. The report is generated locally and can be used to assign and track corrections.</p>'},
+  {id:'compare',label:'Project comparison',icon:'square-stack',title:'Compare with a completed project',body:'<p>Project Comparison audits the target registry normally, then aligns both registries by UPN for a separate side-by-side review. Building values are excluded so project locations do not create false differences.</p><ol><li>Choose the registry to audit and a completed-project reference.</li><li>Select a UPN to compare equipment nesting, organizational headers, dependencies, and I&amp;C placement.</li><li>Treat differences as review prompts. The completed project is precedent, not an automatic rule.</li></ol><div class="guide-note">'+ic('lock')+'Both workbooks stay in browser memory for this session. The reference is never saved or used to change audit rules.</div>'},
   {id:'privacy',label:'Privacy',icon:'lock',title:'The registry stays on this device',body:'<p>The selected workbook is never uploaded, persisted, or used to learn rules. Refreshing or closing the HTML clears the audit session.</p><div class="guide-note">'+ic('info')+'The only automatic network request is an anonymous check for a newer SSM Audit release when the HTML opens or refreshes.</div>'},
 ];
 let activeGuide='start';
 
-function go(screen){S.screen=screen;if(screen==='audit')renderAuditResult(go);else renderUpload(go);}
+function go(screen){S.screen=screen;if(screen==='audit')renderAuditResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);}
 function renderGuide(){
   $('#guideNav').innerHTML=GUIDE_SECTIONS.map(section=>`<button type="button" class="${section.id===activeGuide?'active':''}" data-guide="${section.id}">${ic(section.icon)}${esc(section.label)}</button>`).join('');
   const section=GUIDE_SECTIONS.find(item=>item.id===activeGuide)||GUIDE_SECTIONS[0];$('#guideBody').innerHTML=`<div class="guide-copy"><span class="eyebrow">SSM Audit Guide</span><h3>${esc(section.title)}</h3>${section.body}</div>`;
   $$('[data-guide]').forEach(button=>button.onclick=()=>{activeGuide=button.dataset.guide;renderGuide();});
+  const openRules=$('#guideOpenRules');if(openRules)openRules.onclick=()=>{closeGuide();S.homeMode='rules';go('rules');};
 }
 function openGuide(){renderGuide();const modal=$('#guideModal');modal.hidden=false;modal.classList.add('show');modal.setAttribute('aria-hidden','false');}
 function closeGuide(){const modal=$('#guideModal');modal.classList.remove('show');modal.hidden=true;modal.setAttribute('aria-hidden','true');}
 
 function init(){
-  $('#brandmark').innerHTML=ic('zap');$('#headerGuide').innerHTML=ic('book-open')+'<span>Guide</span>';$('#headerGuide').onclick=openGuide;
+  $('#brandmark').innerHTML=ic('zap');$('#headerRules').innerHTML=ic('check-check')+'<span>Rules</span>';$('#headerRules').onclick=()=>{S.homeMode='rules';go('rules');};$('#headerGuide').innerHTML=ic('book-open')+'<span>Guide</span>';$('#headerGuide').onclick=openGuide;
   $('#versionLink').textContent=`v${APP_VERSION}`;$('#guideClose').classList.add('xbtn');$('#guideClose').innerHTML=ic('x');$('#guideClose').onclick=closeGuide;
   $('#guideModal').onclick=event=>{if(event.target===$('#guideModal'))closeGuide();};document.addEventListener('ssm-audit:guide',openGuide);
   $('#drawerClose').innerHTML=ic('x');$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=event=>{if(event.target===$('#drawerBack'))closeDrawer();};

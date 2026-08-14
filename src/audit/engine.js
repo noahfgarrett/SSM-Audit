@@ -29,9 +29,12 @@ export const SSM_AUDIT_RULES=Object.freeze({
   systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name matches UPN','System Name and UPN must identify the same system.'),
   icDiscipline:auditRule('metadata.ic-discipline','registry','metadata','Approved controls mapping','I&C equipment must map to the approved controls discipline and tag-derived UPN.'),
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','Consistent UPN grouping','One UPN should map to one System Name and Discipline.'),
-  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','When a project uses milestones, every equipment row must include both L1 Milestone Parent and L2 Milestone.'),
-  milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','Aligned milestone intent','L1 and L2 milestone intent must not conflict on an explicit phase, capacity, or percentage target.'),
-  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone meaning','One L2 milestone should map to one consistent L1 milestone intent.'),
+  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','Complete milestone pair','When a project uses milestones, every equipment row must include both L1 Milestone Parent and L2 Milestone.',{enabled:false,confidence:'pending',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','Aligned milestone intent','L1 and L2 milestone intent must not conflict on an explicit phase, capacity, or percentage target.',{enabled:false,confidence:'pending',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Consistent milestone meaning','One L2 milestone should map to one consistent L1 milestone intent.',{enabled:false,confidence:'pending',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneCohort:auditRule('milestone.local-cohort-outlier','sop','milestones','Local milestone cohort','Comparable assets in one building and system should use a consistent milestone pair.',{enabled:false,confidence:'strong',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneLevel:auditRule('milestone.level-field-mismatch','sop','milestones','Milestone level placement','L1 and L2 milestone identifiers must appear in their corresponding fields.',{enabled:false,confidence:'strong',disabledReason:'Milestone audit criteria are awaiting validation.'}),
+  milestoneBranch:auditRule('milestone.branch-outlier','sop','milestones','Branch milestone alignment','An equipment branch should use a consistent milestone pair unless an approved exception applies.',{enabled:false,confidence:'strong',disabledReason:'Milestone audit criteria are awaiting validation.'}),
   itemMasterStandard:auditRule('item-master.standardized-assignment','registry','item-masters','Standardized Item Master','Item Master assignments should match the approved VF standard by equipment meaning, not by project prefix.',{enabled:false,confidence:'pending',disabledReason:'Waiting for the approved VF Item Master standard.'}),
   headerDependency:auditRule('header.has-dependency','sop','headers','Header groups only','An organizational header should not carry unexplained dependencies.'),
   unusedHeader:auditRule('header.unused','sop','headers','Header has children','An organizational header must group at least one child.'),
@@ -98,6 +101,42 @@ function auditMilestoneConflict(l1,l2){
   if(left.includes('capacity')&&right.includes('enabling')||left.includes('enabling')&&right.includes('capacity'))return 'capacity versus enabling';
   return '';
 }
+function auditMilestonePairParts(row){
+  const parent=clean(row&&row.milestoneParent),milestone=clean(row&&row.milestone);if(!parent||!milestone)return null;
+  return {key:`${auditNormId(parent)} => ${auditNormId(milestone)}`,parent,milestone};
+}
+function auditLooksLikeMilestoneLevel(value,level){return new RegExp(`(?:^|[-_\\s])L${level}[-_\\s]+(?:M\\d+[-_\\s]+)?\\d`,'i').test(clean(value));}
+export function auditMilestoneLevelIssues(row){
+  const issues=[];
+  if(auditLooksLikeMilestoneLevel(row&&row.milestoneParent,2))issues.push({row,field:'L1 Milestone Parent',actual:clean(row.milestoneParent),expected:'L1 milestone identifier',foundLevel:'L2'});
+  if(auditLooksLikeMilestoneLevel(row&&row.milestone,1))issues.push({row,field:'L2 Milestone',actual:clean(row.milestone),expected:'L2 milestone identifier',foundLevel:'L1'});
+  return issues;
+}
+export function auditMilestoneCohortCandidates(rows,{minimumPeers=10,minimumAgreement=.95}={}){
+  const groups=new Map(),result=[];
+  for(const row of rows||[]){const parts=auditMilestonePairParts(row),cohort=[row&&row.building,row&&row.upn,row&&row.equipmentDescription].map(auditNormId);if(!parts||cohort.some(value=>!value))continue;
+    const key=cohort.join('|'),entry=groups.get(key)||{rows:[],counts:new Map(),representatives:new Map()};entry.rows.push(row);entry.counts.set(parts.key,(entry.counts.get(parts.key)||0)+1);if(!entry.representatives.has(parts.key))entry.representatives.set(parts.key,parts);groups.set(key,entry);}
+  for(const entry of groups.values())for(const row of entry.rows){const current=auditMilestonePairParts(row),peerCount=entry.rows.length-1;if(peerCount<minimumPeers)continue;
+    let expectedKey='',agreementCount=0;for(const [pairKey,count] of entry.counts){const peerMatches=count-(pairKey===current.key?1:0);if(peerMatches>agreementCount||peerMatches===agreementCount&&natCmp(pairKey,expectedKey)<0){expectedKey=pairKey;agreementCount=peerMatches;}}
+    if(!expectedKey||expectedKey===current.key||agreementCount/peerCount<minimumAgreement)continue;const expected=entry.representatives.get(expectedKey);result.push({row,peerCount,agreementCount,expectedParent:expected.parent,expectedMilestone:expected.milestone});}
+  return result;
+}
+export function auditMilestoneBranchCandidates(rows,{minimumPeers=5,minimumAgreement=.95}={}){
+  const rowsById=new Map(),children=new Map(),result=[];
+  for(const row of rows||[]){const id=auditNormId(row&&row.equipmentId);if(id&&!rowsById.has(id))rowsById.set(id,row);const parentId=auditNormId(row&&row.closestParent);if(parentId){const list=children.get(parentId)||[];list.push(row);children.set(parentId,list);}}
+  for(const row of rows||[]){const current=auditMilestonePairParts(row),parent=rowsById.get(auditNormId(row&&row.closestParent)),parentPair=auditMilestonePairParts(parent);if(!current||!parentPair||current.key===parentPair.key)continue;
+    const partition=[row&&row.building,row&&row.upn,row&&row.discipline].map(auditNormId),parentPartition=[parent&&parent.building,parent&&parent.upn,parent&&parent.discipline].map(auditNormId);if(partition.some(value=>!value)||partition.some((value,index)=>value!==parentPartition[index]))continue;
+    const peers=(children.get(auditNormId(row.closestParent))||[]).filter(peer=>peer!==row&&auditMilestonePairParts(peer)&&[peer.building,peer.upn,peer.discipline].map(auditNormId).every((value,index)=>value===partition[index]));if(peers.length<minimumPeers)continue;
+    const agreementCount=peers.filter(peer=>auditMilestonePairParts(peer).key===parentPair.key).length;if(agreementCount/peers.length<minimumAgreement)continue;result.push({row,parent,peerCount:peers.length,agreementCount,expectedParent:parentPair.parent,expectedMilestone:parentPair.milestone});
+  }
+  return result;
+}
+function auditItemMasterTokens(value){return clean(value).toUpperCase().replace(/[^A-Z0-9]+/g,' ').split(/\s+/).filter(Boolean);}
+export function auditItemMasterCanonicalCandidates(value,canonicalValues){
+  const input=auditItemMasterTokens(value),matches=[];if(!input.length)return matches;
+  for(const canonicalValue of canonicalValues||[]){const canonical=auditItemMasterTokens(canonicalValue);if(canonical.length<2||!/^VF\d*$/.test(canonical[0]))continue;const body=canonical.slice(1);if(input.length<body.length)continue;const suffix=input.slice(-body.length);if(body.every((token,index)=>token===suffix[index]))matches.push(clean(canonicalValue));}
+  return [...new Set(matches)].sort(natCmp);
+}
 function auditReachableFrom(seeds,edges){
   const reached=new Set(seeds),queue=[...seeds];
   for(let index=0;index<queue.length;index++)for(const next of edges.get(queue[index])||[])if(!reached.has(next)){reached.add(next);queue.push(next);}
@@ -125,23 +164,23 @@ export function auditCyclePaths(nodes,edges){
 
 export function runSsmAudit(snapshot){
   const rows=snapshot&&snapshot.rows||[],findings=[];let checks=0;
-  const add=(rule,severity,row,details)=>findings.push(auditFinding(rule,severity,row,details));
+  const add=(rule,severity,row,details)=>{if(rule.enabled)findings.push(auditFinding(rule,severity,row,details));};
   const rowsById=new Map(),duplicates=new Map();
   for(const row of rows){const key=auditNormId(row.equipmentId);if(!key)continue;if(rowsById.has(key)){const list=duplicates.get(key)||[rowsById.get(key)];list.push(row);duplicates.set(key,list);}else rowsById.set(key,row);}
   for(const list of duplicates.values())for(const row of list){checks++;add(SSM_AUDIT_RULES.duplicateId,'blocker',row,{field:'Equipment ID',why:'Equipment IDs must be unique in one SSM register.',actual:row.equipmentId,expected:'One row per Equipment ID',recommendation:'Merge duplicate records or assign the correct unique equipment tag.'});}
   const children=new Map(),parentEdges=new Map(),precedenceEdges=new Map(),generatedHeaders=new Map(),nodes=new Set(rowsById.keys());
   const addEdge=(map,from,to)=>{if(!from||!to)return;const set=map.get(from)||new Set();set.add(to);map.set(from,set);};
-  const upnGroups=new Map(),milestoneGroups=new Map(),projectUsesMilestones=rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
+  const upnGroups=new Map(),milestoneGroups=new Map(),milestonePairEnabled=SSM_AUDIT_RULES.milestonePair.enabled,milestoneIntentEnabled=SSM_AUDIT_RULES.milestoneIntent.enabled,milestoneConsistencyEnabled=SSM_AUDIT_RULES.milestoneInconsistent.enabled,projectUsesMilestones=milestonePairEnabled&&rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
     if(/^I\s*(?:&|AND)\s*C$/i.test(clean(row.discipline))){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'I&C does not match the allowed Cx discipline mapping.',actual:`${row.discipline}; tag UPN candidates: ${candidates.join(', ')||'none'}`,expected:'FACILITIES MONITORING SYSTEM with one tag-derived UPN',recommendation:candidates.length===1?`Use UPN ${candidates[0]} and its allowed System Name.`:'Resolve the tag-derived UPN before assigning Discipline and System Name.'});}
     if(row.systemName&&row.upn){checks++;const match=extoRev21Norm(row.systemName).match(/^([0-9]+)(?:\s|$)/),systemUpn=match&&match[1];if(systemUpn&&extoRev21Norm(systemUpn)!==extoRev21Norm(row.upn))add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',why:'System Name identifies a different UPN than the row assignment.',actual:`UPN ${row.upn}; System ${row.systemName}`,expected:`System Name beginning with UPN ${row.upn}`,recommendation:'Correct the UPN or select the System Name assigned to that UPN.'});}
     if(projectUsesMilestones){checks++;if(!clean(row.milestone)||!clean(row.milestoneParent))add(SSM_AUDIT_RULES.milestonePair,'error',row,{field:'Milestones',why:'This project uses milestones, but this equipment does not have a complete L1/L2 pair.',actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone populated',recommendation:'Assign the equipment to its governing L1 milestone and corresponding L2 milestone.'});}
-    if(row.milestone&&row.milestoneParent){
-      const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;
-      if(conflict)add(SSM_AUDIT_RULES.milestoneIntent,'warning',row,{field:'Milestones',why:`The milestone pair has conflicting intent: ${conflict}.`,actual:`L1: ${row.milestoneParent}; L2: ${row.milestone}`,expected:'L1 and L2 milestones with compatible phase and capacity intent',recommendation:'Confirm the equipment belongs to the same startup phase represented by both milestones.'});
-      const key=auditNormId(row.milestone),entry=milestoneGroups.get(key)||{row,parents:new Map()};
-      const intent=auditMilestoneIntentKey(row.milestoneParent),values=entry.parents.get(intent)||new Set();values.add(clean(row.milestoneParent));entry.parents.set(intent,values);milestoneGroups.set(key,entry);
+    if(row.milestone&&row.milestoneParent&&(milestoneIntentEnabled||milestoneConsistencyEnabled)){
+      if(milestoneIntentEnabled){const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;
+        if(conflict)add(SSM_AUDIT_RULES.milestoneIntent,'warning',row,{field:'Milestones',why:`The milestone pair has conflicting intent: ${conflict}.`,actual:`L1: ${row.milestoneParent}; L2: ${row.milestone}`,expected:'L1 and L2 milestones with compatible phase and capacity intent',recommendation:'Confirm the equipment belongs to the same startup phase represented by both milestones.'});}
+      if(milestoneConsistencyEnabled){const key=auditNormId(row.milestone),entry=milestoneGroups.get(key)||{row,parents:new Map()};
+        const intent=auditMilestoneIntentKey(row.milestoneParent),values=entry.parents.get(intent)||new Set();values.add(clean(row.milestoneParent));entry.parents.set(intent,values);milestoneGroups.set(key,entry);}
     }
     const upn=auditNormId(row.upn);if(upn){const group=upnGroups.get(upn)||{systems:new Set(),disciplines:new Set(),wbs:new Set(),rows:[]};if(row.systemName)group.systems.add(auditNormId(row.systemName));if(row.discipline)group.disciplines.add(auditNormId(row.discipline));if(row.wbs)group.wbs.add(auditNormId(row.wbs));group.rows.push(row);upnGroups.set(upn,group);}
     checks++;if(!parentId)add(SSM_AUDIT_RULES.blankParent,'blocker',row,{field:'Closest Parent',why:'This equipment has no structural parent or System Name root.',expected:'Equipment parent or the row System Name',recommendation:'Assign the correct same-UPN parent; use System Name for a root.'});
@@ -175,6 +214,10 @@ export function runSsmAudit(snapshot){
     const meaningful=[...entry.parents].filter(([intent])=>intent!=='unclassified');checks++;
     if(meaningful.length>1)add(SSM_AUDIT_RULES.milestoneInconsistent,'error',entry.row,{field:'Milestone Parent',why:'The same L2 milestone maps to conflicting L1 milestone meanings.',actual:meaningful.map(([intent])=>intent).join('; '),expected:'One consistent L1 phase and readiness intent per L2 milestone',recommendation:'Review the affected milestone assignments by meaning rather than milestone number.'});
   }
+  const milestoneCohortRows=new Set();
+  if(SSM_AUDIT_RULES.milestoneLevel.enabled)for(const row of rows)for(const issue of auditMilestoneLevelIssues(row)){checks++;add(SSM_AUDIT_RULES.milestoneLevel,'error',row,{field:issue.field,why:`${issue.field} contains an identifier formatted for ${issue.foundLevel}.`,actual:issue.actual,expected:issue.expected,recommendation:'Move the milestone to the corresponding field and confirm the paired assignment.'});}
+  if(SSM_AUDIT_RULES.milestoneCohort.enabled)for(const candidate of auditMilestoneCohortCandidates(rows)){checks++;milestoneCohortRows.add(candidate.row);add(SSM_AUDIT_RULES.milestoneCohort,'warning',candidate.row,{field:'Milestones',why:`This assignment differs from ${candidate.agreementCount.toLocaleString()} comparable assets in the same building and system.`,actual:`L1: ${candidate.row.milestoneParent}; L2: ${candidate.row.milestone}`,expected:`L1: ${candidate.expectedParent}; L2: ${candidate.expectedMilestone}`,recommendation:'Review this row against its local building, UPN, and equipment-description cohort.'});}
+  if(SSM_AUDIT_RULES.milestoneBranch.enabled)for(const candidate of auditMilestoneBranchCandidates(rows)){if(milestoneCohortRows.has(candidate.row))continue;checks++;add(SSM_AUDIT_RULES.milestoneBranch,'warning',candidate.row,{field:'Milestones',why:`The parent and ${candidate.agreementCount.toLocaleString()} sibling assets use the same milestone pair, but this equipment differs.`,actual:`L1: ${candidate.row.milestoneParent}; L2: ${candidate.row.milestone}`,expected:`L1: ${candidate.expectedParent}; L2: ${candidate.expectedMilestone}`,recommendation:'Confirm the branch assignment and align this row when no documented exception applies.',relatedEquipmentId:candidate.parent.equipmentId});}
   for(const cycle of auditCyclePaths(nodes,parentEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.parentCycle,'blocker',row,{field:'Closest Parent',why:'The Closest Parent chain contains a cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic parent hierarchy',recommendation:'Break the cycle by correcting at least one Closest Parent.'});}
   for(const cycle of auditCyclePaths(nodes,precedenceEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.precedenceCycle,'blocker',row,{field:'Dependencies',why:'Parent and dependency relationships create a startup sequence cycle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'Acyclic commissioning sequence',recommendation:'Review the involved parent/dependency links and break the circular gating logic.'});}
   for(const row of rows){if(!auditIsOrganizationalHeader(row))continue;const id=auditNormId(row.equipmentId),childCount=(children.get(id)||[]).length;

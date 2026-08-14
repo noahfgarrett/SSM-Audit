@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
-import { auditCyclePaths, runSsmAudit, SSM_AUDIT_RULES, SSM_AUDIT_SOURCES } from '../src/audit/engine.js'
+import { auditCyclePaths, auditItemMasterCanonicalCandidates, auditMilestoneBranchCandidates, auditMilestoneCohortCandidates, auditMilestoneLevelIssues, runSsmAudit, SSM_AUDIT_RULES, SSM_AUDIT_SOURCES } from '../src/audit/engine.js'
 
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
 const index = Object.fromEntries(EXTO_REV21_COLUMNS.map(column => [column.field, column.index]))
@@ -132,29 +132,60 @@ test('Item Master standard remains visible but disabled and emits no prefix-base
     headers,
     row({ equipmentId: 'B1-CA', closestParent: '602 Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602 Medium Voltage', itemMaster: 'CA_LEGACY_PANEL' }),
     row({ equipmentId: 'B1-SP', closestParent: '602 Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602 Medium Voltage', itemMaster: 'SP_LEGACY_PANEL' }),
+    row({ equipmentId: 'B1-EA', closestParent: '602 Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602 Medium Voltage', itemMaster: 'EA_LEGACY_PANEL' }),
+    row({ equipmentId: 'B1-CUSTOM', closestParent: '602 Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602 Medium Voltage', itemMaster: 'PROJECT99_LEGACY_PANEL' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const result = runSsmAudit(snapshot)
   assert.equal(result.findings.filter(finding => finding.rule.id === SSM_AUDIT_RULES.itemMasterStandard.id).length, 0)
   assert.equal(result.findings.filter(finding => finding.rule.id.startsWith('item-master.')).length, 0)
 })
 
-test('milestone projects flag every row missing either L1 or L2', () => {
+test('milestone rules remain visible but disabled and emit no findings', () => {
+  for (const ruleKey of ['milestonePair', 'milestoneIntent', 'milestoneInconsistent', 'milestoneCohort', 'milestoneLevel', 'milestoneBranch']) {
+    assert.equal(SSM_AUDIT_RULES[ruleKey].enabled, false)
+  }
   const snapshot = auditSnapshotFromAoa([
     headers,
-    row({ equipmentId: 'PAIR-COMPLETE', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', milestoneParent: 'L1 Enabling', milestone: 'L2 Enabling' }),
+    row({ equipmentId: 'PAIR-CONFLICT', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', milestoneParent: 'L1 30 Percent Enabling', milestone: 'L2 100 Percent Capacity' }),
     row({ equipmentId: 'MISSING-L1', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', milestone: 'L2 Capacity' }),
     row({ equipmentId: 'MISSING-L2', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', milestoneParent: 'L1 Capacity' }),
-    row({ equipmentId: 'MISSING-BOTH', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
-  assert.deepEqual(equipmentIdsForRule(runSsmAudit(snapshot), 'milestonePair'), ['MISSING-BOTH', 'MISSING-L1', 'MISSING-L2'])
+  const result = runSsmAudit(snapshot)
+  assert.equal(result.findings.filter(finding => finding.category === 'milestones').length, 0)
 })
 
-test('projects without a milestone program do not receive missing-pair findings', () => {
-  const snapshot = auditSnapshotFromAoa([
-    headers,
-    row({ equipmentId: 'NO-MILESTONES', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System' }),
-  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
-  assert.deepEqual(equipmentIdsForRule(runSsmAudit(snapshot), 'milestonePair'), [])
+test('milestone cohort candidates require ten strongly agreeing local peers', () => {
+  const values = Array.from({ length: 10 }, (_, index) => row({ equipmentId: `COHORT-${index}`, closestParent: 'SYSTEM', building: 'BLD1', upn: '402', discipline: 'MECHANICAL DRY', equipmentDescription: 'Purge Panel', milestoneParent: 'L1-EXPECTED', milestone: 'L2-EXPECTED' }))
+  values.push(row({ equipmentId: 'COHORT-OUTLIER', closestParent: 'SYSTEM', building: 'BLD1', upn: '402', discipline: 'MECHANICAL DRY', equipmentDescription: 'Purge Panel', milestoneParent: 'L1-OTHER', milestone: 'L2-OTHER' }))
+  const snapshot = auditSnapshotFromAoa([headers, ...values], { sheet: 'Registry' })
+  const candidates = auditMilestoneCohortCandidates(snapshot.rows)
+  assert.deepEqual(candidates.map(candidate => candidate.row.equipmentId), ['COHORT-OUTLIER'])
+  assert.equal(candidates[0].agreementCount, 10)
+  assert.equal(candidates[0].expectedMilestone, 'L2-EXPECTED')
+})
+
+test('milestone level candidates recognize only explicit identifiers in the wrong field', () => {
+  const issues = auditMilestoneLevelIssues({ milestoneParent: 'SP-L2-M1-1418 100% Blowdown', milestone: 'SP-L1-M1-133 100% Ready' })
+  assert.deepEqual(issues.map(issue => issue.field), ['L1 Milestone Parent', 'L2 Milestone'])
+  assert.deepEqual(auditMilestoneLevelIssues({ milestoneParent: 'Local readiness gate', milestone: 'Capacity complete' }), [])
+})
+
+test('milestone branch candidates require the parent and five siblings to agree', () => {
+  const common = { building: 'BLD1', upn: '1820', discipline: 'MECHANICAL DRY', milestoneParent: 'L1-EXPECTED', milestone: 'L2-EXPECTED' }
+  const values = [row({ equipmentId: 'BRANCH-PARENT', closestParent: 'SYSTEM', ...common })]
+  for (let index = 0; index < 5; index++) values.push(row({ equipmentId: `BRANCH-PEER-${index}`, closestParent: 'BRANCH-PARENT', ...common }))
+  values.push(row({ equipmentId: 'BRANCH-OUTLIER', closestParent: 'BRANCH-PARENT', ...common, milestoneParent: 'L1-OTHER', milestone: 'L2-OTHER' }))
+  const snapshot = auditSnapshotFromAoa([headers, ...values], { sheet: 'Registry' })
+  const candidates = auditMilestoneBranchCandidates(snapshot.rows)
+  assert.deepEqual(candidates.map(candidate => candidate.row.equipmentId), ['BRANCH-OUTLIER'])
+  assert.equal(candidates[0].agreementCount, 5)
+})
+
+test('Item Master candidates ignore arbitrary prefixes and preserve ambiguity', () => {
+  const catalog = ['VF1_PUMP_CENTRIFUGAL', 'VF2_PUMP_CENTRIFUGAL', 'VF1_AIR_HANDLER']
+  assert.deepEqual(auditItemMasterCanonicalCandidates('EA_SITE_PUMP_CENTRIFUGAL', catalog), ['VF1_PUMP_CENTRIFUGAL', 'VF2_PUMP_CENTRIFUGAL'])
+  assert.deepEqual(auditItemMasterCanonicalCandidates('PROJECT99_AIR_HANDLER', catalog), ['VF1_AIR_HANDLER'])
+  assert.deepEqual(auditItemMasterCanonicalCandidates('EA_EXHAUST_FAN', catalog), [])
 })
 
 test('HEADER description defines an organizational header while VF_Blank alone does not', () => {
