@@ -18,7 +18,11 @@ test('release versions stay synchronized and changelog describes active behavior
 test('single-file build is offline-ready and pinned to its own updater',()=>{
   execFileSync(process.execPath,['build/build.mjs'],{cwd:root,stdio:'pipe'})
   const html=readFileSync(resolve(root,'SSM-Audit.html'),'utf8')
+  const appScript=html.match(/<script>\s*"use strict";([\s\S]*?)<\/script>/)
+  assert.ok(appScript,'built application script is present')
+  execFileSync(process.execPath,['--check','-'],{input:appScript[1],stdio:'pipe'})
   assert.match(html,/<title>SSM Audit<\/title>/)
+  assert.match(html,/SSM hierarchy/)
   assert.match(html,/noahfgarrett\/SSM-Audit-Releases/)
   assert.doesNotMatch(html,/SSManagement-Releases|SSM-Builder-Releases/i)
   assert.doesNotMatch(html,/src=["']https?:|href=["']https?:/i)

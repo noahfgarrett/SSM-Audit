@@ -78,7 +78,7 @@ function sortedMode(values){
   const winner=[...counts].sort((a,b)=>b[1]-a[1]||natCmp(a[0],b[0]))[0];return winner&&display.get(winner[0])||'';
 }
 
-function registryModel(snapshot){
+export function auditRegistryModel(snapshot){
   const rows=snapshot&&snapshot.rows||[],rowsById=new Map(),childrenById=new Map(),generatedHeaders=new Map();
   for(const row of rows){const id=auditNormId(row.equipmentId);if(id&&!rowsById.has(id))rowsById.set(id,row);}
   for(const row of rows){
@@ -203,7 +203,7 @@ function compareSystem(upn,targetNodes=[],referenceNodes=[]){
 }
 
 export function compareSsmRegistries(targetSnapshot,referenceSnapshot){
-  const target=registryModel(targetSnapshot),reference=registryModel(referenceSnapshot),upns=new Set([...target.systems.keys(),...reference.systems.keys()]);
+  const target=auditRegistryModel(targetSnapshot),reference=auditRegistryModel(referenceSnapshot),upns=new Set([...target.systems.keys(),...reference.systems.keys()]);
   const systems=[...upns].sort(natCmp).map(upn=>compareSystem(upn,target.systems.get(upn)||[],reference.systems.get(upn)||[]));
   const summary={systems:systems.length,alignedSystems:0,differentSystems:0,targetOnlySystems:0,referenceOnlySystems:0,targetRows:target.rows.length,referenceRows:reference.rows.length,alignedRows:0,changedRows:0,targetOnlyRows:0,referenceOnlyRows:0,observations:0};
   for(const system of systems){if(system.status==='aligned')summary.alignedSystems++;else if(system.status==='target-only')summary.targetOnlySystems++;else if(system.status==='reference-only')summary.referenceOnlySystems++;else summary.differentSystems++;summary.alignedRows+=system.pairSummary.aligned;summary.changedRows+=system.pairSummary.changed;summary.targetOnlyRows+=system.pairSummary.targetOnly;summary.referenceOnlyRows+=system.pairSummary.referenceOnly;summary.observations+=system.observations.length;}

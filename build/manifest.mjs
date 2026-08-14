@@ -7,6 +7,7 @@ export const MODULES=[
   'src/audit/model.js',
   'src/audit/engine.js',
   'src/audit/compare.js',
+  'src/audit/hierarchy.js',
   'src/core/download.js',
   'src/ui/icons.js',
   'src/ui/feedback.js',

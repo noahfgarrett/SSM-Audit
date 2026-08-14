@@ -1,6 +1,6 @@
 # SSM Audit
 
-SSM Audit is a standalone, offline-first review tool for completed Exto Cx Registry workbooks. It checks hierarchy, dependencies, metadata, system assignment, headers, and commissioning logic against the SSM SOP and approved Exto upload requirements.
+SSM Audit is a standalone, offline-first review tool for completed Exto Cx Registry workbooks. It checks hierarchy, dependencies, metadata, system assignment, headers, and commissioning logic against the SSM SOP and approved Exto upload requirements. Audited registries can also be explored as an interactive SSM tree or compared side by side with a completed project.
 
 ## Privacy
 

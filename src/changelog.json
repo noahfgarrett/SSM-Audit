@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.0",
+    "date": "2026-08-14",
+    "type": "feature",
+    "notes": "- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"
+  },
+  {
     "version": "1.3.0",
     "date": "2026-08-14",
     "type": "feature",

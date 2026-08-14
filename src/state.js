@@ -9,7 +9,7 @@ export const S={
 };
 
 export function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null};
+  S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,selectedHierarchyNodeKey:''};
 }
 
 export function resetComparison(){
