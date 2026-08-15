@@ -1,3 +1,4 @@
+import { SSM_AUDIT_RULES } from '../src/audit/engine.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -12,7 +13,14 @@ test('release versions stay synchronized and changelog describes active behavior
   const changelog=JSON.parse(readFileSync(resolve(root,'src/changelog.json'),'utf8'))
   assert.match(versionSource,new RegExp(`APP_VERSION=['\"]${packageJson.version.replace(/\./g,'\\.')}['\"]`))
   assert.equal(changelog[0].version,packageJson.version)
-  assert.doesNotMatch(changelog.map(entry=>entry.notes).join('\n'),/\b(?:disabled|inactive|milestones?|item masters?)\b/i)
+  /* Release notes describe active behavior only. Never the words disabled/inactive,
+     and never a feature area whose rules are currently switched off — the banned
+     list is derived from the engine, so re-enabling a rule family lifts the ban. */
+  const notes=changelog.map(entry=>entry.notes).join('\n')
+  assert.doesNotMatch(notes,/\b(?:disabled|inactive)\b/i)
+  const disabledCategories=new Set(Object.values(SSM_AUDIT_RULES).filter(rule=>!rule.enabled).map(rule=>rule.category))
+  const bannedWords={milestones:/\bmilestones?\b/i,'item-masters':/\bitem masters?\b/i}
+  for(const [category,pattern] of Object.entries(bannedWords))if(disabledCategories.has(category))assert.doesNotMatch(notes,pattern,`release notes mention ${category} while its rules are disabled`)
 })
 
 test('single-file build is offline-ready and pinned to its own updater',()=>{

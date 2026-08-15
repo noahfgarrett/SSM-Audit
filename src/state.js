@@ -1,6 +1,7 @@
 export const S={
   screen:'upload',
   homeMode:'audit',
+  ui:{navCollapsed:false},
   rules:{search:'',source:'all',category:'all'},
   session:null,
   comparison:null,
@@ -9,7 +10,7 @@ export const S={
 };
 
 export function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,selectedHierarchyNodeKey:''};
+  S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
 }
 
 export function resetComparison(){
