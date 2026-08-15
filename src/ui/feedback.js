@@ -25,10 +25,12 @@ export async function runWithProgress(title,detail,task){
   try{return await task(checkpoint,setProgress);}finally{hideProgress();}
 }
 
-export function copyTagHtml(tag){
+/* `labelHtml` lets callers pass already-escaped markup (search highlighting) for the
+   visible label. The copied value always comes from the raw tag. */
+export function copyTagHtml(tag,labelHtml){
   if(!tag)return '<span class="muted">Registry</span>';
   const safe=String(tag).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  return `<button class="copy-tag" type="button" data-copy-tag="${safe}" title="Copy ${safe}">${safe}</button>`;
+  return `<button class="copy-tag" type="button" data-copy-tag="${safe}" title="Copy ${safe}">${labelHtml||safe}</button>`;
 }
 export async function copyText(value){
   const text=String(value||'');if(!text)return false;

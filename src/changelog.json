@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.6.0",
+    "date": "2026-08-14",
+    "type": "feature",
+    "notes": "- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"
+  },
+  {
     "version": "1.5.1",
     "date": "2026-08-14",
     "type": "fix",

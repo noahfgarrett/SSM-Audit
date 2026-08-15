@@ -10,6 +10,13 @@ const EXTO_REV21_CANONICAL=Object.fromEntries(Object.entries(EXTO_REV21_VOCABULA
 const EXTO_REV21_UPN_SET=new Set((EXTO_REV21_VOCABULARY.UPN||[]).map(extoRev21Norm));
 const EXTO_REV21_SYSTEMS_BY_UPN=new Map();
 for(const name of EXTO_REV21_VOCABULARY['System Name']||[]){const match=extoRev21Norm(name).match(/^([^ ]+)/);if(!match)continue;const list=EXTO_REV21_SYSTEMS_BY_UPN.get(match[1])||[];list.push(name);EXTO_REV21_SYSTEMS_BY_UPN.set(match[1],list);}
+/* Small read-only lookups the audit engine needs: is this a Rev21 UPN, and
+   which approved System Names belong to it. Letter-code UPNs (RR / SEC / MISC)
+   have no System Name beginning with the code, so callers must use the by-UPN
+   list rather than a "starts with the UPN" test. */
+export function extoRev21IsUpn(value){return EXTO_REV21_UPN_SET.has(extoRev21Norm(value));}
+export function extoRev21SystemsForUpn(upn){return [...(EXTO_REV21_SYSTEMS_BY_UPN.get(extoRev21Norm(upn))||[])];}
+export function extoRev21IsSystemName(value){return EXTO_REV21_CANONICAL['System Name'].has(extoRev21Norm(value));}
 export function extoRev21Canonical(field,value){
   const normalized=extoRev21Norm(value);if(!normalized)return '';
   const dropdown=EXTO_REV21_FIELD_TO_DROPDOWN[field],values=dropdown&&EXTO_REV21_CANONICAL[dropdown];
