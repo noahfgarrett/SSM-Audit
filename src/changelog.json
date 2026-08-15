@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.6.1",
+    "date": "2026-08-15",
+    "type": "fix",
+    "notes": "- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"
+  },
+  {
     "version": "1.6.0",
     "date": "2026-08-14",
     "type": "feature",
