@@ -224,6 +224,8 @@ export function runSsmAudit(snapshot,options={}){
   const upnGroups=new Map(),milestoneGroups=new Map();
   const projectUsesMilestones=SSM_AUDIT_RULES.milestonePair.enabled&&rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
   const rowUpn=row=>auditNormId(row&&row.upn);
+  const populatedItemMasters=rows.filter(row=>clean(row.itemMaster)&&!auditIsBlankItemMaster(row));
+  const legacyItemMasterRegistry=populatedItemMasters.length>=50&&populatedItemMasters.filter(row=>!/^VF/.test(auditNormId(row.itemMaster))).length/populatedItemMasters.length>0.5;
   const isHeaderRow=row=>headerIds.has(auditNormId(row&&row.equipmentId));
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
@@ -289,14 +291,28 @@ export function runSsmAudit(snapshot,options={}){
         checks++;add(SSM_AUDIT_RULES.sameUpnBottomUp,'info',row,{field:'Dependencies',why:`This dependency is inside the same UPN (${row.upn}) and discipline. In a bottom-up discipline the hierarchy already sets the order, so a same-system dependency is only needed for a real sequencing reason.`,actual:dependency,expected:'Same-UPN dependencies mainly on instruments and devices; on other equipment, only for a documented sequencing reason',recommendation:'Confirm the dependency is intended. If the equipment simply nests, the hierarchy already covers the order.',relatedEquipmentId:target.equipmentId});
       }
     }
-    /* --- item masters --- */
+    /* --- item masters ---
+       Any site-prefixed name (CA_NB_…, SP_NB_…, EL_…) is a legacy assignment the
+       VF standard replaces; the VF equivalent is proposed by matching the name's
+       tail. When a registry is wholesale non-VF this is a migration, not 20,000
+       separate mistakes, so the per-row note drops to info — the count is the
+       signal, and the structural findings stay on top. */
     if(SSM_AUDIT_RULES.itemMasterStandard.enabled&&clean(row.itemMaster)){checks++;
-      const im=auditNormId(row.itemMaster);
-      if(/^CA_/.test(im)){const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,itemMasterVocabulary);add(SSM_AUDIT_RULES.itemMasterStandard,'warning',row,{field:'Item Master Unique Identifier',why:'This is a legacy project-prefixed Item Master. The VF standard names should be used.',actual:row.itemMaster,expected:candidates.length===1?candidates[0]:candidates.length?`One of: ${candidates.join(' | ')}`:'The matching VF_ Item Master',recommendation:candidates.length===1?`Replace with ${candidates[0]}.`:'Replace with the VF Item Master that matches this equipment.'});}
-      else if(itemMasterVocabulary.length&&!/^VF/.test(im)&&!itemMasterVocabulary.some(value=>auditNormId(value)===im))add(SSM_AUDIT_RULES.itemMasterStandard,'warning',row,{field:'Item Master Unique Identifier',why:'This Item Master is not in the approved VF list.',actual:row.itemMaster,expected:'An Item Master from the VF template',recommendation:'Pick the VF Item Master that matches this equipment.'});
+      const im=auditNormId(row.itemMaster),known=itemMasterVocabulary.some(value=>auditNormId(value)===im);
+      const legacy=/^[A-Z]{1,4}_/.test(im)&&!/^VF/.test(im);
+      /* A legacy site prefix is always reportable. A VF-looking name that is
+         merely absent from the list is only judged when a vocabulary is in
+         force — an explicit empty list means "do not judge unknown names". */
+      if(!known&&!auditIsBlankItemMaster(row)&&(legacy||itemMasterVocabulary.length)){
+        const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,itemMasterVocabulary);
+        add(SSM_AUDIT_RULES.itemMasterStandard,legacyItemMasterRegistry?'info':'warning',row,{field:'Item Master Unique Identifier',
+          why:legacy?`This is a site-prefixed Item Master (${im.split('_')[0]}_). The VF standard name should be used.`:'This Item Master is not one of the approved VF names in the Standardized Item Master Template.',
+          actual:row.itemMaster,expected:candidates.length===1?candidates[0]:candidates.length?`One of: ${candidates.join(' | ')}`:'The matching VF_ Item Master',
+          recommendation:candidates.length===1?`Replace with ${candidates[0]}.`:'Replace with the VF Item Master that matches this equipment.'});
+      }
     }
   }
-  for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`${entry.count.toLocaleString()} row${entry.count===1?'':'s'} nest under a parent that is not any equipment in this registry.`,actual:entry.parent,expected:'An intentional header row (with a Blank Item Master) or the row’s System Name',recommendation:'If this is meant to be a header, add it as a row with a Blank Item Master. If not, correct the parent.'});}
+  for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`${entry.count.toLocaleString()} row${entry.count===1?' nests':'s nest'} under a parent that is not any equipment in this registry.`,actual:entry.parent,expected:'An intentional header row (with a Blank Item Master) or the row’s System Name',recommendation:'If this is meant to be a header, add it as a row with a Blank Item Master. If not, correct the parent.'});}
   for(const [upn,group] of upnGroups){checks++;if(group.systems.size>1||group.disciplines.size>1)add(SSM_AUDIT_RULES.upnInconsistent,'error',group.rows[0],{field:'UPN',why:`Rows on UPN ${upn} use more than one System Name or Discipline.`,actual:`Systems: ${[...group.systems].join('; ')}; Disciplines: ${[...group.disciplines].join('; ')}`,expected:'One System Name and one Discipline for the whole UPN',recommendation:`Review every row on UPN ${upn} and align them.`});}
   for(const entry of milestoneGroups.values()){
     const meaningful=[...entry.parents].filter(([intent])=>intent!=='unclassified');checks++;
@@ -313,7 +329,7 @@ export function runSsmAudit(snapshot,options={}){
   for(const row of rows){
     const id=auditNormId(row.equipmentId);if(!id)continue;
     const referenced=parentRefCounts.get(id)||0,blank=auditIsBlankItemMaster(row);
-    if(referenced&&!blank&&isLikelyHeaderName(row,children.get(id)||[])){checks++;add(SSM_AUDIT_RULES.headerItemMaster,'warning',row,{field:'Item Master Unique Identifier',why:`${referenced.toLocaleString()} row${referenced===1?'':'s'} nest under this row as a group, but it carries a real Item Master, so checklists would be applied to a header.`,actual:row.itemMaster||'Blank',expected:'VF_Blank (or the site’s Blank Item Master)',recommendation:'If this row is an organizational header, set its Item Master to VF_Blank. If it is real equipment, leave it.'});}
+    if(referenced&&!blank&&isLikelyHeaderName(row,children.get(id)||[])){checks++;add(SSM_AUDIT_RULES.headerItemMaster,'warning',row,{field:'Item Master Unique Identifier',why:`${referenced.toLocaleString()} row${referenced===1?' nests':'s nest'} under this row as a group, but it carries a real Item Master, so checklists would be applied to a header.`,actual:row.itemMaster||'Blank',expected:'VF_Blank (or the site’s Blank Item Master)',recommendation:'If this row is an organizational header, set its Item Master to VF_Blank. If it is real equipment, leave it.'});}
     if(blank&&referenced){
       if(auditReferences(row.dependencies).length){checks++;add(SSM_AUDIT_RULES.headerDependency,'warning',row,{field:'Dependencies',why:'This header groups equipment but also carries dependencies.',actual:row.dependencies,expected:'No dependencies on a header',recommendation:'Move the dependencies to the equipment that actually needs them.'});}
     }else if(blank&&!referenced){checks++;add(SSM_AUDIT_RULES.unusedHeader,'info',row,{field:'Equipment ID',why:'This row has a Blank Item Master (a header) but nothing nests under it.',actual:row.equipmentId,expected:'At least one piece of equipment nested under it',recommendation:'Attach the intended equipment, or remove the header if it is not needed.'});}

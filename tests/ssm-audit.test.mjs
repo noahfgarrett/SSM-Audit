@@ -226,11 +226,13 @@ test('Item Master standard flags legacy CA_ names and proposes the VF equivalent
   const ca = withVocabulary.findings.find(f => f.equipmentId === 'B1-CA')
   assert.equal(ca.expected, 'VF_ELEC_PANEL', 'the VF equivalent is proposed by suffix match')
   assert.match(ca.recommendation, /Replace with VF_ELEC_PANEL/)
-  // an explicit empty vocabulary disables the unknown-name check; only the legacy-prefix rule can fire
+  assert.match(ca.why, /site-prefixed Item Master \(CA_\)/, 'any site prefix is called out by name, not only CA_')
+  assert.equal(ca.severity, 'warning', 'in a mostly-VF registry a stray legacy name is a warning')
+  // an explicit empty vocabulary disables the unknown-name check; only site-prefixed legacy names can fire
   assert.deepEqual(equipmentIdsForRule(runSsmAudit(snapshot, { itemMasterVocabulary: [] }), 'itemMasterStandard'), ['B1-CA'])
-  // by default the shipped VF list is used, so an invented VF_ name that is not in it is still flagged
+  // by default the shipped VF list is used, so names absent from it — even VF-looking ones — are flagged
   const shipped = runSsmAudit(snapshot)
-  assert.ok(equipmentIdsForRule(shipped, 'itemMasterStandard').includes('B1-UNKNOWN'), 'unknown names are checked against the shipped VF list')
+  assert.deepEqual(equipmentIdsForRule(shipped, 'itemMasterStandard'), ['B1-CA', 'B1-UNKNOWN', 'B1-VF'], 'the invented VF_ELEC_PANEL is not a real Rev14 name, so it is flagged too')
 })
 
 test('milestone rules are enabled as review-grade checks', () => {
@@ -538,4 +540,15 @@ test('same-UPN dependencies are normal in top-down disciplines and on instrument
   assert.deepEqual(equipmentIdsForRule(result, 'sameUpnBottomUp'), ['PMP-2'], 'electrical (top-down) and the instrument pass; the mechanical pump-to-pump dependency is noted')
   const finding = result.findings.find(f => f.equipmentId === 'PMP-2' && f.rule.id === SSM_AUDIT_RULES.sameUpnBottomUp.id)
   assert.equal(finding.severity, 'info')
+})
+
+
+test('a registry that is wholesale on a site item-master scheme is a migration, not thousands of warnings', () => {
+  const rows = [headers]
+  for (let i = 0; i < 60; i++) rows.push(row({ equipmentId: `B1-PNL-${String(i).padStart(3, '0')}`, closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', itemMaster: 'SP_NB_ELEC_PANEL' }))
+  const result = runSsmAudit(auditSnapshotFromAoa(rows, { file: 'synthetic.xlsx', sheet: 'Registry' }))
+  const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.itemMasterStandard.id)
+  assert.equal(findings.length, 60, 'every row still gets its migration note')
+  assert.ok(findings.every(f => f.severity === 'info'), 'but as info, so structural findings stay on top')
+  assert.match(findings[0].why, /site-prefixed Item Master \(SP_\)/)
 })
