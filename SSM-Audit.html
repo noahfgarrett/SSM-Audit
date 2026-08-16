@@ -1257,7 +1257,7 @@ body.audit-fullscreen{overflow:hidden}
 .audit-table td:nth-child(6){color:var(--ink-3);text-align:center}
 .audit-table td:nth-child(6) .ic{width:15px;height:15px}
 .audit-spacer,.audit-spacer td{border:0!important;padding:0!important;background:transparent!important}
-.audit-severity{display:inline-flex;align-items:center;justify-content:center;min-width:64px;height:23px;padding:0 6px;border:1px solid var(--border);border-radius:5px;font:700 9.5px var(--mono);text-transform:uppercase}
+.audit-severity{display:inline-flex;align-items:center;justify-content:center;min-width:104px;height:23px;padding:0 8px;border:1px solid var(--border);border-radius:5px;font:700 10px var(--mono);letter-spacing:.1px;white-space:nowrap}
 .audit-severity.blocker{border-color:#efc5c1;background:#fdecea;color:var(--danger)}
 .audit-severity.error{border-color:#e5c6c2;background:#fbefed;color:#a24942}
 .audit-severity.warning{border-color:#ecd0a7;background:var(--warn-bg);color:var(--warn)}
@@ -1442,7 +1442,7 @@ body.audit-fullscreen{overflow:hidden}
 .audit-head .btn{white-space:nowrap}
 .audit-title p{max-width:none}
 .sev-strip{display:flex;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto}
-.sev-chip{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 11px;border:1px solid var(--border);border-radius:99px;
+.sev-chip{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 11px;white-space:nowrap;border:1px solid var(--border);border-radius:99px;
   background:var(--surface);color:var(--ink-3);font:600 12.5px var(--sans);white-space:nowrap;cursor:pointer;transition:.12s ease}
 .sev-chip b{font:700 12px var(--mono);color:var(--ink-2)}
 .sev-chip .sev-dot{width:8px;height:8px;border-radius:50%;background:var(--ink-3);opacity:.45}
@@ -1515,6 +1515,36 @@ body.audit-fullscreen{overflow:hidden}
 .finding-context dt{color:var(--ink-3);font:700 9.5px var(--mono);text-transform:uppercase}
 .finding-context dd{margin:3px 0 0;color:var(--ink);font-size:12px;line-height:1.45;overflow-wrap:anywhere}
 .finding-context dd .copy-tag{font:600 12px var(--mono)}
+/* Relationship diagram — parent / dependency / loop */
+.rel-diagram{display:flex;flex-direction:column;gap:0}
+.rel-node{display:flex;flex-direction:column;gap:2px;padding:8px 11px;border:1px solid var(--border);border-left:3px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2)}
+.rel-node.role-this{border-left-color:var(--accent);background:var(--tint)}
+.rel-node.role-parent{border-left-color:var(--border-strong)}
+.rel-node.role-dependency{border-left-color:#6e8598;background:#f3f6f9}
+.rel-node.role-step{border-left-color:var(--border-strong)}
+.rel-node-role{color:var(--ink-3);font:700 9px var(--mono);letter-spacing:.5px;text-transform:uppercase}
+.rel-node-tag{min-width:0;overflow-wrap:anywhere}
+.rel-node-tag .copy-tag{font:680 13px var(--mono);color:var(--ink);text-align:left}
+.rel-node-meta{display:flex;align-items:center;flex-wrap:wrap;gap:5px;color:var(--ink-3);font-size:11.5px}
+.rel-value{color:var(--ink-2);font-family:var(--mono)}
+.rel-value.is-diff{color:var(--danger);font-weight:700}
+.rel-pill{padding:0 6px;border:1px solid #efc5c1;border-radius:99px;background:#fdecea;color:var(--danger);font:700 9px var(--mono);line-height:15px;text-transform:uppercase;letter-spacing:.3px}
+.rel-link{display:flex;align-items:center;gap:8px;height:26px;padding-left:16px}
+.rel-link .rel-line{width:2px;height:100%;background:var(--border-strong)}
+.rel-link-label{color:var(--ink-3);font:11px var(--mono)}
+.rel-dependency{flex-direction:row;align-items:center;gap:8px}
+.rel-dependency .rel-node{flex:1;min-width:0}
+.rel-arrow{flex:0 0 auto;color:var(--ink-3)}
+.rel-loop{margin:0;padding:0;list-style:none}
+.rel-loop-step{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;column-gap:8px}
+.rel-step-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px solid var(--border-strong);border-radius:50%;background:var(--surface);color:var(--ink-2);font:700 10px var(--mono)}
+.rel-loop-step.is-start .rel-step-num{border-color:var(--accent-300);background:var(--tint-2);color:var(--accent-700)}
+.rel-node.compact{flex-direction:row;align-items:center;flex-wrap:wrap;gap:4px 9px;min-height:30px;padding:3px 10px}
+.rel-node.compact .rel-node-role{flex-basis:100%}
+.rel-loop-arrow{grid-column:2;display:flex;align-items:center;gap:6px;height:16px;color:var(--ink-3);font:10.5px var(--mono)}
+.rel-loop-arrow .ic{width:13px;height:13px}
+.rel-loop-arrow.back{color:var(--accent-700)}
+.rel-legend{margin:8px 0 0;color:var(--ink-2);font-size:12px;line-height:1.5}
 .finding-evidence{display:flex;align-items:center;gap:7px;margin-bottom:14px;color:var(--ink-3);font:11.5px var(--mono)}
 .finding-evidence .ic{width:14px;height:14px}
 .finding-steps{display:flex;align-items:center;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
@@ -1591,6 +1621,8 @@ body.audit-fullscreen{overflow:hidden}
   .sidenav.collapsed .sidenav-item{justify-content:flex-start;padding:0 10px}
   .sidenav.collapsed .sidenav-item.active::after{display:none}
   .finding-compare,.finding-context{grid-template-columns:minmax(0,1fr)}
+  .rel-dependency{flex-direction:column;align-items:stretch}
+  .rel-dependency .rel-arrow{transform:rotate(90deg);align-self:center}
   .checks-list{grid-template-columns:minmax(0,1fr)}
   .hierarchy-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .hierarchy-toolbar .searchbox{grid-column:1/-1}
@@ -1693,7 +1725,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1704,7 +1736,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.6.1';
+const APP_VERSION='1.7.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -2011,8 +2043,12 @@ function auditFinding(rule,severity,row,details={}){
   return Object.freeze({schemaVersion:1,id:`${rule.id}:${fingerprint}`,fingerprint,rule,severity,category:rule.category,
     equipmentId,row:source.row||0,sheet:source.sheet||'',field:details.field||'',why:details.why||'',actual,
     expected:details.expected==null?'':details.expected,recommendation:details.recommendation||'',relatedEquipmentId:details.relatedEquipmentId||'',
+    /* Optional structured relationship for the UI to draw: {kind:'parent'|'dependency'|'loop', nodes:[{tag,role,upn,discipline}]}
+       role ∈ 'this' (the flagged equipment) | 'parent' | 'dependency' | 'step' (a loop member). Text fields stay the human record. */
+    relationship:details.relationship?Object.freeze({kind:details.relationship.kind,nodes:Object.freeze((details.relationship.nodes||[]).map(node=>Object.freeze({...node})))}):null,
     searchKey:auditNormId([rule.id,rule.source,rule.title,rule.category,equipmentId,source.sheet,details.field,details.why,actual,details.expected,details.relatedEquipmentId].join(' '))});
 }
+function auditRelNode(row,role,fallbackTag){return {tag:clean(row&&row.equipmentId)||clean(fallbackTag),role,upn:clean(row&&row.upn),discipline:clean(row&&row.discipline)};}
 function auditPolarity(discipline){return /elec|life safety|security|fire/i.test(discipline||'')?'top-down':'bottom-up';}
 function auditDescription(row){return auditNormId(row&&row.equipmentDescription);}
 function auditReferences(value){return auditSplitReferences(value).filter(reference=>!/^N\/?A$/i.test(reference));}
@@ -2198,10 +2234,10 @@ function runSsmAudit(snapshot,options={}){
       if(parent){
         addEdge(parentEdges,id,parentId);const list=children.get(parentId)||[];list.push(row);children.set(parentId,list);
         const childUpn=upn,parentUpn=rowUpn(parent);checks++;
-        if(childUpn&&parentUpn&&childUpn!==parentUpn)add(SSM_AUDIT_RULES.crossUpn,'error',row,{field:'Closest Parent',why:`This row is on UPN ${row.upn} but its parent is on UPN ${parent.upn}. A parent must be in the same UPN.`,actual:`${row.equipmentId} (${row.upn}) → ${parent.equipmentId} (${parent.upn})`,expected:`A parent in UPN ${row.upn}`,recommendation:`Keep ${parent.equipmentId} as a dependency and pick a parent inside UPN ${row.upn} (or the System Name if this is the top).`,relatedEquipmentId:parent.equipmentId});
+        if(childUpn&&parentUpn&&childUpn!==parentUpn)add(SSM_AUDIT_RULES.crossUpn,'error',row,{field:'Closest Parent',why:`This row is on UPN ${row.upn} but its parent is on UPN ${parent.upn}. A parent must be in the same UPN.`,actual:`${row.equipmentId} (${row.upn}) → ${parent.equipmentId} (${parent.upn})`,expected:`A parent in UPN ${row.upn}`,recommendation:`Keep ${parent.equipmentId} as a dependency and pick a parent inside UPN ${row.upn} (or the System Name if this is the top).`,relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});
         const childDiscipline=auditNormId(row.discipline),parentDiscipline=auditNormId(parent.discipline);checks++;
         const approvedControlsChild=extoRev21EffectiveDiscipline(row.discipline)==='FACILITIES MONITORING SYSTEM'||auditIsControlEquipment(row)||auditIsInstrument(row);
-        if(childDiscipline&&parentDiscipline&&childDiscipline!==parentDiscipline&&!approvedControlsChild)add(SSM_AUDIT_RULES.crossDiscipline,'warning',row,{field:'Closest Parent',why:`This row is ${row.discipline} but its parent is ${parent.discipline}.`,actual:`${row.discipline} → ${parent.discipline}`,expected:`A parent in ${row.discipline}, unless this is a controls device under the equipment it serves`,recommendation:'Confirm the exception, or record the relationship as a dependency instead.',relatedEquipmentId:parent.equipmentId});
+        if(childDiscipline&&parentDiscipline&&childDiscipline!==parentDiscipline&&!approvedControlsChild)add(SSM_AUDIT_RULES.crossDiscipline,'warning',row,{field:'Closest Parent',why:`This row is ${row.discipline} but its parent is ${parent.discipline}.`,actual:`${row.discipline} → ${parent.discipline}`,expected:`A parent in ${row.discipline}, unless this is a controls device under the equipment it serves`,recommendation:'Confirm the exception, or record the relationship as a dependency instead.',relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});
         if(auditPolarity(row.discipline)==='top-down')addEdge(precedenceEdges,parentId,id);else addEdge(precedenceEdges,id,parentId);
       }else if(status==='NEW'){
         if(parentId!==auditNormId(row.systemName)){
@@ -2218,7 +2254,7 @@ function runSsmAudit(snapshot,options={}){
       if(depId&&!target&&!clean(row.dependencyProject))add(SSM_AUDIT_RULES.unresolvedDependency,'error',row,{field:'Dependencies',why:'This dependency is not a tag in the registry, and no other project is named for it.',actual:dependency,expected:'A tag in this registry, or a Dependency Project naming where it lives',recommendation:'Correct the tag, or fill in the Dependency Project.'});
       if(target&&depId!==id&&depId!==parentId)addEdge(precedenceEdges,depId,id);
       if(target&&depId!==id&&SSM_AUDIT_RULES.sameUpnBottomUp.enabled&&upn&&rowUpn(target)===upn&&auditPolarity(row.discipline)==='bottom-up'&&auditNormId(target.discipline)===auditNormId(row.discipline)&&!auditIsInstrument(row)&&!isHeaderRow(row)){
-        checks++;add(SSM_AUDIT_RULES.sameUpnBottomUp,'info',row,{field:'Dependencies',why:`This dependency is inside the same UPN (${row.upn}) and discipline. In a bottom-up discipline the hierarchy already sets the order, so a same-system dependency is only needed for a real sequencing reason.`,actual:dependency,expected:'Same-UPN dependencies mainly on instruments and devices; on other equipment, only for a documented sequencing reason',recommendation:'Confirm the dependency is intended. If the equipment simply nests, the hierarchy already covers the order.',relatedEquipmentId:target.equipmentId});
+        checks++;add(SSM_AUDIT_RULES.sameUpnBottomUp,'info',row,{field:'Dependencies',why:`This dependency is inside the same UPN (${row.upn}) and discipline. In a bottom-up discipline the hierarchy already sets the order, so a same-system dependency is only needed for a real sequencing reason.`,actual:dependency,expected:'Same-UPN dependencies mainly on instruments and devices; on other equipment, only for a documented sequencing reason',recommendation:'Confirm the dependency is intended. If the equipment simply nests, the hierarchy already covers the order.',relatedEquipmentId:target.equipmentId,relationship:{kind:'dependency',nodes:[auditRelNode(row,'this'),auditRelNode(target,'dependency')]}});
       }
     }
     /* --- item masters ---
@@ -2252,8 +2288,8 @@ function runSsmAudit(snapshot,options={}){
   if(SSM_AUDIT_RULES.milestoneLevel.enabled)for(const row of rows)for(const issue of auditMilestoneLevelIssues(row)){checks++;add(SSM_AUDIT_RULES.milestoneLevel,'warning',row,{field:issue.field,why:`${issue.field} holds an identifier written for ${issue.foundLevel}.`,actual:issue.actual,expected:issue.expected,recommendation:'Move the milestone to the right field and confirm the pair.'});}
   if(SSM_AUDIT_RULES.milestoneCohort.enabled)for(const candidate of auditMilestoneCohortCandidates(rows)){checks++;milestoneCohortRows.add(candidate.row);add(SSM_AUDIT_RULES.milestoneCohort,'warning',candidate.row,{field:'Milestones',why:`${candidate.agreementCount.toLocaleString()} comparable rows in the same building and system use a different milestone pair.`,actual:`L1: ${candidate.row.milestoneParent}; L2: ${candidate.row.milestone}`,expected:`L1: ${candidate.expectedParent}; L2: ${candidate.expectedMilestone}`,recommendation:'Confirm this row is really an exception; otherwise match its neighbours.'});}
   if(SSM_AUDIT_RULES.milestoneBranch.enabled)for(const candidate of auditMilestoneBranchCandidates(rows)){if(milestoneCohortRows.has(candidate.row))continue;checks++;add(SSM_AUDIT_RULES.milestoneBranch,'warning',candidate.row,{field:'Milestones',why:`Its parent and ${candidate.agreementCount.toLocaleString()} siblings share one milestone pair; this row differs.`,actual:`L1: ${candidate.row.milestoneParent}; L2: ${candidate.row.milestone}`,expected:`L1: ${candidate.expectedParent}; L2: ${candidate.expectedMilestone}`,recommendation:'Confirm the difference is intended; otherwise match the branch.',relatedEquipmentId:candidate.parent.equipmentId});}
-  for(const cycle of auditCyclePaths(nodes,parentEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.parentCycle,'blocker',row,{field:'Closest Parent',why:'Following Closest Parent upward comes back to this equipment.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'A hierarchy with no loops',recommendation:'Change one Closest Parent in this loop.'});}
-  for(const cycle of auditCyclePaths(nodes,precedenceEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.precedenceCycle,'blocker',row,{field:'Dependencies',why:'These parent and dependency links make the startup order go in a circle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'A startup order with no loops',recommendation:'Break the circle by removing or moving one of these links.'});}
+  for(const cycle of auditCyclePaths(nodes,parentEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.parentCycle,'blocker',row,{field:'Closest Parent',why:'Following Closest Parent upward comes back to this equipment.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'A hierarchy with no loops',recommendation:'Change one Closest Parent in this loop.',relationship:{kind:'loop',nodes:cycle.map((id,index)=>auditRelNode(rowsById.get(id),index===0?'this':'step',id))}});}
+  for(const cycle of auditCyclePaths(nodes,precedenceEdges)){checks++;const row=rowsById.get(cycle[0]);add(SSM_AUDIT_RULES.precedenceCycle,'blocker',row,{field:'Dependencies',why:'These parent and dependency links make the startup order go in a circle.',actual:cycle.map(id=>rowsById.get(id)?.equipmentId||id).join(' → '),expected:'A startup order with no loops',recommendation:'Break the circle by removing or moving one of these links.',relationship:{kind:'loop',nodes:cycle.map((id,index)=>auditRelNode(rowsById.get(id),index===0?'this':'step',id))}});}
   /* --- headers: rows used as parents that carry a Blank Item Master --- */
   const parentRefCounts=new Map();for(const row of rows){const p=auditNormId(row.closestParent);if(p)parentRefCounts.set(p,(parentRefCounts.get(p)||0)+1);}
   for(const row of rows){
@@ -2287,14 +2323,14 @@ function runSsmAudit(snapshot,options={}){
     /* SOP nesting conventions — the tag's UPN is the guiderail */
     const tagUpns=extoRev21UpnCandidates(row.equipmentId),tagUpn=tagUpns.length===1?tagUpns[0]:'';
     if(auditIsInstrument(row)&&SSM_AUDIT_RULES.instrumentUpn.enabled&&tagUpn){checks++;
-      if(parent&&rowUpn(parent)&&rowUpn(parent)!==tagUpn&&!isHeaderRow(parent))add(SSM_AUDIT_RULES.instrumentUpn,'error',row,{field:'Closest Parent',why:`This instrument’s tag carries UPN ${tagUpn}, but it is nested under equipment on UPN ${parent.upn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`Equipment in UPN ${tagUpn}`,recommendation:`Nest it under the equipment it serves in UPN ${tagUpn}.`,relatedEquipmentId:parent.equipmentId});
+      if(parent&&rowUpn(parent)&&rowUpn(parent)!==tagUpn&&!isHeaderRow(parent))add(SSM_AUDIT_RULES.instrumentUpn,'error',row,{field:'Closest Parent',why:`This instrument’s tag carries UPN ${tagUpn}, but it is nested under equipment on UPN ${parent.upn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`Equipment in UPN ${tagUpn}`,recommendation:`Nest it under the equipment it serves in UPN ${tagUpn}.`,relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});
       else if(parentIsSystem&&!auditIsControlValve(row))add(SSM_AUDIT_RULES.instrumentUpn,'warning',row,{field:'Closest Parent',why:'This instrument sits directly under the System Name instead of the equipment it belongs to.',actual:row.closestParent,expected:`Equipment (or an approved roll-up header) in UPN ${tagUpn}`,recommendation:'Nest it under the equipment or skid it is mounted on.'});
     }
     if(auditIsInstrument(row)&&SSM_AUDIT_RULES.untiedInstrumentRollup.enabled&&tagUpn&&parent&&isHeaderRow(parent)&&auditIsPipingRollup(parent)&&rowUpn(parent)&&rowUpn(parent)!==tagUpn){checks++;
-      add(SSM_AUDIT_RULES.untiedInstrumentRollup,'error',row,{field:'Closest Parent',why:`This instrument sits under a piping/duct roll-up on UPN ${parent.upn}, but its tag carries UPN ${tagUpn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`A roll-up or equipment in UPN ${tagUpn}`,recommendation:`Move it to the roll-up for UPN ${tagUpn}.`,relatedEquipmentId:parent.equipmentId});}
+      add(SSM_AUDIT_RULES.untiedInstrumentRollup,'error',row,{field:'Closest Parent',why:`This instrument sits under a piping/duct roll-up on UPN ${parent.upn}, but its tag carries UPN ${tagUpn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`A roll-up or equipment in UPN ${tagUpn}`,recommendation:`Move it to the roll-up for UPN ${tagUpn}.`,relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});}
     if(auditIsControlValve(row)&&SSM_AUDIT_RULES.controlValveParent.enabled&&parentIsSystem){checks++;add(SSM_AUDIT_RULES.controlValveParent,'warning',row,{field:'Closest Parent',why:'This control valve sits directly under the System Name.',actual:row.closestParent,expected:'The equipment the valve serves',recommendation:'Nest the valve under its equipment.'});}
     if(auditIsRoomSensor(row)&&SSM_AUDIT_RULES.roomSensorParent.enabled&&(parentIsSystem||(parent&&auditNormId(parent.discipline)==='ROOM/AREA/BAY-READY'))){checks++;add(SSM_AUDIT_RULES.roomSensorParent,'warning',row,{field:'Closest Parent',why:'This room sensor is placed under the room or area rather than the equipment it controls.',actual:row.closestParent,expected:'The equipment this sensor controls (for example the air handler serving the room)',recommendation:'Nest the sensor under the equipment it controls.'});}
-    if(auditIsLcp(row)&&SSM_AUDIT_RULES.lcpPlacement.enabled&&parent&&rowUpn(parent)&&upn&&rowUpn(parent)!==upn){checks++;add(SSM_AUDIT_RULES.lcpPlacement,'error',row,{field:'Closest Parent',why:`This local control panel is nested under equipment on UPN ${parent.upn}, but it is on UPN ${row.upn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`Its own equipment or skid in UPN ${row.upn}, or the System Name`,recommendation:'Nest the LCP under the equipment or skid it serves in its own UPN.',relatedEquipmentId:parent.equipmentId});}
+    if(auditIsLcp(row)&&SSM_AUDIT_RULES.lcpPlacement.enabled&&parent&&rowUpn(parent)&&upn&&rowUpn(parent)!==upn){checks++;add(SSM_AUDIT_RULES.lcpPlacement,'error',row,{field:'Closest Parent',why:`This local control panel is nested under equipment on UPN ${parent.upn}, but it is on UPN ${row.upn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`Its own equipment or skid in UPN ${row.upn}, or the System Name`,recommendation:'Nest the LCP under the equipment or skid it serves in its own UPN.',relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});}
     if(auditIsFmsIo(row)&&SSM_AUDIT_RULES.fmsIoUnderVfd.enabled){checks++;const underVfd=parent&&auditIsVfd(parent),hasPlc=dependencies.some(auditIsPlc)||dependencies.some(auditIsController);
       if(!underVfd||!hasPlc)add(SSM_AUDIT_RULES.fmsIoUnderVfd,'warning',row,{field:underVfd?'Dependencies':'Closest Parent',why:!underVfd?'This FMS hardwired I/O is not nested under a VFD.':'This FMS hardwired I/O does not list its PLC as a dependency.',actual:!underVfd?(row.closestParent||'Blank'):(row.dependencies||'Blank'),expected:!underVfd?'The VFD it is wired to':'The controlling PLC as a dependency',recommendation:!underVfd?'Nest it under its VFD, with the PLC as a dependency.':'Add the PLC as a dependency.'});}
   }
@@ -2829,7 +2865,7 @@ const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDI
 const AUDIT_EXPORT_ACTIONED_NOTE='Type Y in the Actioned column on an equipment’s first line when it is closed out. Index and Dashboard progress update from those marks.';
 const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',muted:'8A96A3',repeat:'AAB4BE',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA'});
 const AUDIT_EXPORT_NEST_FILLS=Object.freeze(['FFFFFF','EDF3F8','DCE8F1','CBDCEA','B9D0E3','A8C5DC','97BAD5']);
-const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'BLOCKER',error:'ERROR',warning:'WARNING',info:'ADVISORY'});
+const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:"WON'T UPLOAD",error:'BREAKS A RULE',warning:'CHECK THIS',info:'NOTE'});
 const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'8C1D18',color:'FFFFFF'},error:{fill:'D9531E',color:'FFFFFF'},warning:{fill:'F2B441',color:'40320A'},info:{fill:'6E8598',color:'FFFFFF'}});
 const AUDIT_EXPORT_MILESTONE_HEADERS=Object.freeze(['Actioned','Nest','Equipment ID','Description','Closest Parent','Discipline','UPN','System Name','Severity','Finding','Why','What to do','Actioned By','Note']);
 const AUDIT_EXPORT_MILESTONE_WIDTHS=Object.freeze([10,6,36,40,28,24,8,30,12,32,54,54,16,30]);
@@ -2999,7 +3035,7 @@ function auditExportDashboardSheet(result,groups,sessionName,generated){
     [`Generated ${auditExportDate(generated)}`,'','','','','',''],
     [`Standard: ${clean(result&&result.standard)}`,'','','','','',''],
     ['','','','','','',''],
-    ['Rows audited','Findings','Blockers','Errors','Warnings','Advisories','Actioned'],
+    ['Rows audited','Findings',"Won't upload",'Breaks a rule','Check this','Notes','Actioned'],
     [summary.rows||0,summary.findings||0,severity.blocker||0,severity.error||0,severity.warning||0,severity.info||0,0],
     ['','','','','','',''],
     ['Milestone','Equipment','Findings','Actioned','Progress','%'],
@@ -3310,8 +3346,8 @@ const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadat
 const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const RULE_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
 const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.'};
-const SEVERITY_LABELS={blocker:'Blocker',error:'Error',warning:'Warning',info:'Advisory'};
-const SEVERITY_PLURALS={blocker:'Blockers',error:'Errors',warning:'Warnings',info:'Advisories'};
+const SEVERITY_LABELS={blocker:"Won't upload",error:'Breaks a rule',warning:'Check this',info:'Note'};
+const SEVERITY_PLURALS={blocker:"Won't upload",error:'Breaks a rule',warning:'Check this',info:'Notes'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
 let auditOutsideHandler=null,auditEscapeHandler=null,drawerTrapCleanup=null,searchDebounceTimer=0;
 
@@ -3334,7 +3370,7 @@ function navBadges(id){
   const result=S.session&&S.session.result,comparison=S.comparison&&S.comparison.result;
   if(id==='audit'&&result){
     const blockers=result.summary.severity.blocker;
-    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} blocking">${blockers.toLocaleString()}</b>`:''}`;
+    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} won't upload">${blockers.toLocaleString()}</b>`:''}`;
   }
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return `<b class="nav-count">${S.session.snapshot.rows.length.toLocaleString()}</b>`;
   if(id==='compare'&&comparison)return `<b class="nav-count">${(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems).toLocaleString()}</b>`;
@@ -3644,7 +3680,7 @@ function filterMenu(result){
 }
 function sortOptions(){const options=[['severity-desc','Most serious first'],['severity-asc','Least serious first'],['equipment-asc','Equipment A to Z'],['equipment-desc','Equipment Z to A'],['rule-asc','Check A to Z'],['rule-desc','Check Z to A'],['row-asc','Row, low to high'],['row-desc','Row, high to low']];return options.map(([value,label])=>`<option value="${value}" ${S.session.sort===value?'selected':''}>${label}</option>`).join('');}
 function groupOptions(){const options=[['none','No grouping'],['rule','Group by check'],['milestone','Group by L2 milestone']];return options.map(([value,label])=>`<option value="${value}" ${S.session.groupBy===value?'selected':''}>${label}</option>`).join('');}
-function statusMarkup(summary){const label=summary.status==='blocked'?`${summary.severity.blocker.toLocaleString()} blocking`:summary.status==='review'?'Needs review':'Looks clean';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
+function statusMarkup(summary){const blockers=summary.severity.blocker||0,label=summary.status==='blocked'?`Won't upload &middot; ${blockers.toLocaleString()} ${blockers===1?'row':'rows'}`:summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
 
 function renderAuditResult(navigate){
   const result=S.session&&S.session.result;if(!result){navigate('upload');return;}
@@ -3732,6 +3768,62 @@ function registryContextHtml(row){
   if(!cells)return '';
   return `<section class="finding-section"><h4>The registry row</h4><dl class="finding-context">${cells}</dl></section>`;
 }
+/* The engine attaches `finding.relationship` to relationship-shaped findings so the
+   drawer can draw the link instead of only describing it. The Found/Expected block
+   stays underneath — it remains the archival record of what was in the workbook. */
+const RELATIONSHIP_LEGENDS={parent:'The equipment at the bottom is nested under the one at the top.',dependency:'The item on the left must be ready before the one on the right.',loop:'Following these links returns to where it started.'};
+function relationshipDiffers(a,b){const left=auditNormId(a),right=auditNormId(b);return !!(left&&right&&left!==right);}
+function relationshipMetaHtml(node,diff){
+  const upn=clean(node&&node.upn),discipline=clean(node&&node.discipline);
+  if(!upn&&!discipline)return '';
+  const parts=[];
+  if(upn)parts.push(`UPN <span class="rel-value ${diff&&diff.upn?'is-diff':''}">${esc(upn)}</span>`);
+  if(discipline)parts.push(`<span class="rel-value ${diff&&diff.discipline?'is-diff':''}">${esc(discipline)}</span>`);
+  const pills=`${diff&&diff.upn?'<span class="rel-pill">different UPN</span>':''}${diff&&diff.discipline?'<span class="rel-pill">different discipline</span>':''}`;
+  return `<span class="rel-node-meta">${parts.join(' &middot; ')}${pills}</span>`;
+}
+function relationshipNodeHtml(node,roleLabel,roleClass,diff){
+  const tag=clean(node&&node.tag);
+  return `<div class="rel-node ${roleClass||''}">${roleLabel?`<span class="rel-node-role">${esc(roleLabel)}</span>`:''}<span class="rel-node-tag">${tag?copyTagHtml(tag):'<span class="muted">Not in this registry</span>'}</span>${relationshipMetaHtml(node,diff)}</div>`;
+}
+function relationshipParentHtml(self,parent){
+  const diff={upn:relationshipDiffers(self&&self.upn,parent&&parent.upn),discipline:relationshipDiffers(self&&self.discipline,parent&&parent.discipline)};
+  return `<div class="rel-diagram rel-parent">${relationshipNodeHtml(parent,'Closest Parent','role-parent',diff)}
+    <div class="rel-link"><span class="rel-line"></span><span class="rel-link-label">nests under</span></div>
+    ${relationshipNodeHtml(self,'This equipment','role-this')}</div>`;
+}
+function relationshipDependencyHtml(self,dependency){
+  return `<div class="rel-diagram rel-dependency">${relationshipNodeHtml(dependency,'Dependency (starts first)','role-dependency')}
+    <span class="rel-arrow" aria-hidden="true">${ic('arrow-right')}</span>
+    ${relationshipNodeHtml(self,'This equipment','role-this')}</div>`;
+}
+/* The engine's cycle path closes on itself (A → B → C → A). The repeated tail is
+   what the "back to 1" arrow already says, so it is dropped from the numbered list. */
+function relationshipLoopNodes(nodes){
+  const first=nodes[0],tail=nodes[nodes.length-1];
+  return nodes.length>2&&auditNormId(first&&first.tag)===auditNormId(tail&&tail.tag)?nodes.slice(0,-1):nodes;
+}
+function relationshipLoopHtml(input){
+  const nodes=relationshipLoopNodes(input),last=nodes.length-1;
+  return `<ol class="rel-diagram rel-loop">${nodes.map((node,index)=>{
+    const start=index===0,tag=clean(node&&node.tag);
+    const connector=index<last?`<span class="rel-loop-arrow" aria-hidden="true">${ic('arrow-down')}</span>`:`<span class="rel-loop-arrow back">${ic('rotate-ccw')}back to 1</span>`;
+    return `<li class="rel-loop-step ${start?'is-start':''}"><span class="rel-step-num">${index+1}</span>
+      <div class="rel-node compact ${start?'role-this':'role-step'}">${start?'<span class="rel-node-role">This equipment (start of loop)</span>':''}<span class="rel-node-tag">${tag?copyTagHtml(tag):'<span class="muted">Not in this registry</span>'}</span>${relationshipMetaHtml(node)}</div>
+      ${connector}</li>`;
+  }).join('')}</ol>`;
+}
+function relationshipDiagramHtml(finding){
+  const relationship=finding&&finding.relationship,nodes=relationship&&Array.isArray(relationship.nodes)?relationship.nodes:null;
+  if(!nodes||!nodes.length)return '';
+  const kind=relationship.kind,self=nodes.find(node=>node.role==='this')||nodes[0];
+  let body='';
+  if(kind==='parent'){const parent=nodes.find(node=>node.role==='parent')||nodes[1];if(!parent)return '';body=relationshipParentHtml(self,parent);}
+  else if(kind==='dependency'){const dependency=nodes.find(node=>node.role==='dependency')||nodes[1];if(!dependency)return '';body=relationshipDependencyHtml(self,dependency);}
+  else if(kind==='loop'){if(nodes.length<2)return '';body=relationshipLoopHtml(nodes);}
+  else return '';
+  return `<section class="finding-section rel-section"><h4>How these are linked</h4>${body}<p class="rel-legend">Reading this: ${esc(RELATIONSHIP_LEGENDS[kind]||'')}</p></section>`;
+}
 function openFinding(id,opener){
   const finding=S.session.result.findings.find(item=>item.id===id);if(!finding)return;
   const list=filteredFindings(),position=list.findIndex(item=>item.id===id);
@@ -3743,6 +3835,7 @@ function openFinding(id,opener){
     <div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span>${finding.equipmentId?`<span class="audit-drawer-tag">${copyTagHtml(finding.equipmentId)}</span>`:'<span class="audit-rule-source">Registry-wide</span>'}</div>
     ${findingSection('Why this was flagged',`<p class="finding-why">${esc(finding.why)}</p>`)}
     ${findingSection('What must be true',`<p class="finding-statement">${esc(finding.rule.statement)}</p><span class="finding-rule-name">${esc(finding.rule.title)} &middot; ${esc(sourceLabel)} &middot; ${esc(confidenceLabel)}</span>`,'muted-section')}
+    ${relationshipDiagramHtml(finding)}
     <section class="finding-section"><h4>What we found and what we expected</h4><div class="finding-compare"><div class="found"><span>Found</span><p>${esc(actual)||'Blank'}</p></div><div class="expected"><span>Expected</span><p>${esc(expected)||'—'}</p></div></div></section>
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
@@ -4027,14 +4120,15 @@ function wireComparisonResult(navigate){
 /* src/boot.js */
 const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
 const GUIDE_SECTIONS=[
-  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit',body:'<p>Select a completed Cx Registry workbook. SSM Audit finds the registry tab automatically, reads it in local browser memory, and evaluates every populated equipment row.</p><ol><li>Choose or drop an .xlsx or .xls workbook.</li><li>Wait for the local audit to complete.</li><li>Start with Blockers, then work through Errors and Warnings.</li></ol>'},
-  {id:'checks',label:'What is checked',icon:'check-check',title:'Standards coverage',body:'<p>The auditor checks an existing registry for internal integrity, SSM SOP requirements, and confidence-rated commissioning relationships.</p><ol><li>Parent-child structure, roots, missing parents, self-parenting, and cycles.</li><li>UPN and Discipline crossings, System Name consistency, and metadata alignment.</li><li>Dependencies, electrical and control paths, equipment-role patterns, and organizational headers.</li></ol><div class="guide-note">'+ic('info')+'Current upload-template vocabulary is checked before export in SSManagement, not against an already-uploaded registry.</div>'},
-  {id:'hierarchy',label:'SSM hierarchy',icon:'list-tree',title:'Explore one registry as a tree',body:'<p>Choose SSM hierarchy in the menu after an audit to walk the registry from Building down through Discipline, System Name, and Equipment.</p><ol><li>Search tags, descriptions, parents, or dependencies — matches are highlighted and opened for you.</li><li>Filter to a Building, Discipline, or System, or switch on Findings only to hide the branches that are already clean.</li><li>Open an equipment row to see its metadata, closest parent, dependencies, source row, and findings.</li></ol><div class="guide-note">'+ic('info')+'The tree shows the registry exactly as uploaded. It never quietly repairs a relationship the audit has flagged.</div>'},
-  {id:'rules',label:'Rule catalog',icon:'check-check',title:'Rules used by the audit',body:ruleGuide()},
-  {id:'findings',label:'Understanding findings',icon:'triangle-alert',title:'Read each finding as evidence',body:'<p>The headline of every finding is what was actually seen. Open a row and you also get the rule behind it, what was found against what was expected, what to do about it, and the registry row it came from.</p><ol><li>Click a severity chip above the table to show or hide that level.</li><li>Use Filters for source, topic, or a single check, and Group by to gather findings under one check or one L2 milestone.</li><li>Arrow keys move down the list, Enter opens a finding, and Escape closes it.</li></ol>'},
-  {id:'report',label:'Exporting results',icon:'file-down',title:'Create a resolution report',body:'<p>Export report creates an Excel workbook containing the audit summary, every finding, and a rule-level count. The report is generated locally and can be used to assign and track corrections.</p>'},
-  {id:'compare',label:'Project comparison',icon:'square-stack',title:'Compare with a completed project',body:'<p>Project Comparison audits the target registry normally, then aligns both registries by UPN for a separate side-by-side review. Building values are excluded so project locations do not create false differences.</p><ol><li>Choose the registry to audit and a completed-project reference.</li><li>Select a UPN to compare equipment nesting, organizational headers, dependencies, and I&amp;C placement.</li><li>Treat differences as review prompts. The completed project is precedent, not an automatic rule.</li></ol><div class="guide-note">'+ic('lock')+'Both workbooks stay in browser memory for this session. The reference is never saved or used to change audit rules.</div>'},
-  {id:'privacy',label:'Privacy',icon:'lock',title:'The registry stays on this device',body:'<p>The selected workbook is never uploaded, persisted, or used to learn rules. Refreshing or closing the HTML clears the audit session.</p><div class="guide-note">'+ic('info')+'The only automatic network request is an anonymous check for a newer SSM Audit release when the HTML opens or refreshes.</div>'},
+  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit in three steps',body:'<p>Choose a completed Cx Registry workbook. SSM Audit finds the registry tab on its own, reads it in this browser only, and checks every equipment row.</p><ol><li>Drop an .xlsx or .xls workbook on the upload area, or click <b>Choose workbook</b>.</li><li>Wait a moment — 20,000 rows take about a second.</li><li>Start with <b>Won\'t upload</b>, then <b>Breaks a rule</b>, then <b>Check this</b>. <b>Notes</b> are for review at your pace.</li></ol><div class="guide-note">'+ic('lock')+'The workbook is never uploaded or saved. Closing or refreshing the page clears it.</div>'},
+  {id:'around',label:'Finding your way',icon:'panel-left-open',title:'The workspace',body:'<p>The menu on the left moves between the four views. Counts on each item show what is waiting there.</p><ol><li><b>Audit findings</b> — every issue, most serious first. Filter by severity with the chips, group by check or by L2 phase, search tags and reasons, or open <b>Filters</b> for source and topic.</li><li><b>SSM hierarchy</b> — the registry as a tree from Building down to equipment, with a finding count on every branch. Turn on <b>Findings only</b> to hide clean branches.</li><li><b>Compare projects</b> — line one registry up against a completed one, UPN by UPN.</li><li><b>Rules</b> — every check in plain language, with how many times it fired.</li></ol><p>Use <b>Collapse</b> at the bottom of the menu for more room, or the expand button on any view for a full-screen table.</p>'},
+  {id:'severity',label:'What the colors mean',icon:'triangle-alert',title:'Four levels, four meanings',body:'<p>Every finding has one of four levels. They are not just degrees of bad — each one tells you what kind of problem it is.</p><ol><li><b>Won\'t upload</b> (red) — the registry cannot be uploaded as it stands, or the row makes no sense: a duplicate tag, a blank parent, a UPN or System Name that is not on the approved list, or a loop.</li><li><b>Breaks a rule</b> (orange) — it would upload, but it breaks an SSM SOP rule: a parent in another UPN, a dependency that cannot be found, a VESDA with no fire alarm panel.</li><li><b>Check this</b> (amber) — a strong pattern says something is off; an engineer should look. Most commissioning-logic and SOP nesting checks live here.</li><li><b>Note</b> (grey-blue) — worth knowing, not necessarily wrong: a same-system dependency in a mechanical discipline, a milestone not yet assigned, an Item Master still on a site prefix.</li></ol>'},
+  {id:'reading',label:'Reading a finding',icon:'file-text',title:'Every finding explains itself',body:'<p>Click any row to open it. Top to bottom you will see:</p><ol><li><b>Why this was flagged</b> — the plain-language reason, written for someone picking this up cold.</li><li><b>What must be true</b> — the rule behind it, and where the rule comes from (SSM SOP, Registry Integrity, or Commissioning Logic).</li><li><b>The relationship</b> — for parent, dependency, and loop findings, a small diagram that labels which tag is this equipment, which is its parent or dependency, and the order of a loop.</li><li><b>Found / Expected</b> and <b>What to do</b> — the specific fix.</li><li><b>The registry row</b> — description, parent, UPN, System Name, milestones, Item Master, dependencies.</li></ol><p><b>Show in hierarchy</b> jumps to that equipment in the tree. <b>Previous</b> and <b>Next</b> walk the current filtered list.</p>'},
+  {id:'checks',label:'What is checked',icon:'check-check',title:'Three sources of truth',body:'<p>Checks come from three places, and each finding says which.</p><ol><li><b>Registry Integrity</b> — the registry agrees with itself and with the approved Rev21 upload lists: one row per tag, resolvable parents, UPNs and System Names from the approved values, I&amp;C rows on the approved controls discipline.</li><li><b>SSM SOP</b> — how equipment nests and depends: a child stays in its parent\'s UPN and discipline; anything crossing UPNs is a dependency, not a parent; instruments nest under equipment in the UPN their tag carries; a VFD sits under what it drives with its panel and PLC as dependencies; LCPs sit with their skid; control valves and room sensors sit under the equipment they serve; headers carry a Blank Item Master and no dependencies; L2 milestones name their UPN; Item Masters use the VF standard.</li><li><b>Commissioning Logic</b> — expected relationships: driven and control equipment trace back to power, RIOs name their controller, heat trace follows its transformer, VESDA depends on its fire alarm panel.</li></ol>'+ruleGuide()},
+  {id:'hierarchy',label:'SSM hierarchy',icon:'list-tree',title:'Explore the registry as a tree',body:'<p>Building &rarr; Discipline &rarr; System Name &rarr; equipment, exactly as uploaded. Nothing is silently repaired.</p><ol><li>Search tags, descriptions, parents, or dependencies; matches are highlighted and their branches open.</li><li>Filter to a building, discipline, or system. <b>Findings only</b> collapses to branches that have something to fix.</li><li>Rows used as organizational headers (a Blank Item Master that other equipment nests under) are marked as headers.</li><li>Open any equipment for its metadata, relationships, source row, and findings.</li></ol>'},
+  {id:'report',label:'The Excel report',icon:'file-down',title:'Export a report you can work from',body:'<p><b>Export</b> in the menu creates a workbook built for actioning, not just reading:</p><ol><li><b>Dashboard</b> — totals, and a progress bar with a live percentage for every L2 phase.</li><li><b>Index</b> — one row per phase, each linked to its own tab; every tab links back.</li><li><b>One tab per L2 phase</b> — every piece of equipment in that phase as an indented tree with its nest level, one line per finding with the reason and what to do, and an <b>Actioned</b> column. Type <b>Y</b> there and the Index and Dashboard update.</li><li><b>All Findings</b> and <b>Rules</b> — the flat list and the plain-language rulebook.</li></ol><div class="guide-note">'+ic('info')+'Filters in the app do not change the report — it always contains everything.</div>'},
+  {id:'compare',label:'Project comparison',icon:'square-stack',title:'Compare with a completed project',body:'<p>Audit a registry as usual, then line it up against a completed project by UPN. Buildings are ignored so different sites do not create false differences.</p><ol><li>Choose the registry to audit and a completed project as the reference.</li><li>Pick a UPN to compare nesting, headers, dependencies, and I&amp;C placement.</li><li>Treat differences as prompts. The completed project is precedent, not a rule.</li></ol><div class="guide-note">'+ic('lock')+'Both workbooks stay in this browser for the session only. The reference never changes the checks.</div>'},
+  {id:'privacy',label:'Privacy',icon:'lock',title:'The registry stays on this device',body:'<p>Nothing you load is uploaded, saved, or used to learn future behavior. The only network request is one anonymous check for a newer SSM Audit release when the page opens.</p>'},
 ];
 let activeGuide='start';
 let guideOpener=null;

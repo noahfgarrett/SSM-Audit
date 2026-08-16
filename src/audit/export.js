@@ -19,7 +19,7 @@ const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDI
 const AUDIT_EXPORT_ACTIONED_NOTE='Type Y in the Actioned column on an equipment’s first line when it is closed out. Index and Dashboard progress update from those marks.';
 const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',muted:'8A96A3',repeat:'AAB4BE',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA'});
 const AUDIT_EXPORT_NEST_FILLS=Object.freeze(['FFFFFF','EDF3F8','DCE8F1','CBDCEA','B9D0E3','A8C5DC','97BAD5']);
-const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'BLOCKER',error:'ERROR',warning:'WARNING',info:'ADVISORY'});
+const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:"WON'T UPLOAD",error:'BREAKS A RULE',warning:'CHECK THIS',info:'NOTE'});
 const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'8C1D18',color:'FFFFFF'},error:{fill:'D9531E',color:'FFFFFF'},warning:{fill:'F2B441',color:'40320A'},info:{fill:'6E8598',color:'FFFFFF'}});
 const AUDIT_EXPORT_MILESTONE_HEADERS=Object.freeze(['Actioned','Nest','Equipment ID','Description','Closest Parent','Discipline','UPN','System Name','Severity','Finding','Why','What to do','Actioned By','Note']);
 const AUDIT_EXPORT_MILESTONE_WIDTHS=Object.freeze([10,6,36,40,28,24,8,30,12,32,54,54,16,30]);
@@ -189,7 +189,7 @@ function auditExportDashboardSheet(result,groups,sessionName,generated){
     [`Generated ${auditExportDate(generated)}`,'','','','','',''],
     [`Standard: ${clean(result&&result.standard)}`,'','','','','',''],
     ['','','','','','',''],
-    ['Rows audited','Findings','Blockers','Errors','Warnings','Advisories','Actioned'],
+    ['Rows audited','Findings',"Won't upload",'Breaks a rule','Check this','Notes','Actioned'],
     [summary.rows||0,summary.findings||0,severity.blocker||0,severity.error||0,severity.warning||0,severity.info||0,0],
     ['','','','','','',''],
     ['Milestone','Equipment','Findings','Actioned','Progress','%'],

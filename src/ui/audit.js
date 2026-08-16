@@ -19,8 +19,8 @@ const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadat
 const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const RULE_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
 const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.'};
-const SEVERITY_LABELS={blocker:'Blocker',error:'Error',warning:'Warning',info:'Advisory'};
-const SEVERITY_PLURALS={blocker:'Blockers',error:'Errors',warning:'Warnings',info:'Advisories'};
+const SEVERITY_LABELS={blocker:"Won't upload",error:'Breaks a rule',warning:'Check this',info:'Note'};
+const SEVERITY_PLURALS={blocker:"Won't upload",error:'Breaks a rule',warning:'Check this',info:'Notes'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
 let auditOutsideHandler=null,auditEscapeHandler=null,drawerTrapCleanup=null,searchDebounceTimer=0;
 
@@ -43,7 +43,7 @@ function navBadges(id){
   const result=S.session&&S.session.result,comparison=S.comparison&&S.comparison.result;
   if(id==='audit'&&result){
     const blockers=result.summary.severity.blocker;
-    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} blocking">${blockers.toLocaleString()}</b>`:''}`;
+    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} won't upload">${blockers.toLocaleString()}</b>`:''}`;
   }
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return `<b class="nav-count">${S.session.snapshot.rows.length.toLocaleString()}</b>`;
   if(id==='compare'&&comparison)return `<b class="nav-count">${(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems).toLocaleString()}</b>`;
@@ -353,7 +353,7 @@ function filterMenu(result){
 }
 function sortOptions(){const options=[['severity-desc','Most serious first'],['severity-asc','Least serious first'],['equipment-asc','Equipment A to Z'],['equipment-desc','Equipment Z to A'],['rule-asc','Check A to Z'],['rule-desc','Check Z to A'],['row-asc','Row, low to high'],['row-desc','Row, high to low']];return options.map(([value,label])=>`<option value="${value}" ${S.session.sort===value?'selected':''}>${label}</option>`).join('');}
 function groupOptions(){const options=[['none','No grouping'],['rule','Group by check'],['milestone','Group by L2 milestone']];return options.map(([value,label])=>`<option value="${value}" ${S.session.groupBy===value?'selected':''}>${label}</option>`).join('');}
-function statusMarkup(summary){const label=summary.status==='blocked'?`${summary.severity.blocker.toLocaleString()} blocking`:summary.status==='review'?'Needs review':'Looks clean';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
+function statusMarkup(summary){const blockers=summary.severity.blocker||0,label=summary.status==='blocked'?`Won't upload &middot; ${blockers.toLocaleString()} ${blockers===1?'row':'rows'}`:summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
 
 export function renderAuditResult(navigate){
   const result=S.session&&S.session.result;if(!result){navigate('upload');return;}
@@ -441,6 +441,62 @@ function registryContextHtml(row){
   if(!cells)return '';
   return `<section class="finding-section"><h4>The registry row</h4><dl class="finding-context">${cells}</dl></section>`;
 }
+/* The engine attaches `finding.relationship` to relationship-shaped findings so the
+   drawer can draw the link instead of only describing it. The Found/Expected block
+   stays underneath — it remains the archival record of what was in the workbook. */
+const RELATIONSHIP_LEGENDS={parent:'The equipment at the bottom is nested under the one at the top.',dependency:'The item on the left must be ready before the one on the right.',loop:'Following these links returns to where it started.'};
+function relationshipDiffers(a,b){const left=auditNormId(a),right=auditNormId(b);return !!(left&&right&&left!==right);}
+function relationshipMetaHtml(node,diff){
+  const upn=clean(node&&node.upn),discipline=clean(node&&node.discipline);
+  if(!upn&&!discipline)return '';
+  const parts=[];
+  if(upn)parts.push(`UPN <span class="rel-value ${diff&&diff.upn?'is-diff':''}">${esc(upn)}</span>`);
+  if(discipline)parts.push(`<span class="rel-value ${diff&&diff.discipline?'is-diff':''}">${esc(discipline)}</span>`);
+  const pills=`${diff&&diff.upn?'<span class="rel-pill">different UPN</span>':''}${diff&&diff.discipline?'<span class="rel-pill">different discipline</span>':''}`;
+  return `<span class="rel-node-meta">${parts.join(' &middot; ')}${pills}</span>`;
+}
+function relationshipNodeHtml(node,roleLabel,roleClass,diff){
+  const tag=clean(node&&node.tag);
+  return `<div class="rel-node ${roleClass||''}">${roleLabel?`<span class="rel-node-role">${esc(roleLabel)}</span>`:''}<span class="rel-node-tag">${tag?copyTagHtml(tag):'<span class="muted">Not in this registry</span>'}</span>${relationshipMetaHtml(node,diff)}</div>`;
+}
+function relationshipParentHtml(self,parent){
+  const diff={upn:relationshipDiffers(self&&self.upn,parent&&parent.upn),discipline:relationshipDiffers(self&&self.discipline,parent&&parent.discipline)};
+  return `<div class="rel-diagram rel-parent">${relationshipNodeHtml(parent,'Closest Parent','role-parent',diff)}
+    <div class="rel-link"><span class="rel-line"></span><span class="rel-link-label">nests under</span></div>
+    ${relationshipNodeHtml(self,'This equipment','role-this')}</div>`;
+}
+function relationshipDependencyHtml(self,dependency){
+  return `<div class="rel-diagram rel-dependency">${relationshipNodeHtml(dependency,'Dependency (starts first)','role-dependency')}
+    <span class="rel-arrow" aria-hidden="true">${ic('arrow-right')}</span>
+    ${relationshipNodeHtml(self,'This equipment','role-this')}</div>`;
+}
+/* The engine's cycle path closes on itself (A → B → C → A). The repeated tail is
+   what the "back to 1" arrow already says, so it is dropped from the numbered list. */
+function relationshipLoopNodes(nodes){
+  const first=nodes[0],tail=nodes[nodes.length-1];
+  return nodes.length>2&&auditNormId(first&&first.tag)===auditNormId(tail&&tail.tag)?nodes.slice(0,-1):nodes;
+}
+function relationshipLoopHtml(input){
+  const nodes=relationshipLoopNodes(input),last=nodes.length-1;
+  return `<ol class="rel-diagram rel-loop">${nodes.map((node,index)=>{
+    const start=index===0,tag=clean(node&&node.tag);
+    const connector=index<last?`<span class="rel-loop-arrow" aria-hidden="true">${ic('arrow-down')}</span>`:`<span class="rel-loop-arrow back">${ic('rotate-ccw')}back to 1</span>`;
+    return `<li class="rel-loop-step ${start?'is-start':''}"><span class="rel-step-num">${index+1}</span>
+      <div class="rel-node compact ${start?'role-this':'role-step'}">${start?'<span class="rel-node-role">This equipment (start of loop)</span>':''}<span class="rel-node-tag">${tag?copyTagHtml(tag):'<span class="muted">Not in this registry</span>'}</span>${relationshipMetaHtml(node)}</div>
+      ${connector}</li>`;
+  }).join('')}</ol>`;
+}
+function relationshipDiagramHtml(finding){
+  const relationship=finding&&finding.relationship,nodes=relationship&&Array.isArray(relationship.nodes)?relationship.nodes:null;
+  if(!nodes||!nodes.length)return '';
+  const kind=relationship.kind,self=nodes.find(node=>node.role==='this')||nodes[0];
+  let body='';
+  if(kind==='parent'){const parent=nodes.find(node=>node.role==='parent')||nodes[1];if(!parent)return '';body=relationshipParentHtml(self,parent);}
+  else if(kind==='dependency'){const dependency=nodes.find(node=>node.role==='dependency')||nodes[1];if(!dependency)return '';body=relationshipDependencyHtml(self,dependency);}
+  else if(kind==='loop'){if(nodes.length<2)return '';body=relationshipLoopHtml(nodes);}
+  else return '';
+  return `<section class="finding-section rel-section"><h4>How these are linked</h4>${body}<p class="rel-legend">Reading this: ${esc(RELATIONSHIP_LEGENDS[kind]||'')}</p></section>`;
+}
 function openFinding(id,opener){
   const finding=S.session.result.findings.find(item=>item.id===id);if(!finding)return;
   const list=filteredFindings(),position=list.findIndex(item=>item.id===id);
@@ -452,6 +508,7 @@ function openFinding(id,opener){
     <div class="audit-drawer-top"><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span>${finding.equipmentId?`<span class="audit-drawer-tag">${copyTagHtml(finding.equipmentId)}</span>`:'<span class="audit-rule-source">Registry-wide</span>'}</div>
     ${findingSection('Why this was flagged',`<p class="finding-why">${esc(finding.why)}</p>`)}
     ${findingSection('What must be true',`<p class="finding-statement">${esc(finding.rule.statement)}</p><span class="finding-rule-name">${esc(finding.rule.title)} &middot; ${esc(sourceLabel)} &middot; ${esc(confidenceLabel)}</span>`,'muted-section')}
+    ${relationshipDiagramHtml(finding)}
     <section class="finding-section"><h4>What we found and what we expected</h4><div class="finding-compare"><div class="found"><span>Found</span><p>${esc(actual)||'Blank'}</p></div><div class="expected"><span>Expected</span><p>${esc(expected)||'—'}</p></div></div></section>
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}

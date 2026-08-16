@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.7.0",
+    "date": "2026-08-15",
+    "type": "feature",
+    "notes": "- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"
+  },
+  {
     "version": "1.6.1",
     "date": "2026-08-15",
     "type": "fix",
