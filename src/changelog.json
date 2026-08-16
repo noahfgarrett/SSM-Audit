@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.8.0",
+    "date": "2026-08-15",
+    "type": "feature",
+    "notes": "- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry \u2014 every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"
+  },
+  {
     "version": "1.7.0",
     "date": "2026-08-15",
     "type": "feature",
