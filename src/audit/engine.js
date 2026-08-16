@@ -14,7 +14,7 @@ export const SSM_AUDIT_STANDARD='Registry Integrity + SSM Rules';
 export const SSM_AUDIT_SEVERITIES=['blocker','error','warning','info'];
 export const SSM_AUDIT_CATEGORIES=['structure','dependencies','metadata','milestones','item-masters','headers'];
 export const SSM_AUDIT_SOURCES=Object.freeze([
-  Object.freeze({id:'registry',label:'Registry Integrity',description:'The registry has to agree with itself and with the approved Rev21 upload lists before it can be uploaded.'}),
+  Object.freeze({id:'registry',label:'Registry Integrity',description:'The registry has to agree with itself and with the approved Rev21 lists — the same lists Exto validates against.'}),
   Object.freeze({id:'sop',label:'SSM SOP',description:'How the SSM SOP says equipment nests, depends, sequences, and rolls up to milestones.'}),
   Object.freeze({id:'logic',label:'Commissioning Logic',description:'Relationships that commissioning practice expects — a drive under the equipment it runs, a VESDA tied to its fire alarm panel.'}),
 ]);
@@ -23,7 +23,7 @@ const SSM_AUDIT_SEVERITY_RANK={blocker:0,error:1,warning:2,info:3};
 function auditRule(id,source,category,title,statement,options={}){return Object.freeze({id,version:1,source,category,title,statement,standardRef:title,confidence:options.confidence||'required',enabled:options.enabled!==false,disabledReason:options.disabledReason||''});}
 export const SSM_AUDIT_RULES=Object.freeze({
   /* identity + structure */
-  duplicateId:auditRule('identity.duplicate-equipment-id','sop','metadata','One row per Equipment ID','Each Equipment ID appears once. Two rows with the same tag cannot be uploaded.'),
+  duplicateId:auditRule('identity.duplicate-equipment-id','sop','metadata','One row per Equipment ID','Each Equipment ID appears once. Two rows with the same tag cannot both be right.'),
   blankParent:auditRule('parent.blank','sop','structure','Every row has a parent','Each equipment row names a Closest Parent — another piece of equipment, or its own System Name when it is the top of that system.'),
   selfParent:auditRule('parent.self','sop','structure','No self-parenting','A row cannot name itself as its Closest Parent.'),
   unresolvedParent:auditRule('parent.unresolved','registry','structure','Parent can be found','A Closest Parent must be a tag in this registry, an intentional header, or an Existing parent from another project.'),

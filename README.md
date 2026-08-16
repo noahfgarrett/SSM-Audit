@@ -10,12 +10,12 @@ Every check has a plain-language statement and belongs to one of three sources:
 - **SSM SOP** — how equipment nests and depends: a child stays in its parent's UPN and discipline; anything crossing UPNs is a dependency, not a parent; instruments nest under equipment in the UPN their tag carries; a VFD sits under what it drives with its panel and PLC as dependencies; FMS hardwired I/O sits under its VFD; LCPs sit with their skid; control valves and room sensors sit under the equipment they serve; organizational headers carry a Blank Item Master and no dependencies; L2 milestones name their UPN; Item Masters use the VF standard (site-prefixed names are flagged with the VF equivalent proposed).
 - **Commissioning Logic** — expected relationships: driven and control equipment trace back to power, RIOs name their controller, heat trace follows its transformer, VESDA depends on its fire alarm panel, drives sit under the equipment they run.
 
-Findings carry one of four levels that say what kind of problem it is:
+Findings carry one of four levels. They describe what *kind* of problem it is — not how the registry got here. Most audited registries are already uploaded, so the levels are about the data itself:
 
 | Level | Meaning |
 |---|---|
-| **Won't upload** | Cannot be uploaded as it stands, or the row makes no sense — duplicate tag, blank parent, UPN or System Name not on the approved list, a loop. |
-| **Breaks a rule** | Would upload, but breaks an SSM SOP rule — parent in another UPN, dependency not found, VESDA without its fire alarm panel. |
+| **Invalid** | The row contradicts the registry or the approved lists — a duplicate tag, a blank or self-referencing parent, a parent that does not exist, a loop, or a UPN / System Name / discipline that is not in the Rev21 upload template. On a fresh upload these are the rows Exto would reject; on an uploaded registry they are the rows that cannot be right. |
+| **Rule broken** | Valid data that breaks an SSM SOP rule — a parent in another UPN, a dependency that cannot be found, an instrument or LCP nested off its UPN, a VESDA without its fire alarm panel. |
 | **Check this** | A strong pattern says something is off; an engineer should look. |
 | **Note** | Worth knowing, not necessarily wrong — a same-system dependency in a mechanical discipline, a milestone not yet assigned, an Item Master still on a site prefix. |
 

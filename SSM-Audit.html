@@ -1641,6 +1641,121 @@ body.audit-fullscreen{overflow:hidden}
 .finding-context>div:last-child:nth-child(odd){grid-column:1/-1}
 @media (max-width:600px){#view{padding-bottom:54px}}
 
+/* ---- Dashboard ---- */
+.dash-shell{max-width:1440px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.dash-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:16px 20px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-sm)}
+.dash-head-copy{min-width:260px;flex:1}
+.dash-head-copy h2{margin:5px 0 4px;font-size:21px;font-weight:640;letter-spacing:-.2px;overflow-wrap:anywhere}
+.dash-head-copy p{margin:0;color:var(--ink-3);font:12px var(--mono)}
+.dash-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dash-block{display:flex;flex-direction:column;gap:10px}
+.dash-block-head{display:flex;align-items:flex-end;gap:16px}
+.dash-block-head>div{min-width:0;flex:1}
+.dash-block-head h3{margin:0;font-size:15px;font-weight:650;letter-spacing:-.1px}
+.dash-block-head p{margin:3px 0 0;color:var(--ink-3);font-size:12.5px}
+.dash-block-head .btn-link{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;font-size:12.5px}
+.dash-block-head .btn-link .ic{width:14px;height:14px}
+.dash-card{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-sm)}
+.dash-empty{margin:0;padding:22px 14px;color:var(--ink-3);font-size:12.5px;text-align:center}
+
+.dash-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.dash-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:15px 16px 13px;border:1px solid var(--border);border-left:3px solid var(--tile-line,var(--border-strong));
+  border-radius:var(--radius-md);background:var(--surface);box-shadow:var(--shadow-sm);text-align:left;font:inherit;cursor:pointer;transition:.14s ease}
+.dash-tile:hover:not(:disabled){border-color:var(--border-strong);border-left-color:var(--tile-line,var(--border-strong));background:var(--tile-bg,var(--surface-2));transform:translateY(-1px);box-shadow:var(--shadow)}
+.dash-tile:focus-visible{outline:none;box-shadow:var(--ring)}
+.dash-tile:disabled{cursor:default;opacity:.62}
+.dash-tile-head{display:flex;align-items:center;gap:7px;color:var(--tile-ink,var(--ink-2));font:700 11.5px var(--sans);letter-spacing:.2px;text-transform:uppercase}
+.dash-tile-dot{width:8px;height:8px;border-radius:50%;background:var(--tile-ink,var(--ink-3))}
+.dash-tile-value{margin:4px 0 2px;color:var(--ink);font:700 34px/1 var(--mono);letter-spacing:-1px}
+.dash-tile-note{color:var(--ink-2);font-size:12px;line-height:1.4}
+.dash-tile-go{display:inline-flex;align-items:center;gap:5px;margin-top:9px;color:var(--tile-ink,var(--ink-3));font:600 11.5px var(--sans);opacity:.82}
+.dash-tile-go .ic{width:13px;height:13px}
+.dash-tile:hover:not(:disabled) .dash-tile-go{opacity:1}
+.dash-tile.blocker{--tile-ink:var(--danger);--tile-line:#efc5c1;--tile-bg:#fdecea}
+.dash-tile.error{--tile-ink:#a24942;--tile-line:#e5c6c2;--tile-bg:#fbefed}
+.dash-tile.warning{--tile-ink:var(--warn);--tile-line:#ecd0a7;--tile-bg:var(--warn-bg)}
+.dash-tile.info{--tile-ink:#315b8a;--tile-line:#cbd8e9;--tile-bg:#eff5fb}
+
+.dash-rank-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:12px}
+.dash-rank-card{display:flex;flex-direction:column;overflow:hidden}
+.dash-rank-card>header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.dash-rank-card h4{margin:0;font-size:12.5px;font-weight:650}
+.dash-rank-card>header span{color:var(--ink-3);font:10.5px var(--mono)}
+.dash-rank-list{display:flex;flex-direction:column;padding:6px 6px 4px}
+.dash-rank-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:8px 9px;border:1px solid transparent;border-radius:var(--radius-sm);
+  background:transparent;font:inherit;text-align:left;cursor:pointer;transition:.12s ease}
+.dash-rank-row:hover{background:var(--surface-2);border-color:var(--border)}
+.dash-rank-row:focus-visible{outline:none;box-shadow:var(--ring)}
+.dash-rank-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);font-size:12.5px;font-weight:560}
+.dash-rank-count{color:var(--ink-2);font:700 12px var(--mono)}
+.dash-rank-track{grid-column:1/-1;height:6px;margin-top:3px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.dash-rank-track i{display:block;height:100%;border-radius:99px;background:var(--ink-3)}
+.dash-rank-track i.blocker{background:var(--danger)}
+.dash-rank-track i.error{background:#a24942}
+.dash-rank-track i.warning{background:var(--warn)}
+.dash-rank-track i.info{background:#6f95bd}
+.dash-rank-more{margin:0;padding:8px 15px 12px;color:var(--ink-3);font:11px var(--mono)}
+
+.dash-check-card{overflow:hidden}
+.dash-check-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.dash-check-table th{height:34px;padding:0 14px;border-bottom:1px solid var(--border);background:var(--surface-2);color:var(--ink-3);
+  font:700 10px var(--mono);text-align:left;text-transform:uppercase}
+.dash-check-table th:nth-child(1){width:124px}.dash-check-table th:nth-child(3){width:96px;text-align:right}.dash-check-table th:nth-child(4){width:250px}
+.dash-check-table td.dash-check-count{text-align:right}
+.dash-check-table td{height:52px;padding:6px 14px;border-bottom:1px solid var(--border);color:var(--ink-2);font-size:12.5px;overflow:hidden}
+.dash-check-table tbody tr:last-child td{border-bottom:0}
+.dash-check-table tbody tr{cursor:pointer;transition:background .12s ease}
+.dash-check-table tbody tr:hover td{background:var(--surface-2)}
+.dash-check-table tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.dash-check-name b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);font-size:13px;font-weight:600}
+.dash-check-name small{display:block;margin-top:1px;color:var(--ink-3);font-size:11px}
+.dash-check-count{color:var(--ink);font:700 13px var(--mono)}
+.dash-share{display:flex;align-items:center;gap:9px}
+.dash-share-track{flex:1;min-width:60px;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.dash-share-track i{display:block;height:100%;border-radius:99px;background:var(--accent-400)}
+.dash-share small{flex:0 0 auto;color:var(--ink-3);font:10.5px var(--mono)}
+
+.dash-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.dash-stat{position:relative;display:flex;flex-direction:column;gap:1px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface);box-shadow:var(--shadow-sm);text-align:left;font:inherit}
+.dash-stat>span{color:var(--ink-3);font:700 9.5px var(--mono);letter-spacing:.4px;text-transform:uppercase}
+.dash-stat>b{margin:3px 0 1px;color:var(--ink);font:700 21px/1 var(--mono);letter-spacing:-.5px}
+.dash-stat>small{color:var(--ink-3);font-size:11px;line-height:1.4}
+.dash-stat.is-action{cursor:pointer;transition:.12s ease}
+.dash-stat.is-action:hover{border-color:var(--accent-300);background:var(--tint)}
+.dash-stat.is-action:focus-visible{outline:none;box-shadow:var(--ring)}
+.dash-stat-go{position:absolute;top:11px;right:11px;color:var(--ink-3);line-height:0}
+.dash-stat-go .ic{width:14px;height:14px}
+.dash-stat.is-action:hover .dash-stat-go{color:var(--accent-700)}
+.dash-foot{display:flex;align-items:center;gap:7px;margin:2px 0 0;color:var(--ink-3);font-size:12px}
+.dash-foot .ic{width:14px;height:14px}
+
+.dash-slice-chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 4px 0 10px;border:1px solid var(--accent-300);border-radius:99px;
+  background:var(--tint);color:var(--accent-700);font-size:12.5px;white-space:nowrap}
+.dash-slice-chip .ic{width:13px;height:13px}
+.dash-slice-chip b{font-weight:700}
+.dash-slice-chip>span{max-width:230px;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+.dash-slice-clear{display:grid;place-items:center;width:24px;height:24px;border:0;border-radius:50%;background:transparent;color:var(--accent-700);cursor:pointer}
+.dash-slice-clear:hover{background:var(--accent-200)}
+.dash-slice-clear:focus-visible{outline:none;box-shadow:var(--ring)}
+
+@media (max-width:1200px){.dash-rank-card>header span{display:none}}
+@media (max-width:1100px){
+  .dash-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dash-check-table th:nth-child(4),.dash-check-table td:nth-child(4){display:none}
+}
+@media (max-width:900px){
+  .dash-rank-grid{grid-template-columns:minmax(0,1fr)}
+  .dash-block-head{flex-wrap:wrap;align-items:flex-start}
+  .dash-head-actions{width:100%}
+}
+@media (max-width:600px){
+  .dash-tiles,.dash-stats{grid-template-columns:minmax(0,1fr)}
+  .dash-head-actions .btn{flex:1}
+}
+@media (pointer:coarse){.dash-rank-row{min-height:52px}.dash-tile{min-height:150px}}
+
 </style>
 </head>
 <body>
@@ -1725,7 +1840,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1736,7 +1851,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.8.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -1752,7 +1867,7 @@ const S={
 };
 
 function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
+  S.session={name:'',snapshot:null,result:null,error:'',auditedAt:0,dashFilter:null,hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,filterOpen:false,selectedFindingId:'',scrollTop:0,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
 }
 
 function resetComparison(){
@@ -1976,7 +2091,7 @@ const SSM_AUDIT_STANDARD='Registry Integrity + SSM Rules';
 const SSM_AUDIT_SEVERITIES=['blocker','error','warning','info'];
 const SSM_AUDIT_CATEGORIES=['structure','dependencies','metadata','milestones','item-masters','headers'];
 const SSM_AUDIT_SOURCES=Object.freeze([
-  Object.freeze({id:'registry',label:'Registry Integrity',description:'The registry has to agree with itself and with the approved Rev21 upload lists before it can be uploaded.'}),
+  Object.freeze({id:'registry',label:'Registry Integrity',description:'The registry has to agree with itself and with the approved Rev21 lists — the same lists Exto validates against.'}),
   Object.freeze({id:'sop',label:'SSM SOP',description:'How the SSM SOP says equipment nests, depends, sequences, and rolls up to milestones.'}),
   Object.freeze({id:'logic',label:'Commissioning Logic',description:'Relationships that commissioning practice expects — a drive under the equipment it runs, a VESDA tied to its fire alarm panel.'}),
 ]);
@@ -1985,7 +2100,7 @@ const SSM_AUDIT_SEVERITY_RANK={blocker:0,error:1,warning:2,info:3};
 function auditRule(id,source,category,title,statement,options={}){return Object.freeze({id,version:1,source,category,title,statement,standardRef:title,confidence:options.confidence||'required',enabled:options.enabled!==false,disabledReason:options.disabledReason||''});}
 const SSM_AUDIT_RULES=Object.freeze({
   /* identity + structure */
-  duplicateId:auditRule('identity.duplicate-equipment-id','sop','metadata','One row per Equipment ID','Each Equipment ID appears once. Two rows with the same tag cannot be uploaded.'),
+  duplicateId:auditRule('identity.duplicate-equipment-id','sop','metadata','One row per Equipment ID','Each Equipment ID appears once. Two rows with the same tag cannot both be right.'),
   blankParent:auditRule('parent.blank','sop','structure','Every row has a parent','Each equipment row names a Closest Parent — another piece of equipment, or its own System Name when it is the top of that system.'),
   selfParent:auditRule('parent.self','sop','structure','No self-parenting','A row cannot name itself as its Closest Parent.'),
   unresolvedParent:auditRule('parent.unresolved','registry','structure','Parent can be found','A Closest Parent must be a tag in this registry, an intentional header, or an Existing parent from another project.'),
@@ -2790,6 +2905,8 @@ ICONS['arrow-down']='<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>';
 ICONS['group']='<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect width="7" height="5" x="7" y="7" rx="1"/><rect width="7" height="5" x="10" y="12" rx="1"/>';
 ICONS['circle-x']='<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>';
 ICONS['shield-check']='<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>';
+ICONS['layout-dashboard']='<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>';
+ICONS['chart-column']='<path d="M3 3v16a2 2 0 0 0 2 2h16"/><rect x="7" y="13" width="3" height="5" rx="1"/><rect x="12" y="9" width="3" height="9" rx="1"/><rect x="17" y="5" width="3" height="13" rx="1"/>';
 ICONS['clipboard-list']='<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>';
 
 /* src/ui/feedback.js */
@@ -2865,7 +2982,7 @@ const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDI
 const AUDIT_EXPORT_ACTIONED_NOTE='Type Y in the Actioned column on an equipment’s first line when it is closed out. Index and Dashboard progress update from those marks.';
 const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',muted:'8A96A3',repeat:'AAB4BE',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA'});
 const AUDIT_EXPORT_NEST_FILLS=Object.freeze(['FFFFFF','EDF3F8','DCE8F1','CBDCEA','B9D0E3','A8C5DC','97BAD5']);
-const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:"WON'T UPLOAD",error:'BREAKS A RULE',warning:'CHECK THIS',info:'NOTE'});
+const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'INVALID',error:'RULE BROKEN',warning:'CHECK THIS',info:'NOTE'});
 const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'8C1D18',color:'FFFFFF'},error:{fill:'D9531E',color:'FFFFFF'},warning:{fill:'F2B441',color:'40320A'},info:{fill:'6E8598',color:'FFFFFF'}});
 const AUDIT_EXPORT_MILESTONE_HEADERS=Object.freeze(['Actioned','Nest','Equipment ID','Description','Closest Parent','Discipline','UPN','System Name','Severity','Finding','Why','What to do','Actioned By','Note']);
 const AUDIT_EXPORT_MILESTONE_WIDTHS=Object.freeze([10,6,36,40,28,24,8,30,12,32,54,54,16,30]);
@@ -3035,7 +3152,7 @@ function auditExportDashboardSheet(result,groups,sessionName,generated){
     [`Generated ${auditExportDate(generated)}`,'','','','','',''],
     [`Standard: ${clean(result&&result.standard)}`,'','','','','',''],
     ['','','','','','',''],
-    ['Rows audited','Findings',"Won't upload",'Breaks a rule','Check this','Notes','Actioned'],
+    ['Rows audited','Findings','Invalid','Rule broken','Check this','Notes','Actioned'],
     [summary.rows||0,summary.findings||0,severity.blocker||0,severity.error||0,severity.warning||0,severity.info||0,0],
     ['','','','','','',''],
     ['Milestone','Equipment','Findings','Actioned','Progress','%'],
@@ -3346,20 +3463,22 @@ const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadat
 const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const RULE_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
 const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.'};
-const SEVERITY_LABELS={blocker:"Won't upload",error:'Breaks a rule',warning:'Check this',info:'Note'};
-const SEVERITY_PLURALS={blocker:"Won't upload",error:'Breaks a rule',warning:'Check this',info:'Notes'};
+const SEVERITY_LABELS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Note'};
+const SEVERITY_PLURALS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Notes'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
 let auditOutsideHandler=null,auditEscapeHandler=null,drawerTrapCleanup=null,searchDebounceTimer=0;
 
 /* ---------------------------------------------------------------- shell nav */
 
 const NAV_SECTIONS=[
+  {id:'dashboard',icon:'layout-dashboard',label:'Dashboard',hint:'Everything this registry turned up, at a glance'},
   {id:'audit',icon:'check-check',label:'Audit findings',hint:'Every issue found in this registry'},
   {id:'hierarchy',icon:'list-tree',label:'SSM hierarchy',hint:'Browse the registry as a tree'},
   {id:'compare',icon:'square-stack',label:'Compare projects',hint:'Line this registry up beside a finished one'},
   {id:'rules',icon:'book-open',label:'Rules',hint:'What the audit checks, in plain language'},
 ];
 function navActiveId(){
+  if(S.screen==='dashboard')return 'dashboard';
   if(S.screen==='audit')return 'audit';
   if(S.screen==='hierarchy')return 'hierarchy';
   if(S.screen==='compare')return 'compare';
@@ -3370,7 +3489,7 @@ function navBadges(id){
   const result=S.session&&S.session.result,comparison=S.comparison&&S.comparison.result;
   if(id==='audit'&&result){
     const blockers=result.summary.severity.blocker;
-    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} won't upload">${blockers.toLocaleString()}</b>`:''}`;
+    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} ${SEVERITY_LABELS.blocker.toLowerCase()}">${blockers.toLocaleString()}</b>`:''}`;
   }
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return `<b class="nav-count">${S.session.snapshot.rows.length.toLocaleString()}</b>`;
   if(id==='compare'&&comparison)return `<b class="nav-count">${(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems).toLocaleString()}</b>`;
@@ -3378,6 +3497,7 @@ function navBadges(id){
 }
 function navDisabled(id){
   if(id==='hierarchy')return !(S.session&&S.session.result&&S.session.snapshot);
+  if(id==='dashboard')return !(S.session&&S.session.result);
   return false;
 }
 function navItemHtml(section,active,collapsed){
@@ -3400,6 +3520,7 @@ function renderSideNav(navigate){
   $('#navCollapse').onclick=()=>{S.ui.navCollapsed=!S.ui.navCollapsed;renderSideNav(navigate);$('#navCollapse')?.focus();};
 }
 function navigateSection(id,navigate){
+  if(id==='dashboard'){S.homeMode='audit';navigate(S.session&&S.session.result?'dashboard':'upload');return;}
   if(id==='rules'){S.homeMode='rules';navigate('rules');return;}
   if(id==='compare'){S.homeMode='compare';navigate(S.comparison&&S.comparison.result?'compare':'upload');return;}
   if(id==='hierarchy'){if(S.session&&S.session.result)navigate('hierarchy');return;}
@@ -3453,7 +3574,7 @@ function renderRuleCatalog(navigate){
 function showOnlyRule(ruleId,navigate){
   const result=S.session&&S.session.result;if(!result)return;
   const others=[...new Set(result.findings.map(finding=>finding.rule.id))].filter(id=>id!==ruleId);
-  S.session.hiddenRules=others;S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.search='';S.session.scrollTop=0;S.session.cursor=-1;
+  S.session.hiddenRules=others;S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.search='';S.session.dashFilter=null;S.session.scrollTop=0;S.session.cursor=-1;
   invalidateFindingCaches();S.homeMode='audit';navigate('audit');
 }
 function renderRules(navigate){
@@ -3535,10 +3656,10 @@ async function addAuditTarget(file,navigate){
       const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.08+fraction*.42,label));
       report(.55,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       const result=runSsmAudit(snapshot);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,result,error:''};
+      S.session={...S.session,snapshot,result,error:'',auditedAt:Date.now()};
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
-    navigate('audit');
+    navigate('dashboard');
   }catch(error){
     console.error('SSM Audit failed',error);S.session.error=error&&error.message||'Could not read this registry';S.session.snapshot=null;S.session.result=null;renderUpload(navigate);
   }
@@ -3596,7 +3717,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,result:auditResult,error:''};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,result:auditResult,error:'',auditedAt:Date.now()};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -3625,10 +3746,10 @@ function registryRowFor(finding){
   return index.bySource.get(`${auditNormId(finding.sheet)}|${finding.row||0}`)||index.byId.get(auditNormId(finding.equipmentId))||null;
 }
 function filteredFindings(){
-  const query=clean(S.session.search).toUpperCase(),hiddenSources=new Set(S.session.hiddenSources||[]),hiddenSeverities=new Set(S.session.hiddenSeverities||[]),hiddenCategories=new Set(S.session.hiddenCategories||[]),hiddenRules=new Set(S.session.hiddenRules||[]);
-  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort].join('');
+  const query=clean(S.session.search).toUpperCase(),hiddenSources=new Set(S.session.hiddenSources||[]),hiddenSeverities=new Set(S.session.hiddenSeverities||[]),hiddenCategories=new Set(S.session.hiddenCategories||[]),hiddenRules=new Set(S.session.hiddenRules||[]),slice=S.session.dashFilter;
+  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort,slice?`${slice.kind}|${slice.value}`:''].join('');
   if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
-  let rows=S.session.result.findings.filter(finding=>!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query)));
+  let rows=S.session.result.findings.filter(finding=>!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query))&&(!slice||dashSliceMatches(finding,slice)));
   const natural=(a,b)=>String(a||'').localeCompare(String(b||''),undefined,{numeric:true,sensitivity:'base'}),sort=S.session.sort;
   if(sort==='severity-asc')rows=[...rows].reverse();
   else if(sort==='equipment-asc'||sort==='equipment-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.equipmentId,b.equipmentId)||a.row-b.row));
@@ -3663,7 +3784,7 @@ function displayRows(){
 function severityStrip(summary){
   const hidden=new Set(S.session.hiddenSeverities||[]),active=SSM_AUDIT_SEVERITIES.filter(level=>!hidden.has(level));
   const chip=level=>`<button class="sev-chip ${level} ${hidden.has(level)?'':'on'}" type="button" data-audit-severity="${level}" aria-pressed="${hidden.has(level)?'false':'true'}"><span class="sev-dot"></span>${SEVERITY_PLURALS[level]}<b>${summary.severity[level].toLocaleString()}</b></button>`;
-  return `<div class="sev-strip"><button class="sev-chip all ${active.length===SSM_AUDIT_SEVERITIES.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${SSM_AUDIT_SEVERITIES.map(chip).join('')}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
+  return `<div class="sev-strip"><button class="sev-chip all ${active.length===SSM_AUDIT_SEVERITIES.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${SSM_AUDIT_SEVERITIES.map(chip).join('')}${dashSliceChipHtml()}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
 }
 function filterCount(){return ['hiddenSources','hiddenSeverities','hiddenCategories','hiddenRules'].reduce((total,key)=>total+(S.session[key]||[]).length,0);}
 function filterCheck(key,value,label,count){const checked=!(S.session[key]||[]).includes(value);return `<label class="audit-filter-option"><input type="checkbox" data-audit-filter-key="${key}" value="${esc(value)}" ${checked?'checked':''}><span>${esc(label)}</span><b>${Number(count||0).toLocaleString()}</b></label>`;}
@@ -3680,13 +3801,13 @@ function filterMenu(result){
 }
 function sortOptions(){const options=[['severity-desc','Most serious first'],['severity-asc','Least serious first'],['equipment-asc','Equipment A to Z'],['equipment-desc','Equipment Z to A'],['rule-asc','Check A to Z'],['rule-desc','Check Z to A'],['row-asc','Row, low to high'],['row-desc','Row, high to low']];return options.map(([value,label])=>`<option value="${value}" ${S.session.sort===value?'selected':''}>${label}</option>`).join('');}
 function groupOptions(){const options=[['none','No grouping'],['rule','Group by check'],['milestone','Group by L2 milestone']];return options.map(([value,label])=>`<option value="${value}" ${S.session.groupBy===value?'selected':''}>${label}</option>`).join('');}
-function statusMarkup(summary){const blockers=summary.severity.blocker||0,label=summary.status==='blocked'?`Won't upload &middot; ${blockers.toLocaleString()} ${blockers===1?'row':'rows'}`:summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
+function statusMarkup(summary){const blockers=summary.severity.blocker||0,label=summary.status==='blocked'?`${SEVERITY_LABELS.blocker} &middot; ${blockers.toLocaleString()} ${blockers===1?'row':'rows'}`:summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
 
 function renderAuditResult(navigate){
   const result=S.session&&S.session.result;if(!result){navigate('upload');return;}
   S.screen='audit';const summary=result.summary,fullscreen=!!S.session.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
   $('#view').innerHTML=`<section id="auditShell" class="audit-shell ${fullscreen?'fullscreen':''}">
-    <div class="audit-head"><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><h2>Audit findings</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="auditBack">${ic('upload')}New registry</button><button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
+    <div class="audit-head"><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><h2>Audit findings</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="auditDashboard">${ic('layout-dashboard')}Dashboard</button><button class="btn" id="auditBack">${ic('upload')}New registry</button><button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
     ${severityStrip(summary)}
     <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, checks, and explanations" value="${esc(S.session.search)}"></div><div class="audit-filter-wrap"><button class="btn audit-filter-button ${filterCount()?'active':''}" id="auditFilters" type="button" aria-expanded="${S.session.filterOpen?'true':'false'}" aria-haspopup="dialog">${ic('filter')}Filters <b id="auditFilterCount">${filterCount()||''}</b></button>${filterMenu(result)}</div><select id="auditGroup" aria-label="Group findings">${groupOptions()}</select><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
     <div class="audit-table-wrap" id="auditTableWrap" tabindex="0" role="group" aria-label="Findings list. Use the arrow keys to move and Enter to open."><table class="audit-table"><thead><tr><th>Severity</th><th>What was found</th><th>Equipment ID</th><th>Source</th><th>Sheet &middot; row</th><th aria-label="Open details"></th></tr></thead><tbody id="auditRows"></tbody></table></div>
@@ -3739,7 +3860,7 @@ function activateCursor(){
   const row=$(`[data-row-index="${S.session.cursor}"]`);openFinding(item.finding.id,row);
 }
 function resetAuditFilters(){
-  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';S.session.cursor=-1;
+  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';S.session.dashFilter=null;S.session.cursor=-1;
   invalidateFindingCaches();const search=$('#auditSearch');if(search)search.value='';
   $$('[data-audit-filter-key]').forEach(input=>input.checked=true);updateFilterButton();renderSeverityStrip();rerenderRows(true);
 }
@@ -3749,6 +3870,8 @@ function renderSeverityStrip(){
   strip.replaceWith(replacement.firstElementChild);wireSeverityStrip();
 }
 function wireSeverityStrip(){
+  const clearSlice=$('#dashClearSlice');
+  if(clearSlice)clearSlice.onclick=()=>{S.session.dashFilter=null;S.session.cursor=-1;invalidateFindingCaches();renderSeverityStrip();rerenderRows(true);};
   $$('[data-audit-severity]').forEach(button=>button.onclick=()=>{
     const level=button.dataset.auditSeverity;
     if(level==='all')S.session.hiddenSeverities=[];
@@ -3861,6 +3984,7 @@ function teardownAuditFilters(){if(auditOutsideHandler)document.removeEventListe
 function wireAuditResult(navigate){
   teardownAuditFilters();
   $('#auditBack').onclick=()=>{S.homeMode='audit';navigate('upload');};$('#exportAudit').onclick=exportSsmAuditXlsx;
+  $('#auditDashboard').onclick=()=>navigate('dashboard');
   $('#auditFullscreen').onclick=()=>{S.session.fullscreen=!S.session.fullscreen;renderAuditResult(navigate);};
   $('#auditSearch').oninput=event=>{S.session.search=event.target.value;S.session.cursor=-1;debounceSearch(()=>rerenderRows(true));};
   $('#auditSort').onchange=event=>{S.session.sort=event.target.value;S.session.cursor=-1;rerenderRows(true);};
@@ -3880,6 +4004,168 @@ function wireAuditResult(navigate){
     else if(event.key==='Enter'||event.key===' '){if(S.session.cursor<0)return;event.preventDefault();activateCursor();}
   };
   wrap.scrollTop=S.session.scrollTop||0;let frame=0;wrap.onscroll=()=>{S.session.scrollTop=wrap.scrollTop;if(frame)return;frame=requestAnimationFrame(()=>{frame=0;renderRows();});};requestAnimationFrame(renderRows);
+}
+
+/* --------------------------------------------------------- dashboard screen */
+
+/* The dashboard is where an audit lands. It answers "what did this registry turn
+   up" in one screen, and every number on it is a way into the findings list. */
+const DASH_RANK_LIMIT=8,DASH_RULE_LIMIT=10,DASH_NO_MILESTONE='No L2 milestone';
+const DASH_SEVERITY_MEANINGS={blocker:'Contradicts the registry or the approved lists',error:'Breaks an SSM SOP rule',warning:'A strong pattern says look',info:'Worth knowing'};
+const DASH_SLICE_LABELS={discipline:'Discipline',upn:'System',milestone:'L2 milestone'};
+const DASH_SLICE_FIELDS={discipline:'discipline',upn:'upn',milestone:'milestone'};
+
+/* A dashboard row click narrows the findings list by a registry column the
+   findings themselves do not carry, so the match runs through the registry row. */
+function dashSliceMatches(finding,slice){
+  const field=DASH_SLICE_FIELDS[slice&&slice.kind];if(!field)return true;
+  const row=registryRowFor(finding);if(!row)return false;
+  return auditNormId(row[field])===auditNormId(slice.value);
+}
+function dashSliceChipHtml(){
+  const slice=S.session&&S.session.dashFilter;if(!slice)return '';
+  const label=clean(slice.label)||clean(slice.value)||DASH_NO_MILESTONE;
+  return `<span class="dash-slice-chip">${ic('filter')}<b>${esc(DASH_SLICE_LABELS[slice.kind]||'Filter')}</b><span>${esc(label)}</span><button class="dash-slice-clear" type="button" id="dashClearSlice" title="Clear this filter" aria-label="Clear the ${esc(label)} filter">${ic('x')}</button></span>`;
+}
+
+/* A UPN is labelled with the System Name most of its rows agree on — one row with
+   a mistyped System Name should not become the name of the whole system. */
+function dashRankBuckets(kind){
+  const field=DASH_SLICE_FIELDS[kind],buckets=new Map();
+  for(const finding of S.session.result.findings){
+    const row=registryRowFor(finding);if(!row)continue;
+    const value=clean(row[field]);if(!value&&kind!=='milestone')continue;
+    const key=auditNormId(value);let bucket=buckets.get(key);
+    if(!bucket){bucket={value,label:value||DASH_NO_MILESTONE,count:0,worst:'',names:new Map()};buckets.set(key,bucket);}
+    bucket.count++;if(severityRank(finding.severity)>severityRank(bucket.worst))bucket.worst=finding.severity;
+    const name=clean(row.systemName);if(name)bucket.names.set(name,(bucket.names.get(name)||0)+1);
+  }
+  const list=[...buckets.values()];
+  if(kind==='upn')for(const bucket of list){
+    const common=[...bucket.names.entries()].sort((a,b)=>b[1]-a[1]||natCmp(a[0],b[0]))[0];
+    /* Approved System Names already lead with the UPN ("602  Medium Voltage"),
+       so only prefix it when the name does not. */
+    const name=common?clean(common[0]).replace(/\s+/g,' '):'';
+    bucket.label=name&&auditNormId(name).startsWith(auditNormId(bucket.value)+' ')?name:clean(`${bucket.value}${name?' \u00b7 '+name:''}`);
+  }
+  return list.sort((a,b)=>b.count-a.count||natCmp(a.label,b.label));
+}
+function dashRuleRanking(){
+  const entries=new Map();
+  for(const finding of S.session.result.findings){
+    let entry=entries.get(finding.rule.id);
+    if(!entry){entry={rule:finding.rule,count:0,worst:'',rows:new Set()};entries.set(finding.rule.id,entry);}
+    entry.count++;if(severityRank(finding.severity)>severityRank(entry.worst))entry.worst=finding.severity;
+    entry.rows.add(auditNormId(finding.equipmentId)||`${auditNormId(finding.sheet)}|${finding.row||0}`);
+  }
+  return [...entries.values()].sort((a,b)=>b.count-a.count||severityRank(b.worst)-severityRank(a.worst)||natCmp(a.rule.title,b.rule.title));
+}
+function dashStructureStats(){
+  const result=S.session.result,rows=result.rows||[],upns=new Set(),disciplines=new Set(),milestones=new Set();
+  let roots=0,withDependencies=0,fullyPhased=0;
+  for(const row of rows){
+    const upn=auditNormId(row.upn),discipline=auditNormId(row.discipline),milestone=auditNormId(row.milestone),parent=auditNormId(row.closestParent);
+    if(upn)upns.add(upn);if(discipline)disciplines.add(discipline);if(milestone)milestones.add(milestone);
+    if(parent&&parent===auditNormId(row.systemName))roots++;
+    if(auditSplitReferences(row.dependencies).length)withDependencies++;
+    if(milestone&&auditNormId(row.milestoneParent))fullyPhased++;
+  }
+  return {rows:rows.length,roots,headers:(result.headerIds||[]).length,withDependencies,upns:upns.size,disciplines:disciplines.size,milestones:milestones.size,
+    phased:rows.length?Math.round(fullyPhased/rows.length*100):0};
+}
+function dashStatTiles(stats){
+  return [
+    {label:'Equipment rows',value:stats.rows.toLocaleString(),note:'Rows the audit read'},
+    {label:'Top of a system',value:stats.roots.toLocaleString(),note:'Parent is their own System Name'},
+    {label:'Organizational headers',value:stats.headers.toLocaleString(),note:'Rows other equipment nests under',action:stats.headers?'headers':'',title:'Browse these in the SSM hierarchy'},
+    {label:'Rows with dependencies',value:stats.withDependencies.toLocaleString(),note:'At least one dependency listed'},
+    {label:'Distinct UPNs',value:stats.upns.toLocaleString(),note:'Systems in this registry'},
+    {label:'Disciplines',value:stats.disciplines.toLocaleString(),note:'Discipline values in use'},
+    {label:'L2 milestones in use',value:stats.milestones.toLocaleString(),note:'Distinct L2 phases',action:stats.milestones?'milestones':'',title:'Group the findings by L2 milestone'},
+    {label:'Rows with L1 and L2',value:`${stats.phased}%`,note:'Both milestone levels filled in'},
+  ];
+}
+
+function dashSeverityTileHtml(level,count){
+  const empty=!count,label=SEVERITY_LABELS[level];
+  return `<button class="dash-tile ${level}${empty?' is-empty':''}" type="button" data-dash-severity="${level}" ${empty?'disabled':''} title="${empty?`Nothing at ${esc(label)} level`:`Show only ${esc(label)} findings`}">
+    <span class="dash-tile-head"><span class="dash-tile-dot"></span>${esc(label)}</span>
+    <b class="dash-tile-value">${count.toLocaleString()}</b>
+    <span class="dash-tile-note">${esc(DASH_SEVERITY_MEANINGS[level]||'')}</span>
+    <span class="dash-tile-go">${empty?'Nothing to show':`Open these findings${ic('arrow-right')}`}</span></button>`;
+}
+function dashRankRowHtml(bucket,kind,max){
+  const width=max?Math.max(4,Math.round(bucket.count/max*100)):0;
+  return `<button class="dash-rank-row" type="button" data-dash-rank="${esc(kind)}" data-dash-value="${esc(bucket.value)}" data-dash-label="${esc(bucket.label)}" title="Show the ${bucket.count.toLocaleString()} findings on ${esc(bucket.label)}">
+    <span class="dash-rank-name">${esc(bucket.label)}</span><b class="dash-rank-count">${bucket.count.toLocaleString()}</b>
+    <span class="dash-rank-track"><i class="${esc(bucket.worst||'info')}" style="width:${width}%"></i></span></button>`;
+}
+function dashRankCardHtml(kind,title,note){
+  const buckets=dashRankBuckets(kind),visible=buckets.slice(0,DASH_RANK_LIMIT),max=visible.length?visible[0].count:0,rest=buckets.length-visible.length;
+  const body=visible.length?visible.map(bucket=>dashRankRowHtml(bucket,kind,max)).join(''):'<p class="dash-empty">Nothing flagged here.</p>';
+  return `<article class="dash-card dash-rank-card"><header><h4>${esc(title)}</h4><span>${esc(note)}</span></header><div class="dash-rank-list">${body}</div>${rest>0?`<p class="dash-rank-more">+${rest.toLocaleString()} more</p>`:''}</article>`;
+}
+function dashCheckTableHtml(){
+  const ranking=dashRuleRanking(),visible=ranking.slice(0,DASH_RULE_LIMIT),total=Math.max(1,S.session.result.summary.rows);
+  if(!visible.length)return '<p class="dash-empty">No check fired on this registry.</p>';
+  return `<table class="dash-check-table"><thead><tr><th>Level</th><th>Check</th><th>Findings</th><th>Rows touched</th></tr></thead><tbody>${visible.map(entry=>{
+    const share=entry.rows.size/total*100,text=share>=1?`${Math.round(share)}%`:'&lt;1%';
+    return `<tr data-dash-rule="${esc(entry.rule.id)}" tabindex="0" title="Show only findings from this check"><td><span class="audit-severity ${esc(entry.worst)}">${esc(SEVERITY_LABELS[entry.worst]||entry.worst)}</span></td><td class="dash-check-name"><b>${esc(entry.rule.title)}</b><small>${esc(SOURCE_LABELS[entry.rule.source]||entry.rule.source)}</small></td><td class="dash-check-count">${entry.count.toLocaleString()}</td><td><span class="dash-share"><span class="dash-share-track"><i style="width:${Math.max(3,Math.min(100,Math.round(share)))}%"></i></span><small>${text} of rows</small></span></td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+function dashStatHtml(stat){
+  const body=`<span>${esc(stat.label)}</span><b>${esc(stat.value)}</b><small>${esc(stat.note)}</small>`;
+  if(!stat.action)return `<div class="dash-stat">${body}</div>`;
+  return `<button class="dash-stat is-action" type="button" data-dash-stat="${esc(stat.action)}" title="${esc(stat.title||'')}">${body}<span class="dash-stat-go">${ic('arrow-right')}</span></button>`;
+}
+
+function renderDashboard(navigate){
+  const result=S.session&&S.session.result;if(!result){S.homeMode='audit';navigate('upload');return;}
+  teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='dashboard';S.homeMode='audit';
+  const summary=result.summary,audited=S.session.auditedAt?new Date(S.session.auditedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'this session';
+  $('#view').innerHTML=`<section class="dash-shell">
+    <header class="dash-head">
+      <div class="dash-head-copy"><span class="eyebrow">Registry overview</span><h2>${esc(S.session.name||'This registry')}</h2><p>Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(audited)}</p></div>
+      <div class="dash-head-actions">${statusMarkup(summary)}<button class="btn primary" type="button" id="dashOpenFindings">${ic('check-check')}Open findings</button><button class="btn" type="button" id="dashExport">${ic('file-down')}Export report</button></div>
+    </header>
+    <div class="dash-tiles">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityTileHtml(level,summary.severity[level]||0)).join('')}</div>
+    <section class="dash-block">
+      <div class="dash-block-head"><div><h3>Where the problems are</h3><p>The same findings counted three ways. Pick a row to open the list narrowed to it.</p></div></div>
+      <div class="dash-rank-grid">${dashRankCardHtml('discipline','By discipline','Findings per discipline')}${dashRankCardHtml('upn','By UPN and system','Findings per system')}${dashRankCardHtml('milestone','By L2 milestone','Findings per L2 phase')}</div>
+    </section>
+    <section class="dash-block">
+      <div class="dash-block-head"><div><h3>Top checks firing</h3><p>The checks producing the most findings. Open one to see only its findings.</p></div><button class="btn-link" type="button" id="dashSeeRules">See all in Rules${ic('arrow-right')}</button></div>
+      <div class="dash-card dash-check-card">${dashCheckTableHtml()}</div>
+    </section>
+    <section class="dash-block">
+      <div class="dash-block-head"><div><h3>Structure at a glance</h3><p>What this registry is made of, before any rule is applied.</p></div></div>
+      <div class="dash-stats">${dashStatTiles(dashStructureStats()).map(dashStatHtml).join('')}</div>
+    </section>
+    <p class="dash-foot">${ic('lock')}Findings never leave this browser.</p>
+  </section>`;
+  renderSideNav(navigate);wireDashboard(navigate);
+}
+function dashOpenFindings(navigate,apply){
+  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';S.session.dashFilter=null;
+  S.session.groupBy='none';S.session.collapsedGroups=[];S.session.cursor=-1;S.session.scrollTop=0;
+  if(apply)apply();
+  invalidateFindingCaches();S.homeMode='audit';navigate('audit');
+}
+function wireDashboard(navigate){
+  $('#dashOpenFindings').onclick=()=>dashOpenFindings(navigate);
+  $('#dashExport').onclick=exportSsmAuditXlsx;
+  $('#dashSeeRules').onclick=()=>{S.homeMode='rules';navigate('rules');};
+  $$('[data-dash-severity]').forEach(tile=>tile.onclick=()=>{const level=tile.dataset.dashSeverity;dashOpenFindings(navigate,()=>{S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);});});
+  $$('[data-dash-rank]').forEach(row=>row.onclick=()=>dashOpenFindings(navigate,()=>{S.session.dashFilter={kind:row.dataset.dashRank,value:row.dataset.dashValue,label:row.dataset.dashLabel};}));
+  $$('[data-dash-rule]').forEach(row=>{
+    const open=()=>showOnlyRule(row.dataset.dashRule,navigate);
+    row.onclick=open;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
+  });
+  $$('[data-dash-stat]').forEach(tile=>tile.onclick=()=>{
+    const action=tile.dataset.dashStat;
+    if(action==='headers'){if(S.session.snapshot)navigate('hierarchy');return;}
+    if(action==='milestones')dashOpenFindings(navigate,()=>{S.session.groupBy='milestone';});
+  });
 }
 
 /* --------------------------------------------------------- hierarchy screen */
@@ -4120,9 +4406,10 @@ function wireComparisonResult(navigate){
 /* src/boot.js */
 const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
 const GUIDE_SECTIONS=[
-  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit in three steps',body:'<p>Choose a completed Cx Registry workbook. SSM Audit finds the registry tab on its own, reads it in this browser only, and checks every equipment row.</p><ol><li>Drop an .xlsx or .xls workbook on the upload area, or click <b>Choose workbook</b>.</li><li>Wait a moment — 20,000 rows take about a second.</li><li>Start with <b>Won\'t upload</b>, then <b>Breaks a rule</b>, then <b>Check this</b>. <b>Notes</b> are for review at your pace.</li></ol><div class="guide-note">'+ic('lock')+'The workbook is never uploaded or saved. Closing or refreshing the page clears it.</div>'},
-  {id:'around',label:'Finding your way',icon:'panel-left-open',title:'The workspace',body:'<p>The menu on the left moves between the four views. Counts on each item show what is waiting there.</p><ol><li><b>Audit findings</b> — every issue, most serious first. Filter by severity with the chips, group by check or by L2 phase, search tags and reasons, or open <b>Filters</b> for source and topic.</li><li><b>SSM hierarchy</b> — the registry as a tree from Building down to equipment, with a finding count on every branch. Turn on <b>Findings only</b> to hide clean branches.</li><li><b>Compare projects</b> — line one registry up against a completed one, UPN by UPN.</li><li><b>Rules</b> — every check in plain language, with how many times it fired.</li></ol><p>Use <b>Collapse</b> at the bottom of the menu for more room, or the expand button on any view for a full-screen table.</p>'},
-  {id:'severity',label:'What the colors mean',icon:'triangle-alert',title:'Four levels, four meanings',body:'<p>Every finding has one of four levels. They are not just degrees of bad — each one tells you what kind of problem it is.</p><ol><li><b>Won\'t upload</b> (red) — the registry cannot be uploaded as it stands, or the row makes no sense: a duplicate tag, a blank parent, a UPN or System Name that is not on the approved list, or a loop.</li><li><b>Breaks a rule</b> (orange) — it would upload, but it breaks an SSM SOP rule: a parent in another UPN, a dependency that cannot be found, a VESDA with no fire alarm panel.</li><li><b>Check this</b> (amber) — a strong pattern says something is off; an engineer should look. Most commissioning-logic and SOP nesting checks live here.</li><li><b>Note</b> (grey-blue) — worth knowing, not necessarily wrong: a same-system dependency in a mechanical discipline, a milestone not yet assigned, an Item Master still on a site prefix.</li></ol>'},
+  {id:'start',label:'Getting started',icon:'upload',title:'Run an audit in three steps',body:'<p>Choose a completed Cx Registry workbook. SSM Audit finds the registry tab on its own, reads it in this browser only, and checks every equipment row.</p><ol><li>Drop an .xlsx or .xls workbook on the upload area, or click <b>Choose workbook</b>.</li><li>Wait a moment — 20,000 rows take about a second.</li><li>Start with <b>Invalid</b>, then <b>Rule broken</b>, then <b>Check this</b>. <b>Notes</b> are for review at your pace.</li></ol><div class="guide-note">'+ic('lock')+'The workbook is never uploaded or saved. Closing or refreshing the page clears it.</div>'},
+  {id:'around',label:'Finding your way',icon:'panel-left-open',title:'The workspace',body:'<p>The menu on the left moves between the five views. Counts on each item show what is waiting there.</p><ol><li><b>Dashboard</b> — where an audit lands: totals by level, where the problems sit by discipline, system, and L2 phase, the checks firing most, and what the registry is made of. Every number opens the findings list already narrowed to it.</li><li><b>Audit findings</b> — every issue, most serious first. Filter by severity with the chips, group by check or by L2 phase, search tags and reasons, or open <b>Filters</b> for source and topic.</li><li><b>SSM hierarchy</b> — the registry as a tree from Building down to equipment, with a finding count on every branch. Turn on <b>Findings only</b> to hide clean branches.</li><li><b>Compare projects</b> — line one registry up against a completed one, UPN by UPN.</li><li><b>Rules</b> — every check in plain language, with how many times it fired.</li></ol><p>Use <b>Collapse</b> at the bottom of the menu for more room, or the expand button on any view for a full-screen table.</p>'},
+  {id:'severity',label:'What the levels mean',icon:'triangle-alert',title:'Four levels, four kinds of problem',body:'<p>Every finding has one of four levels. They describe what <em>kind</em> of problem it is — not how the registry got here. Most registries you audit are already uploaded, so the levels are about the data itself.</p><ol><li><b>Invalid</b> (red) — the row contradicts the registry or the approved lists: a duplicate tag, a blank or self-referencing parent, a parent that does not exist, a loop, or a UPN, System Name, or discipline that is not in the Rev21 upload template. On a fresh upload these are the rows Exto would reject; on an uploaded registry they are the rows that cannot be right.</li><li><b>Rule broken</b> (orange) — the data is valid, but it breaks an SSM SOP rule: a parent in another UPN, a dependency that cannot be found, an instrument or LCP nested off its UPN, a VESDA with no fire alarm panel.</li><li><b>Check this</b> (amber) — a strong pattern says something is off and an engineer should look. Most commissioning-logic and nesting checks live here.</li><li><b>Note</b> (grey-blue) — worth knowing, not necessarily wrong: a same-system dependency in a mechanical discipline, a milestone not yet assigned, an Item Master still on a site prefix.</li></ol>'},
+
   {id:'reading',label:'Reading a finding',icon:'file-text',title:'Every finding explains itself',body:'<p>Click any row to open it. Top to bottom you will see:</p><ol><li><b>Why this was flagged</b> — the plain-language reason, written for someone picking this up cold.</li><li><b>What must be true</b> — the rule behind it, and where the rule comes from (SSM SOP, Registry Integrity, or Commissioning Logic).</li><li><b>The relationship</b> — for parent, dependency, and loop findings, a small diagram that labels which tag is this equipment, which is its parent or dependency, and the order of a loop.</li><li><b>Found / Expected</b> and <b>What to do</b> — the specific fix.</li><li><b>The registry row</b> — description, parent, UPN, System Name, milestones, Item Master, dependencies.</li></ol><p><b>Show in hierarchy</b> jumps to that equipment in the tree. <b>Previous</b> and <b>Next</b> walk the current filtered list.</p>'},
   {id:'checks',label:'What is checked',icon:'check-check',title:'Three sources of truth',body:'<p>Checks come from three places, and each finding says which.</p><ol><li><b>Registry Integrity</b> — the registry agrees with itself and with the approved Rev21 upload lists: one row per tag, resolvable parents, UPNs and System Names from the approved values, I&amp;C rows on the approved controls discipline.</li><li><b>SSM SOP</b> — how equipment nests and depends: a child stays in its parent\'s UPN and discipline; anything crossing UPNs is a dependency, not a parent; instruments nest under equipment in the UPN their tag carries; a VFD sits under what it drives with its panel and PLC as dependencies; LCPs sit with their skid; control valves and room sensors sit under the equipment they serve; headers carry a Blank Item Master and no dependencies; L2 milestones name their UPN; Item Masters use the VF standard.</li><li><b>Commissioning Logic</b> — expected relationships: driven and control equipment trace back to power, RIOs name their controller, heat trace follows its transformer, VESDA depends on its fire alarm panel.</li></ol>'+ruleGuide()},
   {id:'hierarchy',label:'SSM hierarchy',icon:'list-tree',title:'Explore the registry as a tree',body:'<p>Building &rarr; Discipline &rarr; System Name &rarr; equipment, exactly as uploaded. Nothing is silently repaired.</p><ol><li>Search tags, descriptions, parents, or dependencies; matches are highlighted and their branches open.</li><li>Filter to a building, discipline, or system. <b>Findings only</b> collapses to branches that have something to fix.</li><li>Rows used as organizational headers (a Blank Item Master that other equipment nests under) are marked as headers.</li><li>Open any equipment for its metadata, relationships, source row, and findings.</li></ol>'},
@@ -4134,7 +4421,7 @@ let activeGuide='start';
 let guideOpener=null;
 let guideTrapCleanup=null;
 
-function go(screen){S.screen=screen;if(screen==='audit')renderAuditResult(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);}
+function go(screen){S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);}
 function renderGuide(){
   $('#guideNav').innerHTML=GUIDE_SECTIONS.map(section=>`<button type="button" class="${section.id===activeGuide?'active':''}" data-guide="${section.id}">${ic(section.icon)}${esc(section.label)}</button>`).join('');
   const section=GUIDE_SECTIONS.find(item=>item.id===activeGuide)||GUIDE_SECTIONS[0];$('#guideBody').innerHTML=`<div class="guide-copy"><span class="eyebrow">SSM Audit Guide</span><h3>${esc(section.title)}</h3>${section.body}</div>`;
