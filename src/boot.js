@@ -2,7 +2,7 @@ import { $, $$, esc } from './core/text.js'
 import { APP_VERSION } from './version.js'
 import { S } from './state.js'
 import { ic } from './ui/icons.js'
-import { activateFocusTrap, animateClose, animateOpen } from './ui/feedback.js'
+import { activateFocusTrap, animateClose, animateOpen, motionReduced } from './ui/feedback.js'
 import { closeDrawer, renderAuditResult, renderComparisonResult, renderDashboard, renderHierarchyResult, renderRules, renderSideNav, renderUpload } from './ui/audit.js'
 import { closeUpdateModal, initUpdate } from './update/update.js'
 
@@ -23,7 +23,9 @@ let activeGuide='start';
 let guideOpener=null;
 let guideTrapCleanup=null;
 
-function go(screen){S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);}
+function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
+/* A screen change slides the new content in; re-renders of the same screen (filters, sorting) stay still. */
+function markViewEnter(){const view=$('#view');if(!view||motionReduced())return;view.classList.remove('view-enter');void view.offsetWidth;view.classList.add('view-enter');view.addEventListener('animationend',()=>view.classList.remove('view-enter'),{once:true});}
 function renderGuide(){
   $('#guideNav').innerHTML=GUIDE_SECTIONS.map(section=>`<button type="button" class="${section.id===activeGuide?'active':''}" data-guide="${section.id}">${ic(section.icon)}${esc(section.label)}</button>`).join('');
   const section=GUIDE_SECTIONS.find(item=>item.id===activeGuide)||GUIDE_SECTIONS[0];$('#guideBody').innerHTML=`<div class="guide-copy"><span class="eyebrow">SSM Audit Guide</span><h3>${esc(section.title)}</h3>${section.body}</div>`;

@@ -1037,6 +1037,13 @@ body.visual-trainer-fullscreen{overflow:hidden}
   .guide-main-head{min-height:48px;padding:7px 12px 7px 16px}
   .guide-panel{padding:20px 16px 34px}
 }
+
+/* ---- Motion: one consistent feel for everything you can click ---- */
+.btn,.chip,.tabbtn,.sidenav-item,.sidenav-collapse,.frow,.pill,.xbtn,.icon-btn,.dtable tbody tr td,.audit-table tbody tr[data-audit-finding] td,.dash-card,.hierarchy-toggle,.compare-tree-toggle,.audit-group-toggle,.guide-nav nav button,.filter-option,.filter-chip,.dropzone .btn{transition:background-color var(--motion-fast) ease,border-color var(--motion-fast) ease,color var(--motion-fast) ease,box-shadow var(--motion-fast) ease,transform var(--motion-fast) ease,opacity var(--motion-fast) ease}
+.btn:active:not(:disabled),.chip:active,.dash-tile:active:not(:disabled),.sidenav-item:active:not(:disabled){transform:translateY(0) scale(.985)}
+.row.open > .twist .ic,.row > .twist .ic,.audit-group-toggle>.ic,.change-chev{transition:transform var(--motion-fast) ease}
+#view.view-enter>*{animation:viewEnter var(--motion-base) var(--ease-out) both}
+@keyframes viewEnter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation-duration:.001ms!important}
   #overlay.show .ring-spin,#overlay.show .ring::before,#overlay.show .ring-dots i{animation:none!important}
