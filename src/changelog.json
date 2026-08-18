@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.10.0",
+    "date": "2026-08-15",
+    "type": "feature",
+    "notes": "- Replaced the row of filter dropdowns with one Filters panel covering level, discipline, L2 milestone, UPN, building, source, topic, and individual checks; only the active filters show on the page, as removable chips\n- The Dashboard now scopes to the same filters, so it can be narrowed to one building, discipline, or phase, and it gained milestone readiness per L2 phase, hierarchy health, a dependencies view, a checks overview that also shows which checks passed, and an Item Master migration gauge"
+  },
+  {
     "version": "1.9.0",
     "date": "2026-08-15",
     "type": "feature",

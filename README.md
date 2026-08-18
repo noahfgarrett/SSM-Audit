@@ -23,7 +23,8 @@ The full rulebook is in the app under **Rules**, with live counts once a registr
 
 ## The workspace
 
-- **Audit findings** — every issue, most serious first. Level chips, filters by discipline / L2 milestone / UPN / building, grouping by check or phase, search across tags and reasons, and a filter popover for source and topic. Open any row for *Why this was flagged → What must be true → the relationship diagram (for parent, dependency, and loop findings) → Found / Expected → What to do → the registry row*, with **Show in hierarchy** and Previous/Next.
+- **Dashboard** — the overview an audit opens on: level totals, milestone readiness per L2 phase, hierarchy health, dependencies, a checks overview that also shows which checks passed, and structure stats. Every number opens the findings narrowed to it, and the whole dashboard scopes to whatever filters are active.
+- **Audit findings** — every issue, most serious first. Level chips, one **Filters** panel for discipline / L2 milestone / UPN / building / source / topic / individual checks (only the active filters show on the page, as chips), grouping by check or phase, and search across tags and reasons. Open any row for *Why this was flagged → What must be true → the relationship diagram (for parent, dependency, and loop findings) → Found / Expected → What to do → the registry row*, with **Show in hierarchy** and Previous/Next.
 - **SSM hierarchy** — Building → Discipline → System → equipment, exactly as uploaded, with finding counts on every branch, a **Findings only** view, header rows marked, and search that opens the matching branches.
 - **Compare projects** — line a registry up against a completed project by UPN.
 - **Rules** — every check in plain language, grouped by source and topic.
