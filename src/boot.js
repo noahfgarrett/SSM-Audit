@@ -40,6 +40,11 @@ function init(){
   document.addEventListener('ssm-audit:navigate',event=>go(event.detail&&event.detail.screen||'upload'));
   $('#drawerClose').innerHTML=ic('x');$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=event=>{if(event.target===$('#drawerBack'))closeDrawer();};
   document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if($('#drawerBack').classList.contains('show'))closeDrawer();else if($('#guideModal').classList.contains('show'))closeGuide();else if($('#updateModal').classList.contains('show'))closeUpdateModal();});
+  /* Narrow screens: the fixed version badge floats over content, so it moves
+     into the topbar actions and back again as the window crosses 900px. */
+  const badgeHome=$('#versionLink').parentElement,mq=window.matchMedia('(max-width:900px)');
+  const placeBadge=()=>{const badge=$('#versionLink'),actions=$('.top-actions');if(!badge||!actions)return;if(mq.matches){if(badge.parentElement!==actions)actions.insertBefore(badge,actions.firstChild);}else if(badge.parentElement!==badgeHome)badgeHome.appendChild(badge);};
+  placeBadge();if(typeof mq.addEventListener==='function')mq.addEventListener('change',placeBadge);
   initUpdate();go('upload');
 }
 

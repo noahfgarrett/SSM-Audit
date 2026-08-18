@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.10.1",
+    "date": "2026-08-15",
+    "type": "fix",
+    "notes": "- Fixed the menu overlapping itself on narrow windows: the top bar now scrolls when its items do not fit, drops to icons under 640px, and the version badge moves into the top bar instead of floating over content"
+  },
+  {
     "version": "1.10.0",
     "date": "2026-08-15",
     "type": "feature",
