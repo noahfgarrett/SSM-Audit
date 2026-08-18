@@ -441,15 +441,20 @@ test('an instrument nests under equipment in the UPN its tag carries', () => {
     row({ equipmentId: 'B14-TT-104-01', closestParent: 'B14-AHU-104-01', ...MECH, equipmentDescription: 'Temperature Transmitter' }),
     row({ equipmentId: 'B14-TT-104-02', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Temperature Transmitter' }),
     row({ equipmentId: 'B14-PMP-101-01', closestParent: '101  Cleanroom Makeup Air System', closestParentStatus: 'NEW', upn: '101', discipline: 'MECHANICAL DRY', systemName: '101  Cleanroom Makeup Air System', equipmentDescription: 'Pump' }),
-    row({ equipmentId: 'B14-PT-104-03', closestParent: 'B14-PMP-101-01', upn: '101', discipline: 'MECHANICAL DRY', systemName: '101  Cleanroom Makeup Air System', equipmentDescription: 'Pressure Transmitter' }),
+    // row UPN 104 (matches its tag) but nested under UPN 101 equipment: a real cross-UPN nesting
+    row({ equipmentId: 'B14-PT-104-03', closestParent: 'B14-PMP-101-01', ...MECH, equipmentDescription: 'Pressure Transmitter' }),
+    // row UPN 101 agrees with its parent; only the TAG says 104: a tag question, not a nesting error
+    row({ equipmentId: 'B14-PT-104-04', closestParent: 'B14-PMP-101-01', upn: '101', discipline: 'MECHANICAL DRY', systemName: '101  Cleanroom Makeup Air System', equipmentDescription: 'Pressure Transmitter' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const result = runSsmAudit(snapshot)
   const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.instrumentUpn.id)
   const byId = Object.fromEntries(findings.map(f => [f.equipmentId, f]))
   assert.ok(!byId['B14-TT-104-01'], 'nested under equipment in its own UPN: fine')
   assert.equal(byId['B14-TT-104-02'].severity, 'warning', 'sitting on the System Name instead of equipment')
-  assert.equal(byId['B14-PT-104-03'].severity, 'error', 'nested under equipment in a different UPN than the tag')
+  assert.equal(byId['B14-PT-104-03'].severity, 'error', 'nested under equipment in a different UPN than the tag and the row')
   assert.match(byId['B14-PT-104-03'].why, /carries UPN 104.*on UPN 101/)
+  assert.equal(byId['B14-PT-104-04'].severity, 'info', 'row and parent agree; only the tag disagrees — a tag question')
+  assert.match(byId['B14-PT-104-04'].why, /tag may be wrong/)
 })
 
 test('a VFD lists its electrical panel and its PLC as dependencies', () => {
@@ -551,4 +556,62 @@ test('a registry that is wholesale on a site item-master scheme is a migration, 
   assert.equal(findings.length, 60, 'every row still gets its migration note')
   assert.ok(findings.every(f => f.severity === 'info'), 'but as info, so structural findings stay on top')
   assert.match(findings[0].why, /site-prefixed Item Master \(SP_\)/)
+})
+
+
+/* ---- checks added after auditing the auditor against a real registry ---- */
+
+test('electrical path reaches a child through its parent feed', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'PNL-1', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', equipmentDescription: 'Panel' }),
+    row({ equipmentId: 'AHU-1', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Air Handler', dependencies: 'PNL-1' }),
+    row({ equipmentId: 'FFU-1', closestParent: 'AHU-1', ...MECH, equipmentDescription: 'Fan Filter Unit' }),
+    row({ equipmentId: 'PMP-LOOSE', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Pump' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  assert.deepEqual(equipmentIdsForRule(runSsmAudit(snapshot), 'drivenElectricalPath'), ['PMP-LOOSE'], 'the FFU is powered through its parent; only the loose pump has no path')
+})
+
+test('a parent duplicated as a dependency is a note; a dependency on a header is a warning', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'GIS-1', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', equipmentDescription: 'GIS' }),
+    row({ equipmentId: 'XFM-1', closestParent: 'GIS-1', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', equipmentDescription: 'Transformer', dependencies: 'GIS-1' }),
+    row({ equipmentId: 'HDR-1', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', equipmentDescription: 'Ring header', itemMaster: 'VF_Blank' }),
+    row({ equipmentId: 'RIO-1', closestParent: 'HDR-1', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', equipmentDescription: 'Remote IO Panel' }),
+    row({ equipmentId: 'PNL-2', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', equipmentDescription: 'Panel', dependencies: 'HDR-1' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  const dup = result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.parentAlsoDependency.id)
+  assert.equal(dup.equipmentId, 'XFM-1'); assert.equal(dup.severity, 'info')
+  assert.match(dup.expected, /Common in electrical/)
+  assert.deepEqual(equipmentIdsForRule(result, 'dependencyOnHeader'), ['PNL-2'])
+})
+
+test('a parent in another building is a rule break; a stale Dependency Project is a note', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'PNL-B14', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', building: 'B14', equipmentDescription: 'Panel' }),
+    row({ equipmentId: 'PNL-B31', closestParent: 'PNL-B14', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', building: 'B31', equipmentDescription: 'Panel', dependencies: 'PNL-B14', dependencyProject: 'OTHER-PROJECT' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  assert.deepEqual(equipmentIdsForRule(result, 'crossBuildingParent'), ['PNL-B31'])
+  assert.match(result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.crossBuildingParent.id).why, /in B31 but its parent is in B14/)
+  assert.deepEqual(equipmentIdsForRule(result, 'staleDependencyProject'), ['PNL-B31'])
+})
+
+test('a system with no root row, a description typed as a tag, and a site classification are each surfaced', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'AHU-1', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Air Handler', equipmentClassification: 'AH' }),
+    // every row on 101 nests under 104 equipment: 101 has no top
+    row({ equipmentId: 'FCU-1', closestParent: 'AHU-1', upn: '101', discipline: 'MECHANICAL DRY', systemName: '101  Cleanroom Makeup Air System', equipmentDescription: 'Fan Coil', equipmentClassification: 'ZZ-SITE' }),
+    row({ equipmentId: 'Distribution piping east wing', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Piping', itemMaster: 'VF_Blank' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  const noRoot = result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.systemNoRoot.id)
+  assert.ok(noRoot && /101/.test(noRoot.actual), 'the 101 system has no root row')
+  assert.deepEqual(equipmentIdsForRule(result, 'tagLooksLikeText'), ['Distribution piping east wing'])
+  assert.deepEqual(equipmentIdsForRule(result, 'siteClassification'), ['FCU-1'])
+  assert.equal(result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.siteClassification.id).severity, 'info')
 })

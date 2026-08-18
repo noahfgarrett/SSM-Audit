@@ -56,6 +56,14 @@ export const SSM_AUDIT_RULES=Object.freeze({
   headerItemMaster:auditRule('header.item-master-not-blank','sop','headers','Header uses a Blank Item Master','A row that other equipment nests under as an organizational header should carry a Blank Item Master (VF_Blank) so no checklists are applied to it.'),
   headerDependency:auditRule('header.has-dependency','sop','headers','Header carries no dependencies','An organizational header only groups equipment. It should not carry dependencies of its own.'),
   unusedHeader:auditRule('header.unused','sop','headers','Header has children','A row set up as a header (Blank Item Master) should have at least one piece of equipment nested under it.'),
+  /* structure hygiene found on real registries */
+  parentAlsoDependency:auditRule('dependency.parent-also-listed','sop','dependencies','Parent listed as a dependency','A row’s Closest Parent also appears in its Dependencies. Electrical routinely lists the feeder in both places; in other disciplines the hierarchy already carries the parent, so the duplicate is worth a look. Filter by discipline to focus.',{confidence:'strong'}),
+  dependencyOnHeader:auditRule('dependency.on-header','sop','dependencies','Dependency points at a header','A dependency names an organizational header (a Blank Item Master row that only groups equipment). Depend on the equipment inside it, not the header itself.',{confidence:'strong'}),
+  crossBuildingParent:auditRule('parent.cross-building','sop','structure','Parent is in the same building','A structural child stays in its parent’s Building. Equipment fed from another building keeps that as a dependency and roots in its own building.'),
+  staleDependencyProject:auditRule('dependency.project-not-needed','registry','dependencies','Dependency Project only for external tags','Dependency Project names another project when a dependency lives there. When every dependency is a tag in this registry, the field is stale.',{confidence:'strong'}),
+  systemNoRoot:auditRule('structure.system-without-root','sop','structure','Every system has a top','Each System Name in use should have at least one row that sits at the top of it (its Closest Parent is the System Name). A system whose rows all nest elsewhere is not really a system block.',{confidence:'strong'}),
+  tagLooksLikeText:auditRule('identity.tag-looks-like-description','registry','metadata','Equipment ID is a tag, not a description','An Equipment ID with lowercase words reads like a description or header name typed into the tag column. Tags are codes; headers get their own row with a Blank Item Master.'),
+  siteClassification:auditRule('metadata.classification-not-in-list','registry','metadata','Site-specific classification?','The Equipment Classification is not in the Rev21 dropdown. It may be a legitimate site-specific code — the count tells you whether it belongs on the approved list.',{confidence:'strong'}),
   /* commissioning logic */
   controlLink:auditRule('logic.control-link-missing','logic','dependencies','Control device names its source','A control device should point to what controls it — an RIO, PLC, VFD, or control panel — as its parent or a dependency.',{confidence:'description-rated'}),
   drivenElectricalPath:auditRule('logic.driven-electrical-path-missing','logic','dependencies','Driven equipment traces to power','Pumps, fans, air handlers, chillers, and similar equipment should trace back to the electrical gear that powers them.',{confidence:'strong'}),
@@ -234,6 +242,11 @@ export function runSsmAudit(snapshot,options={}){
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
     const upn=rowUpn(row);
+    /* --- identity hygiene --- */
+    if(id&&SSM_AUDIT_RULES.tagLooksLikeText.enabled&&/[a-z]/.test(clean(row.equipmentId))&&/[a-z]{3,}/.test(clean(row.equipmentId))){checks++;
+      add(SSM_AUDIT_RULES.tagLooksLikeText,'blocker',row,{field:'Equipment ID',why:'This Equipment ID contains lowercase words — it reads like a description or header name, not a tag.',actual:row.equipmentId,expected:'An equipment tag code (or a header row with a Blank Item Master)',recommendation:'Replace with the real tag. If this is a grouping, keep it as a header row with a Blank Item Master and a code-style ID.'});}
+    if(clean(row.equipmentClassification)&&SSM_AUDIT_RULES.siteClassification.enabled&&!extoRev21Canonical('equipmentClassification',row.equipmentClassification)){checks++;
+      add(SSM_AUDIT_RULES.siteClassification,'info',row,{field:'Equipment Classification',why:`"${row.equipmentClassification}" is not in the Rev21 classification dropdown. It may be a site-specific code.`,actual:row.equipmentClassification,expected:'A Rev21 classification, or a site code that should be added to the list',recommendation:'Decide whether this code belongs on the approved list; if so, request it be added.'});}
     /* --- approved lists --- */
     if(upn){checks++;if(!extoRev21IsUpn(upn))add(SSM_AUDIT_RULES.upnNotApproved,'blocker',row,{field:'UPN',why:'This UPN is not on the Rev21 approved list.',actual:row.upn,expected:'A UPN from the Rev21 upload template',recommendation:'Correct the UPN to the approved value for this system.'});}
     if(extoRev21EffectiveDiscipline(row.discipline)==='FACILITIES MONITORING SYSTEM'&&extoRev21Norm(row.discipline)!=='FACILITIES MONITORING SYSTEM'){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'This I&C row is not using the approved controls discipline.',actual:`${row.discipline}; UPN in tag: ${candidates.join(', ')||'none found'}`,expected:'FACILITIES MONITORING SYSTEM with the UPN taken from the tag',recommendation:candidates.length===1?`Set the discipline to the approved value and use UPN ${candidates[0]}.`:'Set the approved discipline and confirm the UPN from the tag before assigning the System Name.'});}
@@ -276,6 +289,8 @@ export function runSsmAudit(snapshot,options={}){
         const childDiscipline=auditNormId(row.discipline),parentDiscipline=auditNormId(parent.discipline);checks++;
         const approvedControlsChild=extoRev21EffectiveDiscipline(row.discipline)==='FACILITIES MONITORING SYSTEM'||auditIsControlEquipment(row)||auditIsInstrument(row);
         if(childDiscipline&&parentDiscipline&&childDiscipline!==parentDiscipline&&!approvedControlsChild)add(SSM_AUDIT_RULES.crossDiscipline,'warning',row,{field:'Closest Parent',why:`This row is ${row.discipline} but its parent is ${parent.discipline}.`,actual:`${row.discipline} → ${parent.discipline}`,expected:`A parent in ${row.discipline}, unless this is a controls device under the equipment it serves`,recommendation:'Confirm the exception, or record the relationship as a dependency instead.',relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});
+        const childBuilding=auditNormId(row.building),parentBuilding=auditNormId(parent.building);
+        if(childBuilding&&parentBuilding&&childBuilding!==parentBuilding&&SSM_AUDIT_RULES.crossBuildingParent.enabled){checks++;add(SSM_AUDIT_RULES.crossBuildingParent,'error',row,{field:'Closest Parent',why:`This row is in ${row.building} but its parent is in ${parent.building}.`,actual:`${row.equipmentId} (${row.building}) → ${parent.equipmentId} (${parent.building})`,expected:`A parent in ${row.building}`,recommendation:`Keep ${parent.equipmentId} as a dependency and pick a parent in ${row.building} (or the System Name if this is the top).`,relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});}
         if(auditPolarity(row.discipline)==='top-down')addEdge(precedenceEdges,parentId,id);else addEdge(precedenceEdges,id,parentId);
       }else if(status==='NEW'){
         if(parentId!==auditNormId(row.systemName)){
@@ -295,6 +310,13 @@ export function runSsmAudit(snapshot,options={}){
         checks++;add(SSM_AUDIT_RULES.sameUpnBottomUp,'info',row,{field:'Dependencies',why:`This dependency is inside the same UPN (${row.upn}) and discipline. In a bottom-up discipline the hierarchy already sets the order, so a same-system dependency is only needed for a real sequencing reason.`,actual:dependency,expected:'Same-UPN dependencies mainly on instruments and devices; on other equipment, only for a documented sequencing reason',recommendation:'Confirm the dependency is intended. If the equipment simply nests, the hierarchy already covers the order.',relatedEquipmentId:target.equipmentId,relationship:{kind:'dependency',nodes:[auditRelNode(row,'this'),auditRelNode(target,'dependency')]}});
       }
     }
+    /* --- dependency hygiene --- */
+    if(parentId&&rowsById.has(parentId)&&SSM_AUDIT_RULES.parentAlsoDependency.enabled&&dependencies.some(dependency=>auditNormId(dependency)===parentId)){checks++;
+      add(SSM_AUDIT_RULES.parentAlsoDependency,'info',row,{field:'Dependencies',why:`${row.closestParent} is this row’s Closest Parent and is also listed as a dependency.`,actual:row.dependencies,expected:auditPolarity(row.discipline)==='top-down'?'Common in electrical — the feeder in both places':'The parent carried by the hierarchy alone',recommendation:'If this is deliberate (electrical feeder practice), leave it. Otherwise remove the duplicate.',relatedEquipmentId:row.closestParent});}
+    if(SSM_AUDIT_RULES.dependencyOnHeader.enabled)for(const dependency of dependencies){const depId=auditNormId(dependency);if(!headerIds.has(depId))continue;checks++;
+      add(SSM_AUDIT_RULES.dependencyOnHeader,'warning',row,{field:'Dependencies',why:`${dependency} is an organizational header, not equipment.`,actual:dependency,expected:'The equipment inside the header that this row actually depends on',recommendation:'Point the dependency at the specific equipment instead of the header.',relatedEquipmentId:dependency});}
+    if(SSM_AUDIT_RULES.staleDependencyProject.enabled&&clean(row.dependencyProject)&&dependencies.length&&dependencies.every(dependency=>rowsById.has(auditNormId(dependency)))){checks++;
+      add(SSM_AUDIT_RULES.staleDependencyProject,'info',row,{field:'Dependency Project',why:'Dependency Project is filled in, but every dependency is a tag in this registry.',actual:row.dependencyProject,expected:'Blank unless a dependency lives in another project',recommendation:'Clear Dependency Project, or add the external dependency it refers to.'});}
     /* --- item masters ---
        Any site-prefixed name (CA_NB_…, SP_NB_…, EL_…) is a legacy assignment the
        VF standard replaces; the VF equivalent is proposed by matching the name's
@@ -318,6 +340,10 @@ export function runSsmAudit(snapshot,options={}){
   }
   for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`${entry.count.toLocaleString()} row${entry.count===1?' nests':'s nest'} under a parent that is not any equipment in this registry.`,actual:entry.parent,expected:'An intentional header row (with a Blank Item Master) or the row’s System Name',recommendation:'If this is meant to be a header, add it as a row with a Blank Item Master. If not, correct the parent.'});}
   for(const [upn,group] of upnGroups){checks++;if(group.systems.size>1||group.disciplines.size>1)add(SSM_AUDIT_RULES.upnInconsistent,'error',group.rows[0],{field:'UPN',why:`Rows on UPN ${upn} use more than one System Name or Discipline.`,actual:`Systems: ${[...group.systems].join('; ')}; Disciplines: ${[...group.disciplines].join('; ')}`,expected:'One System Name and one Discipline for the whole UPN',recommendation:`Review every row on UPN ${upn} and align them.`});}
+  if(SSM_AUDIT_RULES.systemNoRoot.enabled){const systems=new Map();
+    for(const row of rows){const key=auditNormId(row.systemName);if(!key)continue;const entry=systems.get(key)||{row,rows:0,roots:0};entry.rows++;if(auditNormId(row.closestParent)===key)entry.roots++;systems.set(key,entry);}
+    for(const [key,entry] of systems){if(entry.roots)continue;checks++;add(SSM_AUDIT_RULES.systemNoRoot,'warning',entry.row,{field:'System Name',why:`${entry.rows.toLocaleString()} row${entry.rows===1?' uses':'s use'} this System Name, but none of them sits at the top of it.`,actual:entry.row.systemName,expected:'At least one row whose Closest Parent is the System Name',recommendation:'Make the top piece of equipment in this system a root (Closest Parent = System Name), or move these rows to the system they really belong to.'});}
+  }
   for(const entry of milestoneGroups.values()){
     const meaningful=[...entry.parents].filter(([intent])=>intent!=='unclassified');checks++;
     if(meaningful.length>1)add(SSM_AUDIT_RULES.milestoneInconsistent,'warning',entry.row,{field:'Milestone Parent',why:'This L2 milestone rolls up to L1 milestones that mean different things.',actual:meaningful.map(([intent])=>intent).join('; '),expected:'One consistent L1 meaning per L2 milestone',recommendation:'Review the rows on this L2 milestone and settle on one L1.'});
@@ -340,7 +366,12 @@ export function runSsmAudit(snapshot,options={}){
   }
   /* --- commissioning logic + SOP nesting --- */
   const electricalSeeds=new Set(rows.filter(auditIsElectrical).map(row=>auditNormId(row.equipmentId)).filter(Boolean));
-  const electricalPath=auditReachableFrom(electricalSeeds,precedenceEdges);
+  /* Power reaches a child through its parent's feed as well as its own: a fan
+     filter unit under an air handler that lists its panel is powered. So the
+     path walks precedence edges AND descends the parent tree from any reached row. */
+  const parentDown=new Map();for(const [child,list] of children)parentDown.set(child,new Set(list.map(row=>auditNormId(row.equipmentId))));
+  const pathEdges=new Map(precedenceEdges);for(const [from,set] of parentDown){const merged=new Set(pathEdges.get(from)||[]);for(const to of set)merged.add(to);pathEdges.set(from,merged);}
+  const electricalPath=auditReachableFrom(electricalSeeds,pathEdges);
   for(const row of rows){
     const id=auditNormId(row.equipmentId);if(!id||isHeaderRow(row))continue;
     const parent=rowsById.get(auditNormId(row.closestParent)),dependencyReferences=auditReferences(row.dependencies),dependencies=dependencyReferences.map(value=>rowsById.get(auditNormId(value))).filter(Boolean),hasExternalDependency=!!clean(row.dependencyProject)&&dependencyReferences.some(value=>!rowsById.has(auditNormId(value))),hasExternalParent=!parent&&extoRev21Canonical('closestParentStatus',row.closestParentStatus)==='EXISTING',related=[parent,...dependencies].filter(Boolean);
@@ -361,7 +392,15 @@ export function runSsmAudit(snapshot,options={}){
     /* SOP nesting conventions — the tag's UPN is the guiderail */
     const tagUpns=extoRev21UpnCandidates(row.equipmentId),tagUpn=tagUpns.length===1?tagUpns[0]:'';
     if(auditIsInstrument(row)&&SSM_AUDIT_RULES.instrumentUpn.enabled&&tagUpn){checks++;
-      if(parent&&rowUpn(parent)&&rowUpn(parent)!==tagUpn&&!isHeaderRow(parent))add(SSM_AUDIT_RULES.instrumentUpn,'error',row,{field:'Closest Parent',why:`This instrument’s tag carries UPN ${tagUpn}, but it is nested under equipment on UPN ${parent.upn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`Equipment in UPN ${tagUpn}`,recommendation:`Nest it under the equipment it serves in UPN ${tagUpn}.`,relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});
+      if(parent&&rowUpn(parent)&&rowUpn(parent)!==tagUpn&&!isHeaderRow(parent)){
+        /* When the row's own UPN agrees with the parent, only the TAG disagrees —
+           that is a tag question, not a nesting error. */
+        const onlyTagDisagrees=upn&&upn===rowUpn(parent);
+        add(SSM_AUDIT_RULES.instrumentUpn,onlyTagDisagrees?'info':'error',row,{field:onlyTagDisagrees?'Equipment ID':'Closest Parent',
+          why:onlyTagDisagrees?`This instrument’s tag carries UPN ${tagUpn}, but the row and its parent are both on UPN ${row.upn}. The tag may be wrong.`:`This instrument’s tag carries UPN ${tagUpn}, but it is nested under equipment on UPN ${parent.upn}.`,
+          actual:`${row.closestParent} (UPN ${parent.upn})`,expected:onlyTagDisagrees?`A tag carrying UPN ${row.upn}, or confirmation the row belongs to UPN ${tagUpn}`:`Equipment in UPN ${tagUpn}`,
+          recommendation:onlyTagDisagrees?'Confirm which UPN this instrument really belongs to and correct the tag or the row.':`Nest it under the equipment it serves in UPN ${tagUpn}.`,relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});
+      }
       else if(parentIsSystem&&!auditIsControlValve(row))add(SSM_AUDIT_RULES.instrumentUpn,'warning',row,{field:'Closest Parent',why:'This instrument sits directly under the System Name instead of the equipment it belongs to.',actual:row.closestParent,expected:`Equipment (or an approved roll-up header) in UPN ${tagUpn}`,recommendation:'Nest it under the equipment or skid it is mounted on.'});
     }
     if(auditIsInstrument(row)&&SSM_AUDIT_RULES.untiedInstrumentRollup.enabled&&tagUpn&&parent&&isHeaderRow(parent)&&auditIsPipingRollup(parent)&&rowUpn(parent)&&rowUpn(parent)!==tagUpn){checks++;
