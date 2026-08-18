@@ -3,7 +3,7 @@ import { downloadBlob } from '../core/download.js'
 import { APP_VERSION, UPDATE_REPOSITORY } from '../version.js'
 import { S } from '../state.js'
 import { ic } from '../ui/icons.js'
-import { activateFocusTrap } from '../ui/feedback.js'
+import { activateFocusTrap, animateOpen, animateClose } from '../ui/feedback.js'
 
 let updateOpener=null;
 let updateTrapCleanup=null;
@@ -44,10 +44,10 @@ function setTab(tab){
   $('#updateTab').classList.toggle('on',tab==='update');$('#changelogTab').classList.toggle('on',tab==='changelog');$('#updateTitle').textContent=tab==='update'&&hasUpdate?'Update Available':'Changelog';
   for(const [id,name] of [['updateTab','update'],['changelogTab','changelog']]){const button=$('#'+id),active=name===tab;if(button){button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;}}
 }
-export function closeUpdateModal(){const modal=$('#updateModal');if(!modal.classList.contains('show'))return;updateTrapCleanup?.();updateTrapCleanup=null;modal.classList.remove('show');modal.hidden=true;modal.setAttribute('aria-hidden','true');const opener=updateOpener;updateOpener=null;if(opener&&opener!==document.body&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();}
+export function closeUpdateModal(){const modal=$('#updateModal');if(!modal.classList.contains('show'))return;updateTrapCleanup?.();updateTrapCleanup=null;modal.setAttribute('aria-hidden','true');animateClose(modal);const opener=updateOpener;updateOpener=null;if(opener&&opener!==document.body&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();}
 export function openUpdateModal(tab='changelog'){
   $('#changelogPanel').innerHTML=renderChangelog();$$('#changelogPanel .change-head').forEach(button=>button.onclick=()=>button.closest('.change-entry').classList.toggle('closed'));
-  setTab(tab);const modal=$('#updateModal');if(!modal.classList.contains('show'))updateOpener=document.activeElement;modal.hidden=false;modal.classList.add('show');modal.setAttribute('aria-hidden','false');updateTrapCleanup?.();updateTrapCleanup=activateFocusTrap(modal,closeUpdateModal);requestAnimationFrame(()=>$('#updateCloseX').focus());
+  setTab(tab);const modal=$('#updateModal');if(!modal.classList.contains('show'))updateOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');updateTrapCleanup?.();updateTrapCleanup=activateFocusTrap(modal,closeUpdateModal);requestAnimationFrame(()=>$('#updateCloseX').focus());
 }
 function showUpdate(info){
   S.updateInfo=info;$('#updateLocal').textContent=`v${APP_VERSION}`;$('#updateRemote').textContent=`v${info.version}`;

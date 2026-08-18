@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.11.0",
+    "date": "2026-08-18",
+    "type": "feature",
+    "notes": "- Full UI motion pass: the Guide, update window, finding drawer, Filters panel, and progress overlay now ease in and ease out (backdrop fade, panel slide or scale) instead of snapping\n- Switching screens slides the new content in; buttons, chips, tiles, tabs, tree toggles, and table rows share one consistent hover and press feel\n- Everything respects the operating system's reduced-motion setting"
+  },
+  {
     "version": "1.10.1",
     "date": "2026-08-15",
     "type": "fix",
@@ -15,13 +21,13 @@
     "version": "1.9.0",
     "date": "2026-08-15",
     "type": "feature",
-    "notes": "- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection \u2014 deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree \u2014 a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"
+    "notes": "- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection — deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree — a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"
   },
   {
     "version": "1.8.0",
     "date": "2026-08-15",
     "type": "feature",
-    "notes": "- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry \u2014 every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"
+    "notes": "- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"
   },
   {
     "version": "1.7.0",
