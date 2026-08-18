@@ -2,7 +2,7 @@ import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S, resetSession } from '../state.js'
 import { readArrayBuffer } from '../io/workbook.js'
 import { auditNormId, auditSnapshotFromWorkbook, auditSplitReferences } from '../audit/model.js'
-import { auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
+import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
@@ -23,7 +23,7 @@ const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata con
 const SEVERITY_LABELS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Note'};
 const SEVERITY_PLURALS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Notes'};
 const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
-let auditOutsideHandler=null,auditEscapeHandler=null,drawerTrapCleanup=null,searchDebounceTimer=0;
+let drawerTrapCleanup=null,searchDebounceTimer=0;
 
 /* ---------------------------------------------------------------- shell nav */
 
@@ -128,10 +128,14 @@ function renderRuleCatalog(navigate){
   }).join('');
   $$('[data-rule-findings]',container).forEach(button=>button.onclick=()=>showOnlyRule(button.dataset.ruleFindings,navigate));
 }
-function showOnlyRule(ruleId,navigate){
+/* `keepScope` leaves the four registry dimensions alone. The dashboard passes it
+   so clicking a number inside a scoped dashboard stays inside that scope; the
+   Rules screen does not, because "42 found" there means 42 across the registry. */
+function showOnlyRule(ruleId,navigate,keepScope){
   const result=S.session&&S.session.result;if(!result)return;
   const others=[...new Set(result.findings.map(finding=>finding.rule.id))].filter(id=>id!==ruleId);
-  S.session.hiddenRules=others;S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.search='';clearDimFilters();S.session.scrollTop=0;S.session.cursor=-1;
+  S.session.hiddenRules=others;S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.search='';S.session.scrollTop=0;S.session.cursor=-1;
+  if(!keepScope)clearDimFilters();
   invalidateFindingCaches();S.homeMode='audit';navigate('audit');
 }
 export function renderRules(navigate){
@@ -288,7 +292,7 @@ async function runComparison(navigate){
 
 /* ---------------------------------------------------------- findings screen */
 
-function invalidateFindingCaches(){S.session.filteredCacheKey='';S.session.filteredCacheRows=null;S.session.displayCacheKey='';S.session.displayCacheRows=null;}
+function invalidateFindingCaches(){S.session.filteredCacheKey='';S.session.filteredCacheRows=null;S.session.displayCacheKey='';S.session.displayCacheRows=null;S.session.scopedCacheKey='';S.session.scopedCache=null;}
 function sessionRowIndex(){
   if(S.session.rowIndex)return S.session.rowIndex;
   const bySource=new Map(),byId=new Map(),rows=S.session.snapshot&&S.session.snapshot.rows||[];
@@ -311,17 +315,18 @@ function registryRowFor(finding){
 const DIM_KEYS=['discipline','milestone','upn','building'];
 const DIM_FIELDS={discipline:'discipline',milestone:'milestone',upn:'upn',building:'building'};
 const DIM_LABELS={discipline:'Discipline',milestone:'L2 milestone',upn:'UPN / system',building:'Building'};
-const DIM_ALL_LABELS={discipline:'All disciplines',milestone:'All milestones',upn:'All systems',building:'All buildings'};
 
 function dimFilterMap(){return S.session.dimFilters||(S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]])));}
 function dimSelected(dimension){return new Set(dimFilterMap()[dimension]||[]);}
 function clearDimFilters(){S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]]));}
-/* Options are the same buckets the dashboard ranks by, so a filter count and a
-   dashboard count can never disagree. */
+/* Options are the same buckets the dashboard ranks by — the dashboard just ranks
+   the findings currently in scope — so a filter count and a dashboard count are
+   the same number counted the same way. Options always come from the whole result
+   so a value never disappears from the panel because it was filtered out. */
 function dimOptions(dimension){
   const cache=S.session.dimOptionCache||(S.session.dimOptionCache={});
   if(cache[dimension])return cache[dimension];
-  const options=dashRankBuckets(dimension).map(bucket=>({key:auditNormId(bucket.value),label:bucket.label,count:bucket.count}))
+  const options=dashRankBuckets(dimension,S.session.result.findings).map(bucket=>({key:auditNormId(bucket.value),label:bucket.label,count:bucket.count}))
     .sort((a,b)=>(a.key?0:1)-(b.key?0:1)||natCmp(a.label,b.label));
   cache[dimension]=options;return options;
 }
@@ -379,81 +384,203 @@ function severityStrip(summary){
   const chip=level=>`<button class="sev-chip ${level} ${hidden.has(level)?'':'on'}" type="button" data-audit-severity="${level}" aria-pressed="${hidden.has(level)?'false':'true'}"><span class="sev-dot"></span>${SEVERITY_PLURALS[level]}<b>${summary.severity[level].toLocaleString()}</b></button>`;
   return `<div class="sev-strip"><button class="sev-chip all ${active.length===SSM_AUDIT_SEVERITIES.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${SSM_AUDIT_SEVERITIES.map(chip).join('')}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
 }
-function filterCount(){return ['hiddenSources','hiddenSeverities','hiddenCategories','hiddenRules'].reduce((total,key)=>total+(S.session[key]||[]).length,0);}
-function filterCheck(key,value,label,count){const checked=!(S.session[key]||[]).includes(value);return `<label class="audit-filter-option"><input type="checkbox" data-audit-filter-key="${key}" value="${esc(value)}" ${checked?'checked':''}><span>${esc(label)}</span><b>${Number(count||0).toLocaleString()}</b></label>`;}
-function filterMenu(result){
-  const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);
-  const rules=[...new Map(result.findings.map(finding=>[finding.rule.id,finding.rule])).values()].sort((a,b)=>a.title.localeCompare(b.title)||a.id.localeCompare(b.id));
-  const categories=SSM_AUDIT_CATEGORIES.filter(category=>(result.summary.category[category]||0)>0);
-  return `<div class="audit-filter-menu ${S.session.filterOpen?'open':''}" id="auditFilterMenu" role="dialog" aria-label="Filter findings" ${S.session.filterOpen?'':'hidden'}>
-    <div class="audit-filter-head"><div><b>Show findings</b><span>Ticked items stay visible</span></div><button class="btn ghost sm" id="auditResetFilters" type="button">${ic('rotate-ccw')}Clear all</button></div>
-    <div class="audit-filter-scroll"><fieldset><legend>Where the check comes from</legend>${SSM_AUDIT_SOURCES.map(source=>filterCheck('hiddenSources',source.id,source.label,result.summary.source[source.id])).join('')}</fieldset>
-    ${categories.length?`<fieldset><legend>Topic</legend>${categories.map(category=>filterCheck('hiddenCategories',category,CATEGORY_LABELS[category]||category,result.summary.category[category])).join('')}</fieldset>`:''}
-    <fieldset><legend>Individual checks</legend>${rules.map(rule=>filterCheck('hiddenRules',rule.id,rule.title,counts.get(rule.id))).join('')}</fieldset></div>
-  </div>`;
-}
-function dimButtonSummary(dimension){
-  const selected=dimFilterMap()[dimension]||[];
-  if(!selected.length)return DIM_ALL_LABELS[dimension];
-  if(selected.length===1)return dimOptionLabel(dimension,selected[0]);
-  return `${selected.length.toLocaleString()} selected`;
-}
-function dimMenuHtml(dimension){
-  const options=dimOptions(dimension),selected=dimSelected(dimension),open=S.session.dimOpen===dimension,label=DIM_LABELS[dimension];
-  const body=options.length?options.map(option=>`<label class="audit-filter-option"><input type="checkbox" data-dim-option="${dimension}" value="${esc(option.key)}" ${!selected.size||selected.has(option.key)?'checked':''}><span>${esc(option.label)}</span><b>${option.count.toLocaleString()}</b></label>`).join(''):`<p class="dim-menu-empty">No ${esc(label.toLowerCase())} values carry findings.</p>`;
-  return `<div class="dim-filter">
-    <button class="dim-button ${selected.size?'on':''}" type="button" data-dim-toggle="${dimension}" ${options.length?'':'disabled'} aria-expanded="${open?'true':'false'}" aria-haspopup="dialog"><b>${esc(label)}</b><span>${esc(dimButtonSummary(dimension))}</span>${ic('chevron-down')}</button>
-    <div class="dim-menu ${open?'open':''}" id="dimMenu-${dimension}" role="dialog" aria-label="Filter by ${esc(label)}" ${open?'':'hidden'}>
-      <div class="dim-menu-head"><b>${esc(label)}</b><button class="btn ghost sm" type="button" data-dim-all="${dimension}">${ic('rotate-ccw')}All</button></div>
-      <div class="dim-menu-scroll">${body}</div>
-    </div></div>`;
-}
-function dimChipsHtml(){
-  const chips=[];
-  for(const dimension of DIM_KEYS)for(const key of dimFilterMap()[dimension]||[]){
-    const label=dimOptionLabel(dimension,key);
-    chips.push(`<span class="dim-chip"><b>${esc(DIM_LABELS[dimension])}:</b><span>${esc(label)}</span><button class="dim-chip-x" type="button" data-dim-chip="${dimension}" data-dim-chip-value="${esc(key)}" title="Stop showing ${esc(label)}" aria-label="Stop showing ${esc(label)}">${ic('x')}</button></span>`);
+/* ------------------------------------------------------------- filter panel */
+
+/* One filter model behind everything. Each section is a checklist over the same
+   result and reduces to one of two state shapes:
+     kind 'hidden' — S.session[stateKey] lists the values that are hidden
+     kind 'dim'    — S.session.dimFilters[id] lists the values that are kept
+   An empty list means the section is not filtering, so "everything ticked" and
+   "nothing chosen yet" stay the same state in both shapes. */
+const FILTER_SECTIONS=[
+  {id:'severity',kind:'hidden',stateKey:'hiddenSeverities',label:'Level',hint:'How serious the finding is'},
+  {id:'discipline',kind:'dim',label:DIM_LABELS.discipline,hint:'The discipline on the registry row'},
+  {id:'milestone',kind:'dim',label:DIM_LABELS.milestone,hint:'The commissioning phase the row sits in'},
+  {id:'upn',kind:'dim',label:DIM_LABELS.upn,hint:'The system the row belongs to'},
+  {id:'building',kind:'dim',label:DIM_LABELS.building,hint:'Where the equipment is'},
+  {id:'source',kind:'hidden',stateKey:'hiddenSources',label:'Source',hint:'Where the check comes from'},
+  {id:'category',kind:'hidden',stateKey:'hiddenCategories',label:'Topic',hint:'What the check is about'},
+  {id:'rule',kind:'hidden',stateKey:'hiddenRules',label:'Check',hint:'The individual check that fired'},
+];
+let filterPanelOpener=null,filterPanelTrap=null,filterRerender=null;
+
+function filterSection(id){return FILTER_SECTIONS.find(section=>section.id===id)||null;}
+/* Counts come from the whole result, never from the current scope: a number that
+   moved every time you ticked a box would be impossible to aim with. */
+function filterSectionOptions(section){
+  const result=S.session&&S.session.result;if(!result)return [];
+  if(section.kind==='dim')return dimOptions(section.id);
+  const cache=S.session.filterOptionCache||(S.session.filterOptionCache={});
+  if(cache[section.id])return cache[section.id];
+  let options=[];
+  if(section.id==='severity')options=SSM_AUDIT_SEVERITIES.map(level=>({key:level,label:SEVERITY_LABELS[level],count:result.summary.severity[level]||0}));
+  else if(section.id==='source')options=SSM_AUDIT_SOURCES.map(source=>({key:source.id,label:source.label,count:result.summary.source[source.id]||0}));
+  else if(section.id==='category')options=SSM_AUDIT_CATEGORIES.filter(category=>(result.summary.category[category]||0)>0).map(category=>({key:category,label:CATEGORY_LABELS[category]||category,count:result.summary.category[category]||0}));
+  else if(section.id==='rule'){
+    const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);
+    options=[...new Map(result.findings.map(finding=>[finding.rule.id,finding.rule])).values()]
+      .map(rule=>({key:rule.id,label:rule.title,count:counts.get(rule.id)||0}))
+      .sort((a,b)=>b.count-a.count||natCmp(a.label,b.label));
   }
-  if(!chips.length)return '';
-  return chips.join('')+`<button class="dim-clear" type="button" id="dimClearAll">Clear filters</button>`;
+  cache[section.id]=options;return options;
 }
-function dimBarHtml(){
-  return `<div class="dim-bar" id="dimBar"><span class="dim-bar-label">${ic('sliders-horizontal')}Filter by</span>${DIM_KEYS.map(dimMenuHtml).join('')}<div class="dim-chips">${dimChipsHtml()}</div></div>`;
+function filterSectionIsOn(section,key){
+  if(section.kind==='dim'){const selected=dimSelected(section.id);return !selected.size||selected.has(key);}
+  return !(S.session[section.stateKey]||[]).includes(key);
 }
-function setDimMenuOpen(dimension){
-  S.session.dimOpen=dimension||'';
-  for(const key of DIM_KEYS){
-    const menu=$(`#dimMenu-${key}`),button=$(`[data-dim-toggle="${key}"]`),open=S.session.dimOpen===key;
-    if(menu){menu.hidden=!open;menu.classList.toggle('open',open);}
-    if(button)button.setAttribute('aria-expanded',open?'true':'false');
+function filterSectionActive(section){
+  if(section.kind==='dim')return dimSelected(section.id).size>0;
+  return (S.session[section.stateKey]||[]).length>0;
+}
+function filterSectionKept(section){
+  const options=filterSectionOptions(section);
+  if(section.kind==='dim'){const selected=dimSelected(section.id);return selected.size?options.filter(option=>selected.has(option.key)):options;}
+  const hidden=new Set(S.session[section.stateKey]||[]);
+  return options.filter(option=>!hidden.has(option.key));
+}
+function filterSectionReset(section){if(section.kind==='dim')dimFilterMap()[section.id]=[];else S.session[section.stateKey]=[];}
+/* Ticking is computed from state rather than from the checkboxes on screen, so a
+   search that hides half the list cannot silently unselect what it hid. */
+function filterSectionSet(section,key,on){
+  if(section.kind==='dim'){
+    const options=filterSectionOptions(section),selected=dimSelected(section.id),keys=selected.size?new Set(selected):new Set(options.map(option=>option.key));
+    if(on)keys.add(key);else keys.delete(key);
+    setDimSelection(section.id,keys);return;
   }
+  const hidden=new Set(S.session[section.stateKey]||[]);
+  if(on)hidden.delete(key);else hidden.add(key);
+  S.session[section.stateKey]=[...hidden];
 }
-function renderDimBar(){
-  const bar=$('#dimBar');if(!bar)return;
-  const replacement=document.createElement('div');replacement.innerHTML=dimBarHtml();
-  bar.replaceWith(replacement.firstElementChild);wireDimBar();
+function filterActiveCount(){return FILTER_SECTIONS.filter(filterSectionActive).length;}
+function clearAllFilters(){S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];clearDimFilters();}
+
+/* A chip is one value a filtering section is still showing, whichever state shape
+   it lives in, so removing a chip always means the same thing: stop showing this. */
+function filterChipRowHtml(includeSeverity){
+  const groups=[];
+  for(const section of FILTER_SECTIONS){
+    if(!filterSectionActive(section))continue;
+    if(section.id==='severity'&&!includeSeverity)continue;
+    const kept=filterSectionKept(section);
+    const chips=kept.length?kept.map(option=>`<span class="filter-chip"><span>${esc(option.label)}</span><button class="filter-chip-x" type="button" data-filter-chip="${esc(section.id)}" data-filter-chip-value="${esc(option.key)}" title="Stop showing ${esc(option.label)}" aria-label="Stop showing ${esc(option.label)}">${ic('x')}</button></span>`).join('')
+      :'<span class="filter-chip is-none">Nothing shown</span>';
+    groups.push(`<span class="filter-chip-group"><b>${esc(section.label)}</b>${chips}</span>`);
+  }
+  if(!groups.length)return '<div class="filter-chip-row" id="filterChipRow" hidden></div>';
+  return `<div class="filter-chip-row" id="filterChipRow">${ic('filter')}${groups.join('')}<button class="filter-chip-clear" type="button" data-filter-clear-all>Clear all</button></div>`;
 }
-/* The bar is rebuilt after every change so the button summaries and chips stay
+function filterButtonHtml(id){
+  const count=filterActiveCount();
+  return `<button class="btn audit-filter-button ${count?'active':''}" id="${esc(id)}" type="button" data-filter-button aria-expanded="${S.session.panelOpen?'true':'false'}" aria-haspopup="dialog">${ic('filter')}Filters <b class="filter-badge">${count||''}</b></button>`;
+}
+function filterPanelSectionHtml(section,query){
+  const options=filterSectionOptions(section);if(!options.length)return '';
+  const matches=query?options.filter(option=>option.label.toUpperCase().includes(query)):options;
+  const active=filterSectionActive(section),kept=filterSectionKept(section).length;
+  const body=matches.length
+    ?matches.map(option=>`<label class="audit-filter-option"><input type="checkbox" data-filter-option="${esc(section.id)}" value="${esc(option.key)}" ${filterSectionIsOn(section,option.key)?'checked':''}><span title="${esc(option.label)}">${esc(option.label)}</span><b>${option.count.toLocaleString()}</b></label>`).join('')
+    :`<p class="filter-section-empty">Nothing in ${esc(section.label)} matches that search.</p>`;
+  return `<section class="filter-section ${active?'is-active':''}" data-filter-section="${esc(section.id)}">
+    <div class="filter-section-head"><div><b>${esc(section.label)}</b><span>${esc(section.hint)}</span></div>
+      <span class="filter-section-state">${active?`${kept.toLocaleString()} of ${options.length.toLocaleString()}`:''}</span>
+      <button class="btn ghost sm" type="button" data-filter-all="${esc(section.id)}" ${active?'':'disabled'} title="Show every ${esc(section.label.toLowerCase())}">${ic('rotate-ccw')}All</button></div>
+    <div class="filter-section-list">${body}</div></section>`;
+}
+function filterPanelBodyHtml(){
+  const query=clean(S.session.panelSearch).toUpperCase();
+  const sections=FILTER_SECTIONS.map(section=>filterPanelSectionHtml(section,query)).filter(Boolean).join('');
+  return sections||'<p class="filter-section-empty">There is nothing to filter yet.</p>';
+}
+function filterPanelSummary(){const count=filterActiveCount();return count?`${count} ${count===1?'group':'groups'} filtering`:'Nothing filtered';}
+function filterPanelHtml(){
+  const open=!!S.session.panelOpen;
+  return `<div class="filter-sheet-back ${open?'show':''}" id="filterSheetBack" ${open?'':'hidden'}>
+    <aside class="filter-sheet" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filters" tabindex="-1">
+      <header class="filter-sheet-head"><div><b>Filters</b><span id="filterSheetSummary">${esc(filterPanelSummary())}</span></div><button class="xbtn icon-btn" type="button" id="filterSheetClose" aria-label="Close filters">${ic('x')}</button></header>
+      <div class="filter-sheet-search"><div class="searchbox">${ic('search')}<input id="filterSheetSearch" aria-label="Search the filter options" placeholder="Search filter options" value="${esc(S.session.panelSearch)}"></div></div>
+      <div class="filter-sheet-scroll" id="filterSheetBody">${filterPanelBodyHtml()}</div>
+      <footer class="filter-sheet-foot"><button class="btn ghost" type="button" id="filterSheetClear">${ic('rotate-ccw')}Clear all</button><button class="btn primary" type="button" id="filterSheetDone">Done</button></footer>
+    </aside></div>`;
+}
+function focusFilterOption(sectionId,value){
+  const match=$$('[data-filter-option]').find(box=>box.dataset.filterOption===sectionId&&box.value===value);
+  (match||$(`[data-filter-all="${sectionId}"]`)||$('#filterSheetSearch'))?.focus();
+}
+function renderFilterPanelBody(){
+  const body=$('#filterSheetBody');if(body){body.innerHTML=filterPanelBodyHtml();wireFilterPanelBody();}
+  const summary=$('#filterSheetSummary');if(summary)summary.textContent=filterPanelSummary();
+}
+function updateFilterBadge(){
+  const count=filterActiveCount();
+  $$('[data-filter-button]').forEach(button=>{button.classList.toggle('active',!!count);const badge=button.querySelector('.filter-badge');if(badge)badge.textContent=count||'';});
+}
+/* Every change applies live. The panel body is rebuilt so per-section state stays
    truthful, which means focus has to be put back on the control that was used. */
-function applyDimChange(keepOpen,focusValue){
-  S.session.dimOpen=keepOpen||'';S.session.cursor=-1;invalidateFindingCaches();renderDimBar();rerenderRows(true);
-  if(!keepOpen)return;
-  const restore=focusValue==null?null:$$(`[data-dim-option="${keepOpen}"]`).find(box=>box.value===focusValue);
-  (restore||$(`[data-dim-toggle="${keepOpen}"]`))?.focus();
+function applyFilterChange(restoreFocus){
+  S.session.cursor=-1;invalidateFindingCaches();
+  if(S.session.panelOpen)renderFilterPanelBody();
+  filterRerender?.();
+  restoreFocus?.();
 }
-function wireDimBar(){
-  $$('[data-dim-toggle]').forEach(button=>button.onclick=event=>{event.stopPropagation();const dimension=button.dataset.dimToggle;setDimMenuOpen(S.session.dimOpen===dimension?'':dimension);});
-  $$('[data-dim-option]').forEach(input=>input.onchange=()=>{
-    const dimension=input.dataset.dimOption,keys=new Set();
-    $$(`[data-dim-option="${dimension}"]`).forEach(box=>{if(box.checked)keys.add(box.value);});
-    setDimSelection(dimension,keys);applyDimChange(dimension,input.value);
+function wireFilterPanelBody(){
+  $$('[data-filter-option]').forEach(input=>input.onchange=()=>{
+    const section=filterSection(input.dataset.filterOption);if(!section)return;
+    const value=input.value;filterSectionSet(section,value,input.checked);
+    applyFilterChange(()=>focusFilterOption(section.id,value));
   });
-  $$('[data-dim-all]').forEach(button=>button.onclick=()=>{const dimension=button.dataset.dimAll;dimFilterMap()[dimension]=[];applyDimChange(dimension);});
-  $$('[data-dim-chip]').forEach(button=>button.onclick=()=>{
-    const dimension=button.dataset.dimChip,value=button.dataset.dimChipValue;
-    dimFilterMap()[dimension]=(dimFilterMap()[dimension]||[]).filter(key=>key!==value);applyDimChange('');
+  $$('[data-filter-all]').forEach(button=>button.onclick=()=>{
+    const section=filterSection(button.dataset.filterAll);if(!section)return;
+    filterSectionReset(section);applyFilterChange(()=>$(`[data-filter-section="${section.id}"] input`)?.focus());
   });
-  const clear=$('#dimClearAll');if(clear)clear.onclick=()=>{clearDimFilters();applyDimChange('');};
+}
+function renderFilterChipRow(includeSeverity){
+  const row=$('#filterChipRow');if(!row)return;
+  const replacement=document.createElement('div');replacement.innerHTML=filterChipRowHtml(includeSeverity);
+  row.replaceWith(replacement.firstElementChild);wireFilterChips();
+}
+function wireFilterChips(){
+  $$('[data-filter-chip]').forEach(button=>button.onclick=()=>{
+    const section=filterSection(button.dataset.filterChip);if(!section)return;
+    filterSectionSet(section,button.dataset.filterChipValue,false);applyFilterChange();
+  });
+  /* The chip row carries one, and the dashboard's empty-scope card carries
+     another — both are on screen at once when the filters exclude everything. */
+  $$('[data-filter-clear-all]').forEach(button=>button.onclick=()=>{clearAllFilters();applyFilterChange();});
+}
+function setFilterPanelOpen(open){
+  const back=$('#filterSheetBack');if(!back)return;
+  S.session.panelOpen=!!open;
+  back.hidden=!open;back.classList.toggle('show',!!open);
+  $$('[data-filter-button]').forEach(button=>button.setAttribute('aria-expanded',open?'true':'false'));
+  document.body.classList.toggle('filter-sheet-open',!!open);
+  if(open){
+    /* Whatever opened the panel gets focus back when it closes. A pointer click
+       may leave the body focused, so the Filters button is the fallback. */
+    const active=document.activeElement;
+    filterPanelOpener=active&&active!==document.body?active:$('[data-filter-button]');
+    renderFilterPanelBody();
+    filterPanelTrap?.();filterPanelTrap=activateFocusTrap(back,()=>setFilterPanelOpen(false));
+    requestAnimationFrame(()=>$('#filterSheetSearch')?.focus());
+    return;
+  }
+  filterPanelTrap?.();filterPanelTrap=null;
+  const opener=filterPanelOpener;filterPanelOpener=null;
+  const target=opener&&document.contains(opener)&&typeof opener.focus==='function'?opener:$('[data-filter-button]');
+  target?.focus();
+}
+/* The dashboard rebuilds its whole shell — Filters button included — after every
+   live filter change, so the buttons are rewired separately from the panel. */
+function wireFilterButtons(){
+  $$('[data-filter-button]').forEach(button=>button.onclick=()=>setFilterPanelOpen(!S.session.panelOpen));
+}
+function wireFilterPanel(){
+  const back=$('#filterSheetBack');if(!back)return;
+  back.onpointerdown=event=>{if(event.target===back)setFilterPanelOpen(false);};
+  $('#filterSheetClose').onclick=()=>setFilterPanelOpen(false);
+  $('#filterSheetDone').onclick=()=>setFilterPanelOpen(false);
+  $('#filterSheetClear').onclick=()=>{clearAllFilters();applyFilterChange(()=>$('#filterSheetClear')?.focus());};
+  $('#filterSheetSearch').oninput=event=>{S.session.panelSearch=event.target.value;debounceSearch(renderFilterPanelBody);};
+  wireFilterButtons();wireFilterPanelBody();
 }
 function sortOptions(){const options=[['severity-desc','Most serious first'],['severity-asc','Least serious first'],['equipment-asc','Equipment A to Z'],['equipment-desc','Equipment Z to A'],['rule-asc','Check A to Z'],['rule-desc','Check Z to A'],['row-asc','Row, low to high'],['row-desc','Row, high to low']];return options.map(([value,label])=>`<option value="${value}" ${S.session.sort===value?'selected':''}>${label}</option>`).join('');}
 function groupOptions(){const options=[['none','No grouping'],['rule','Group by check'],['milestone','Group by L2 milestone']];return options.map(([value,label])=>`<option value="${value}" ${S.session.groupBy===value?'selected':''}>${label}</option>`).join('');}
@@ -461,14 +588,15 @@ function statusMarkup(summary){const blockers=summary.severity.blocker||0,label=
 
 export function renderAuditResult(navigate){
   const result=S.session&&S.session.result;if(!result){navigate('upload');return;}
-  S.screen='audit';S.session.dimOpen='';const summary=result.summary,fullscreen=!!S.session.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
+  S.screen='audit';S.session.panelOpen=false;const summary=result.summary,fullscreen=!!S.session.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
   $('#view').innerHTML=`<section id="auditShell" class="audit-shell ${fullscreen?'fullscreen':''}">
     <div class="audit-head"><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><h2>Audit findings</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="auditDashboard">${ic('layout-dashboard')}Dashboard</button><button class="btn" id="auditBack">${ic('upload')}New registry</button><button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
     ${severityStrip(summary)}
-    ${dimBarHtml()}
-    <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, checks, and explanations" value="${esc(S.session.search)}"></div><div class="audit-filter-wrap"><button class="btn audit-filter-button ${filterCount()?'active':''}" id="auditFilters" type="button" aria-expanded="${S.session.filterOpen?'true':'false'}" aria-haspopup="dialog">${ic('filter')}Filters <b id="auditFilterCount">${filterCount()||''}</b></button>${filterMenu(result)}</div><select id="auditGroup" aria-label="Group findings">${groupOptions()}</select><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
+    ${filterChipRowHtml(false)}
+    <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, checks, and explanations" value="${esc(S.session.search)}"></div>${filterButtonHtml('auditFilters')}<select id="auditGroup" aria-label="Group findings">${groupOptions()}</select><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
     <div class="audit-table-wrap" id="auditTableWrap" tabindex="0" role="group" aria-label="Findings list. Use the arrow keys to move and Enter to open."><table class="audit-table"><thead><tr><th>Severity</th><th>What was found</th><th>Equipment ID</th><th>Source</th><th>Sheet &middot; row</th><th aria-label="Open details"></th></tr></thead><tbody id="auditRows"></tbody></table></div>
-  </section>`;
+  </section>
+  ${filterPanelHtml()}`;
   renderSideNav(navigate);wireAuditResult(navigate);
 }
 
@@ -517,9 +645,9 @@ function activateCursor(){
   const row=$(`[data-row-index="${S.session.cursor}"]`);openFinding(item.finding.id,row);
 }
 function resetAuditFilters(){
-  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';clearDimFilters();S.session.cursor=-1;
-  invalidateFindingCaches();const search=$('#auditSearch');if(search)search.value='';
-  $$('[data-audit-filter-key]').forEach(input=>input.checked=true);updateFilterButton();renderSeverityStrip();renderDimBar();rerenderRows(true);
+  clearAllFilters();S.session.search='';
+  const search=$('#auditSearch');if(search)search.value='';
+  applyFilterChange();
 }
 function renderSeverityStrip(){
   const strip=$('.sev-strip'),result=S.session.result;if(!strip||!result)return;
@@ -532,9 +660,7 @@ function wireSeverityStrip(){
     if(level==='all')S.session.hiddenSeverities=[];
     else{const hidden=new Set(S.session.hiddenSeverities||[]);if(hidden.has(level))hidden.delete(level);else hidden.add(level);
       if(hidden.size===SSM_AUDIT_SEVERITIES.length)hidden.clear();S.session.hiddenSeverities=[...hidden];}
-    S.session.cursor=-1;invalidateFindingCaches();updateFilterButton();
-    $$('[data-audit-filter-key]').forEach(input=>{if(input.dataset.auditFilterKey==='hiddenSeverities')input.checked=!(S.session.hiddenSeverities||[]).includes(input.value);});
-    renderSeverityStrip();rerenderRows(true);
+    applyFilterChange();
   });
 }
 
@@ -633,30 +759,23 @@ export function closeDrawer(){
   drawerTrapCleanup?.();drawerTrapCleanup=null;$('#drawerBack').classList.remove('show');$('#drawerBack').setAttribute('aria-hidden','true');const opener=S.session&&S.session.opener;if(opener&&document.contains(opener))opener.focus();
 }
 function rerenderRows(reset){const wrap=$('#auditTableWrap');if(reset&&wrap)wrap.scrollTop=0;renderRows();}
-function updateFilterButton(){const count=filterCount(),button=$('#auditFilters'),badge=$('#auditFilterCount');if(button)button.classList.toggle('active',!!count);if(badge)badge.textContent=count||'';}
-function setFilterOpen(open){S.session.filterOpen=!!open;const menu=$('#auditFilterMenu'),button=$('#auditFilters');if(menu){menu.hidden=!open;menu.classList.toggle('open',!!open);}if(button)button.setAttribute('aria-expanded',open?'true':'false');}
-function teardownAuditFilters(){if(auditOutsideHandler)document.removeEventListener('pointerdown',auditOutsideHandler);if(auditEscapeHandler)document.removeEventListener('keydown',auditEscapeHandler);auditOutsideHandler=null;auditEscapeHandler=null;}
+/* Every screen that can host the filter panel tears the previous one down first,
+   so a panel never outlives the screen that opened it. */
+function teardownAuditFilters(){
+  filterPanelTrap?.();filterPanelTrap=null;filterPanelOpener=null;filterRerender=null;
+  document.body.classList.remove('filter-sheet-open');
+  if(S.session)S.session.panelOpen=false;
+}
 function wireAuditResult(navigate){
   teardownAuditFilters();
+  filterRerender=()=>{renderSeverityStrip();renderFilterChipRow(false);updateFilterBadge();rerenderRows(true);};
   $('#auditBack').onclick=()=>{S.homeMode='audit';navigate('upload');};$('#exportAudit').onclick=exportSsmAuditXlsx;
   $('#auditDashboard').onclick=()=>navigate('dashboard');
   $('#auditFullscreen').onclick=()=>{S.session.fullscreen=!S.session.fullscreen;renderAuditResult(navigate);};
   $('#auditSearch').oninput=event=>{S.session.search=event.target.value;S.session.cursor=-1;debounceSearch(()=>rerenderRows(true));};
   $('#auditSort').onchange=event=>{S.session.sort=event.target.value;S.session.cursor=-1;rerenderRows(true);};
   $('#auditGroup').onchange=event=>{S.session.groupBy=event.target.value;S.session.collapsedGroups=[];S.session.cursor=-1;S.session.displayCacheKey='';rerenderRows(true);};
-  $('#auditFilters').onclick=event=>{event.stopPropagation();setFilterOpen(!S.session.filterOpen);};
-  $('#auditResetFilters').onclick=()=>resetAuditFilters();
-  $$('[data-audit-filter-key]').forEach(input=>input.onchange=()=>{const key=input.dataset.auditFilterKey,values=new Set(S.session[key]||[]);if(input.checked)values.delete(input.value);else values.add(input.value);S.session[key]=[...values];S.session.cursor=-1;invalidateFindingCaches();updateFilterButton();renderSeverityStrip();rerenderRows(true);});
-  wireSeverityStrip();wireDimBar();
-  auditOutsideHandler=event=>{
-    if(S.session.filterOpen&&!event.target.closest('.audit-filter-wrap'))setFilterOpen(false);
-    if(S.session.dimOpen&&!event.target.closest('.dim-filter'))setDimMenuOpen('');
-  };document.addEventListener('pointerdown',auditOutsideHandler);
-  auditEscapeHandler=event=>{
-    if(event.key!=='Escape')return;
-    if(S.session.filterOpen){setFilterOpen(false);$('#auditFilters')?.focus();}
-    else if(S.session.dimOpen){const dimension=S.session.dimOpen;setDimMenuOpen('');$(`[data-dim-toggle="${dimension}"]`)?.focus();}
-  };document.addEventListener('keydown',auditEscapeHandler);
+  wireSeverityStrip();wireFilterChips();wireFilterPanel();
   const wrap=$('#auditTableWrap');
   wrap.onkeydown=event=>{
     if(event.key==='ArrowDown'){event.preventDefault();moveCursor(1);}
@@ -671,14 +790,54 @@ function wireAuditResult(navigate){
 /* --------------------------------------------------------- dashboard screen */
 
 /* The dashboard is where an audit lands. It answers "what did this registry turn
-   up" in one screen, and every number on it is a way into the findings list. */
-const DASH_RANK_LIMIT=8,DASH_RULE_LIMIT=10,DASH_NO_MILESTONE='No L2 milestone';
+   up" in one screen, every number on it is a way into the findings list, and it
+   reads the same filters as the findings list so it can be scoped to one
+   building, one discipline, or one phase. */
+const DASH_RANK_LIMIT=8,DASH_NO_MILESTONE='No L2 milestone',DASH_DEEP_NEST=6,DASH_MAX_CHAIN=64;
 const DASH_SEVERITY_MEANINGS={blocker:'Contradicts the registry or the approved lists',error:'Breaks an SSM SOP rule',warning:'A strong pattern says look',info:'Worth knowing'};
+
+/* Findings are already filtered by everything. Rows are narrowed by the four
+   registry dimensions only: a level, source, topic, or check filter says which
+   findings to read, not which rows exist, so a row with nothing wrong with it
+   still counts towards the structure numbers. */
+function scopedResult(){
+  const result=S.session&&S.session.result;if(!result)return {rows:[],findings:[],headerIds:[]};
+  const findings=filteredFindings(),active=dimActiveSets();
+  const key=[S.session.filteredCacheKey,DIM_KEYS.map(dimension=>(dimFilterMap()[dimension]||[]).join('~')).join('|')].join('#');
+  if(S.session.scopedCacheKey===key&&S.session.scopedCache)return {...S.session.scopedCache,findings};
+  const allRows=result.rows||[],allHeaders=result.headerIds||[];
+  const rows=active.length?allRows.filter(row=>active.every(([field,values])=>values.has(auditNormId(row[field])))):[...allRows];
+  let headerIds=[...allHeaders];
+  if(active.length){const ids=new Set(rows.map(row=>auditNormId(row.equipmentId)));headerIds=allHeaders.filter(id=>ids.has(auditNormId(id)));}
+  S.session.scopedCacheKey=key;S.session.scopedCache={rows,headerIds};
+  return {rows,headerIds,findings};
+}
+function dashIsScoped(){return filterActiveCount()>0||!!clean(S.session.search);}
+function dashSeverityCounts(findings){
+  const counts=Object.fromEntries(SSM_AUDIT_SEVERITIES.map(level=>[level,0]));
+  for(const finding of findings)if(counts[finding.severity]!=null)counts[finding.severity]++;
+  return counts;
+}
+/* One pass that hands every block the same row-to-findings map, so two blocks can
+   never disagree about whether a row is clean. */
+function dashRowFindings(scoped){
+  const map=new Map();
+  for(const finding of scoped.findings){const row=registryRowFor(finding);if(!row)continue;const list=map.get(row);if(list)list.push(finding);else map.set(row,[finding]);}
+  return map;
+}
+function dashRowsById(scoped){
+  const rowsById=new Map();
+  for(const row of scoped.rows){const id=auditNormId(row.equipmentId);if(id&&!rowsById.has(id))rowsById.set(id,row);}
+  return rowsById;
+}
+function dashRuleCounts(scoped){
+  const counts=new Map();for(const finding of scoped.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);return counts;
+}
 /* A UPN is labelled with the System Name most of its rows agree on — one row with
    a mistyped System Name should not become the name of the whole system. */
-function dashRankBuckets(kind){
+function dashRankBuckets(kind,findings){
   const field=DIM_FIELDS[kind],buckets=new Map();
-  for(const finding of S.session.result.findings){
+  for(const finding of findings){
     const row=registryRowFor(finding);if(!row)continue;
     const value=clean(row[field]);if(!value&&kind!=='milestone')continue;
     const key=auditNormId(value);let bucket=buckets.get(key);
@@ -692,66 +851,214 @@ function dashRankBuckets(kind){
     /* Approved System Names already lead with the UPN ("602  Medium Voltage"),
        so only prefix it when the name does not. */
     const name=common?clean(common[0]).replace(/\s+/g,' '):'';
-    bucket.label=name&&auditNormId(name).startsWith(auditNormId(bucket.value)+' ')?name:clean(`${bucket.value}${name?' \u00b7 '+name:''}`);
+    bucket.label=name&&auditNormId(name).startsWith(auditNormId(bucket.value)+' ')?name:clean(`${bucket.value}${name?' · '+name:''}`);
   }
   return list.sort((a,b)=>b.count-a.count||natCmp(a.label,b.label));
 }
-function dashRuleRanking(){
-  const entries=new Map();
-  for(const finding of S.session.result.findings){
-    let entry=entries.get(finding.rule.id);
-    if(!entry){entry={rule:finding.rule,count:0,worst:'',rows:new Set()};entries.set(finding.rule.id,entry);}
-    entry.count++;if(severityRank(finding.severity)>severityRank(entry.worst))entry.worst=finding.severity;
-    entry.rows.add(auditNormId(finding.equipmentId)||`${auditNormId(finding.sheet)}|${finding.row||0}`);
+
+/* ---- milestone readiness ---- */
+
+/* Can this phase be commissioned yet? One row per L2 milestone, counting the rows
+   in it and how many of them are clean. */
+function dashMilestoneReadiness(scoped){
+  const byRow=dashRowFindings(scoped),buckets=new Map();
+  for(const row of scoped.rows){
+    const value=clean(row.milestone),key=auditNormId(value);
+    let bucket=buckets.get(key);
+    if(!bucket){bucket={key,label:value||DASH_NO_MILESTONE,rows:0,clean:0,findings:0,blocker:0,error:0,warning:0,info:0};buckets.set(key,bucket);}
+    const list=byRow.get(row)||[];
+    bucket.rows++;if(!list.length)bucket.clean++;
+    for(const finding of list){bucket.findings++;if(bucket[finding.severity]!=null)bucket[finding.severity]++;}
   }
-  return [...entries.values()].sort((a,b)=>b.count-a.count||severityRank(b.worst)-severityRank(a.worst)||natCmp(a.rule.title,b.rule.title));
+  return [...buckets.values()].sort((a,b)=>b.blocker-a.blocker||b.findings-a.findings||natCmp(a.label,b.label));
 }
-/* Two of these tiles answer questions about the registry as it was written: which
-   Equipment Classifications are not on the approved Rev21 list, and how often a
-   Closest Parent is repeated in Dependencies (routine in electrical, worth a look
-   elsewhere). Both are counted here so the tiles read from one pass. */
-const DASH_SITE_CLASS_RULE=SSM_AUDIT_RULES.siteClassification.id,DASH_PARENT_DEPENDENCY_RULE=SSM_AUDIT_RULES.parentAlsoDependency.id,DASH_MOSTLY_ELECTRICAL=.7;
-function dashStructureStats(){
-  const result=S.session.result,rows=result.rows||[],upns=new Set(),disciplines=new Set(),milestones=new Set(),siteClassifications=new Set();
-  let roots=0,withDependencies=0,fullyPhased=0,siteClassificationRows=0;
-  for(const row of rows){
-    const classification=clean(row.equipmentClassification);
-    if(classification&&!extoRev21Canonical('equipmentClassification',classification)){siteClassifications.add(auditNormId(classification));siteClassificationRows++;}
-    const upn=auditNormId(row.upn),discipline=auditNormId(row.discipline),milestone=auditNormId(row.milestone),parent=auditNormId(row.closestParent);
-    if(upn)upns.add(upn);if(discipline)disciplines.add(discipline);if(milestone)milestones.add(milestone);
+function dashSeverityNumeral(level,count){
+  return `<span class="dash-numeral ${esc(level)} ${count?'':'is-zero'}" title="${esc(SEVERITY_LABELS[level])}">${count.toLocaleString()}</span>`;
+}
+function dashMilestoneTableHtml(scoped){
+  const buckets=dashMilestoneReadiness(scoped);
+  if(!buckets.length)return '<p class="dash-empty">No rows in scope.</p>';
+  return `<div class="dash-table-scroll"><table class="dash-table dash-milestone-table">
+    <thead><tr><th>L2 milestone</th><th>Rows</th><th>Findings</th><th class="dash-levels-head">By level</th><th>Clean</th></tr></thead>
+    <tbody>${buckets.map(bucket=>{
+      const percent=bucket.rows?Math.round(bucket.clean/bucket.rows*100):0;
+      return `<tr data-dash-milestone="${esc(bucket.key)}" tabindex="0" title="Show the findings on ${esc(bucket.label)}">
+        <td class="dash-table-name"><b>${esc(bucket.label)}</b></td>
+        <td class="dash-table-num">${bucket.rows.toLocaleString()}</td>
+        <td class="dash-table-num">${bucket.findings.toLocaleString()}</td>
+        <td class="dash-levels">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityNumeral(level,bucket[level])).join('')}</td>
+        <td class="dash-clean"><span class="dash-clean-bar"><i style="width:${percent}%"></i></span><small>${percent}%</small></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+/* ---- hierarchy health ---- */
+
+/* Depth and "clean branch" both need the parent chain, so they are walked once.
+   A chain that leaves the scope, or loops, is treated as a top: loops are already
+   a finding of their own and must not turn into an endless walk here. */
+function dashHierarchyHealth(scoped){
+  const rowsById=dashRowsById(scoped),byRow=dashRowFindings(scoped),resolved=new Map();
+  const resolveRow=start=>{
+    const path=[],seen=new Set();let current=start;
+    while(current&&!resolved.has(current)&&!seen.has(current)&&path.length<DASH_MAX_CHAIN){
+      seen.add(current);path.push(current);
+      const parentId=auditNormId(current.closestParent);
+      const parent=parentId?rowsById.get(parentId)||null:null;
+      current=parent===current?null:parent;
+    }
+    let base=current&&resolved.get(current)||{depth:-1,dirty:false};
+    for(let index=path.length-1;index>=0;index--){
+      const row=path[index];
+      base={depth:base.depth+1,dirty:base.dirty||(byRow.get(row)||[]).length>0};
+      resolved.set(row,base);
+    }
+    return resolved.get(start)||{depth:0,dirty:false};
+  };
+  let roots=0,maxDepth=0,deep=0,cleanBranch=0;
+  for(const row of scoped.rows){
+    const parent=auditNormId(row.closestParent);
     if(parent&&parent===auditNormId(row.systemName))roots++;
-    if(auditSplitReferences(row.dependencies).length)withDependencies++;
-    if(milestone&&auditNormId(row.milestoneParent))fullyPhased++;
+    const info=resolveRow(row);
+    if(info.depth>maxDepth)maxDepth=info.depth;
+    if(info.depth>=DASH_DEEP_NEST)deep++;
+    if(!info.dirty)cleanBranch++;
   }
-  let siteClassificationFindings=0,parentAlsoDependency=0,parentAlsoDependencyElectrical=0;
-  for(const finding of result.findings){
-    if(finding.rule.id===DASH_SITE_CLASS_RULE){siteClassificationFindings++;continue;}
-    if(finding.rule.id!==DASH_PARENT_DEPENDENCY_RULE)continue;
+  const counts=dashRuleCounts(scoped);
+  return {rows:scoped.rows.length,roots,maxDepth,deep,headers:scoped.headerIds.length,
+    cleanBranchPercent:scoped.rows.length?Math.round(cleanBranch/scoped.rows.length*100):0,
+    systemsNoRoot:counts.get(SSM_AUDIT_RULES.systemNoRoot.id)||0};
+}
+function dashHierarchyTiles(stats){
+  return [
+    {label:'Top of a system',value:stats.roots.toLocaleString(),note:'Parent is their own System Name'},
+    {label:'Deepest nesting',value:stats.maxDepth.toLocaleString(),note:'Levels below the top of a system'},
+    {label:`Nested ${DASH_DEEP_NEST}+ deep`,value:stats.deep.toLocaleString(),note:'Rows a long way down a branch',action:stats.deep?'hierarchy':'',title:'Browse these in the SSM hierarchy'},
+    {label:'On a clean branch',value:`${stats.cleanBranchPercent}%`,note:'Nothing flagged on the row or above it'},
+    {label:'Organizational headers',value:stats.headers.toLocaleString(),note:'Rows other equipment nests under',action:stats.headers?'hierarchy':'',title:'Browse these in the SSM hierarchy'},
+    {label:'Systems with no top',value:stats.systemsNoRoot.toLocaleString(),note:stats.systemsNoRoot?'No row sits at the top of them':'Every system has a root row',
+      action:stats.systemsNoRoot?`rule:${SSM_AUDIT_RULES.systemNoRoot.id}`:'',title:'Show the systems with no row at the top'},
+  ];
+}
+
+/* ---- dependencies ---- */
+
+const DASH_MOSTLY_ELECTRICAL=.7;
+function dashDependencyStats(scoped){
+  const rowsById=dashRowsById(scoped);
+  let withDependencies=0,references=0,sameUpn=0,crossUpn=0,external=0;
+  for(const row of scoped.rows){
+    const list=auditSplitReferences(row.dependencies).filter(reference=>!/^N\/?A$/i.test(reference));
+    if(!list.length)continue;
+    withDependencies++;
+    const hasProject=!!clean(row.dependencyProject);
+    for(const reference of list){
+      references++;
+      const target=rowsById.get(auditNormId(reference));
+      if(target)auditNormId(target.upn)===auditNormId(row.upn)?sameUpn++:crossUpn++;
+      else if(hasProject)external++;
+    }
+  }
+  let parentAlsoDependency=0,parentAlsoDependencyElectrical=0;
+  for(const finding of scoped.findings){
+    if(finding.rule.id!==SSM_AUDIT_RULES.parentAlsoDependency.id)continue;
     parentAlsoDependency++;
     const row=registryRowFor(finding);
     if(row&&auditPolarity(row.discipline)==='top-down')parentAlsoDependencyElectrical++;
   }
-  return {rows:rows.length,roots,headers:(result.headerIds||[]).length,withDependencies,upns:upns.size,disciplines:disciplines.size,milestones:milestones.size,
-    phased:rows.length?Math.round(fullyPhased/rows.length*100):0,
-    siteClassifications:siteClassifications.size,siteClassificationRows,siteClassificationFindings,parentAlsoDependency,
-    mostlyElectrical:!!parentAlsoDependency&&parentAlsoDependencyElectrical/parentAlsoDependency>=DASH_MOSTLY_ELECTRICAL};
+  const counts=dashRuleCounts(scoped);
+  return {withDependencies,references,sameUpn,crossUpn,external,parentAlsoDependency,
+    mostlyElectrical:!!parentAlsoDependency&&parentAlsoDependencyElectrical/parentAlsoDependency>=DASH_MOSTLY_ELECTRICAL,
+    onHeaders:counts.get(SSM_AUDIT_RULES.dependencyOnHeader.id)||0};
+}
+function dashDependencyTiles(stats){
+  return [
+    {label:'Rows with dependencies',value:stats.withDependencies.toLocaleString(),note:'At least one dependency listed'},
+    {label:'Dependency references',value:stats.references.toLocaleString(),note:'Every tag named across those rows'},
+    {label:'Inside the same UPN',value:stats.sameUpn.toLocaleString(),note:'The hierarchy already carries the order'},
+    {label:'Across UPNs',value:stats.crossUpn.toLocaleString(),note:'One system waiting on another'},
+    {label:'In another project',value:stats.external.toLocaleString(),note:'Not in this registry, Dependency Project filled in'},
+    {label:'Parent also a dependency',value:stats.parentAlsoDependency.toLocaleString(),note:stats.parentAlsoDependency?(stats.mostlyElectrical?'Mostly electrical':'Across disciplines'):'Nothing flagged',
+      action:stats.parentAlsoDependency?`rule:${SSM_AUDIT_RULES.parentAlsoDependency.id}`:'',title:'Show the rows whose Closest Parent is also listed as a dependency'},
+    {label:'Pointing at a header',value:stats.onHeaders.toLocaleString(),note:stats.onHeaders?'Depend on the equipment inside instead':'No dependency names a header',
+      action:stats.onHeaders?`rule:${SSM_AUDIT_RULES.dependencyOnHeader.id}`:'',title:'Show the dependencies that name an organizational header'},
+  ];
+}
+
+/* ---- checks overview ---- */
+
+/* Every enabled check, including the ones that found nothing — silence is a
+   result too, and an engineer reading this should be able to see which checks
+   ran and came back clean. */
+function dashCheckOverview(scoped){
+  const counts=dashRuleCounts(scoped),worst=new Map();
+  for(const finding of scoped.findings)if(severityRank(finding.severity)>severityRank(worst.get(finding.rule.id)||''))worst.set(finding.rule.id,finding.severity);
+  const enabled=Object.values(SSM_AUDIT_RULES).filter(rule=>rule.enabled);
+  let max=0;for(const rule of enabled)max=Math.max(max,counts.get(rule.id)||0);
+  const groups=SSM_AUDIT_SOURCES.map(source=>{
+    const entries=enabled.filter(rule=>rule.source===source.id)
+      .map(rule=>({rule,count:counts.get(rule.id)||0,severity:worst.get(rule.id)||''}))
+      .sort((a,b)=>b.count-a.count||severityRank(b.severity)-severityRank(a.severity)||natCmp(a.rule.title,b.rule.title));
+    return {source,firing:entries.filter(entry=>entry.count>0),passing:entries.filter(entry=>!entry.count)};
+  }).filter(group=>group.firing.length||group.passing.length);
+  return {groups,max,firing:enabled.filter(rule=>(counts.get(rule.id)||0)>0).length,total:enabled.length};
+}
+function dashCheckRowHtml(entry,max){
+  const width=max?Math.max(3,Math.round(entry.count/max*100)):0,firing=entry.count>0;
+  const pill=firing?`<span class="audit-severity ${esc(entry.severity)}">${esc(SEVERITY_LABELS[entry.severity]||entry.severity)}</span>`:'<span class="audit-severity is-quiet">&mdash;</span>';
+  return `<tr class="${firing?'':'is-passing'}" ${firing?`data-dash-rule="${esc(entry.rule.id)}" tabindex="0" title="Show only findings from this check"`:'title="This check ran and found nothing"'}>
+    <td>${pill}</td>
+    <td class="dash-check-name"><b>${esc(entry.rule.title)}</b><small>${esc(RULE_CATEGORY_LABELS[entry.rule.category]||entry.rule.category)}</small></td>
+    <td class="dash-check-count">${firing?entry.count.toLocaleString():'0'}</td>
+    <td><span class="dash-share"><span class="dash-share-track">${firing?`<i style="width:${width}%"></i>`:''}</span>${firing?'':'<small>Passing</small>'}</span></td></tr>`;
+}
+function dashCheckOverviewHtml(overview){
+  if(!overview.groups.length)return '<p class="dash-empty">No checks to show.</p>';
+  return overview.groups.map(group=>`<article class="dash-card dash-check-group">
+    <header><div><h4>${esc(group.source.label)}</h4><span>${group.firing.length.toLocaleString()} of ${(group.firing.length+group.passing.length).toLocaleString()} checks found something</span></div></header>
+    <div class="dash-table-scroll"><table class="dash-table dash-check-table">
+      <thead><tr><th>Level</th><th>Check</th><th>Findings</th><th>Share</th></tr></thead>
+      <tbody>${group.firing.map(entry=>dashCheckRowHtml(entry,overview.max)).join('')}${group.passing.map(entry=>dashCheckRowHtml(entry,overview.max)).join('')}</tbody>
+    </table></div></article>`).join('');
+}
+
+/* ---- structure at a glance ---- */
+
+const DASH_SITE_CLASS_RULE=SSM_AUDIT_RULES.siteClassification.id,DASH_ITEM_MASTER_RULE=SSM_AUDIT_RULES.itemMasterStandard.id;
+function dashStructureStats(scoped){
+  const upns=new Set(),disciplines=new Set(),siteClassifications=new Set();
+  let fullyPhased=0,siteClassificationRows=0,itemMasterRows=0,itemMasterStandard=0;
+  for(const row of scoped.rows){
+    const classification=clean(row.equipmentClassification);
+    if(classification&&!extoRev21Canonical('equipmentClassification',classification)){siteClassifications.add(auditNormId(classification));siteClassificationRows++;}
+    const upn=auditNormId(row.upn),discipline=auditNormId(row.discipline);
+    if(upn)upns.add(upn);if(discipline)disciplines.add(discipline);
+    if(auditNormId(row.milestone)&&auditNormId(row.milestoneParent))fullyPhased++;
+    /* Blank Item Masters are the header convention, not a migration state, so
+       they are left out of the VF-versus-site-prefix split entirely. */
+    const itemMaster=auditNormId(row.itemMaster);
+    if(itemMaster&&!auditIsBlankItemMaster(row)){itemMasterRows++;if(/^VF[_\- ]/.test(itemMaster))itemMasterStandard++;}
+  }
+  const counts=dashRuleCounts(scoped);
+  return {rows:scoped.rows.length,upns:upns.size,disciplines:disciplines.size,
+    phased:scoped.rows.length?Math.round(fullyPhased/scoped.rows.length*100):0,
+    siteClassifications:siteClassifications.size,siteClassificationRows,siteClassificationFindings:counts.get(DASH_SITE_CLASS_RULE)||0,
+    itemMasterRows,itemMasterStandard,itemMasterPercent:itemMasterRows?Math.round(itemMasterStandard/itemMasterRows*100):0,
+    itemMasterFindings:counts.get(DASH_ITEM_MASTER_RULE)||0};
 }
 function dashStatTiles(stats){
   return [
-    {label:'Equipment rows',value:stats.rows.toLocaleString(),note:'Rows the audit read'},
-    {label:'Top of a system',value:stats.roots.toLocaleString(),note:'Parent is their own System Name'},
-    {label:'Organizational headers',value:stats.headers.toLocaleString(),note:'Rows other equipment nests under',action:stats.headers?'headers':'',title:'Browse these in the SSM hierarchy'},
-    {label:'Rows with dependencies',value:stats.withDependencies.toLocaleString(),note:'At least one dependency listed'},
+    {label:'Equipment rows',value:stats.rows.toLocaleString(),note:'Rows in scope'},
     {label:'Distinct UPNs',value:stats.upns.toLocaleString(),note:'Systems in this registry'},
     {label:'Disciplines',value:stats.disciplines.toLocaleString(),note:'Discipline values in use'},
-    {label:'L2 milestones in use',value:stats.milestones.toLocaleString(),note:'Distinct L2 phases',action:stats.milestones?'milestones':'',title:'Group the findings by L2 milestone'},
     {label:'Rows with L1 and L2',value:`${stats.phased}%`,note:'Both milestone levels filled in'},
     {label:'Site-specific classifications',value:stats.siteClassifications.toLocaleString(),note:stats.siteClassifications?`${stats.siteClassificationRows.toLocaleString()} ${stats.siteClassificationRows===1?'row uses':'rows use'} them`:'Every classification is on the Rev21 list',
-      action:stats.siteClassificationFindings?'site-classifications':'',title:'Show the rows whose Equipment Classification is not in the Rev21 dropdown'},
-    {label:'Parent also a dependency',value:stats.parentAlsoDependency.toLocaleString(),note:stats.parentAlsoDependency?(stats.mostlyElectrical?'Mostly electrical':'Across disciplines'):'Nothing flagged',
-      action:stats.parentAlsoDependency?'parent-also-dependency':'',title:'Show the rows whose Closest Parent is also listed as a dependency'},
+      action:stats.siteClassificationFindings?`rule:${DASH_SITE_CLASS_RULE}`:'',title:'Show the rows whose Equipment Classification is not in the Rev21 dropdown'},
+    {label:'Item Master migration',value:`${stats.itemMasterPercent}%`,note:stats.itemMasterRows?`${stats.itemMasterStandard.toLocaleString()} of ${stats.itemMasterRows.toLocaleString()} on the VF standard`:'No Item Masters to migrate',
+      bar:stats.itemMasterPercent,action:stats.itemMasterFindings?`rule:${DASH_ITEM_MASTER_RULE}`:'',title:'Show the rows still on a site-prefixed Item Master'},
   ];
 }
+
+/* ---- shared tile + block markup ---- */
 
 function dashSeverityTileHtml(level,count){
   const empty=!count,label=SEVERITY_LABELS[level];
@@ -763,78 +1070,109 @@ function dashSeverityTileHtml(level,count){
 }
 function dashRankRowHtml(bucket,kind,max){
   const width=max?Math.max(4,Math.round(bucket.count/max*100)):0;
-  return `<button class="dash-rank-row" type="button" data-dash-rank="${esc(kind)}" data-dash-value="${esc(bucket.value)}" data-dash-label="${esc(bucket.label)}" title="Show the ${bucket.count.toLocaleString()} findings on ${esc(bucket.label)}">
+  return `<button class="dash-rank-row" type="button" data-dash-rank="${esc(kind)}" data-dash-value="${esc(bucket.value)}" title="Show the ${bucket.count.toLocaleString()} findings on ${esc(bucket.label)}">
     <span class="dash-rank-name">${esc(bucket.label)}</span><b class="dash-rank-count">${bucket.count.toLocaleString()}</b>
     <span class="dash-rank-track"><i class="${esc(bucket.worst||'info')}" style="width:${width}%"></i></span></button>`;
 }
-function dashRankCardHtml(kind,title,note){
-  const buckets=dashRankBuckets(kind),visible=buckets.slice(0,DASH_RANK_LIMIT),max=visible.length?visible[0].count:0,rest=buckets.length-visible.length;
+function dashRankCardHtml(kind,title,note,findings){
+  const buckets=dashRankBuckets(kind,findings),visible=buckets.slice(0,DASH_RANK_LIMIT),max=visible.length?visible[0].count:0,rest=buckets.length-visible.length;
   const body=visible.length?visible.map(bucket=>dashRankRowHtml(bucket,kind,max)).join(''):'<p class="dash-empty">Nothing flagged here.</p>';
   return `<article class="dash-card dash-rank-card"><header><h4>${esc(title)}</h4><span>${esc(note)}</span></header><div class="dash-rank-list">${body}</div>${rest>0?`<p class="dash-rank-more">+${rest.toLocaleString()} more</p>`:''}</article>`;
 }
-function dashCheckTableHtml(){
-  const ranking=dashRuleRanking(),visible=ranking.slice(0,DASH_RULE_LIMIT),total=Math.max(1,S.session.result.summary.rows);
-  if(!visible.length)return '<p class="dash-empty">No check fired on this registry.</p>';
-  return `<table class="dash-check-table"><thead><tr><th>Level</th><th>Check</th><th>Findings</th><th>Rows touched</th></tr></thead><tbody>${visible.map(entry=>{
-    const share=entry.rows.size/total*100,text=share>=1?`${Math.round(share)}%`:'&lt;1%';
-    return `<tr data-dash-rule="${esc(entry.rule.id)}" tabindex="0" title="Show only findings from this check"><td><span class="audit-severity ${esc(entry.worst)}">${esc(SEVERITY_LABELS[entry.worst]||entry.worst)}</span></td><td class="dash-check-name"><b>${esc(entry.rule.title)}</b><small>${esc(SOURCE_LABELS[entry.rule.source]||entry.rule.source)}</small></td><td class="dash-check-count">${entry.count.toLocaleString()}</td><td><span class="dash-share"><span class="dash-share-track"><i style="width:${Math.max(3,Math.min(100,Math.round(share)))}%"></i></span><small>${text} of rows</small></span></td></tr>`;
-  }).join('')}</tbody></table>`;
-}
 function dashStatHtml(stat){
-  const body=`<span>${esc(stat.label)}</span><b>${esc(stat.value)}</b><small>${esc(stat.note)}</small>`;
+  const bar=stat.bar==null?'':`<span class="dash-stat-bar"><i style="width:${Math.max(0,Math.min(100,stat.bar))}%"></i></span>`;
+  const body=`<span>${esc(stat.label)}</span><b>${esc(stat.value)}</b>${bar}<small>${esc(stat.note)}</small>`;
   if(!stat.action)return `<div class="dash-stat">${body}</div>`;
   return `<button class="dash-stat is-action" type="button" data-dash-stat="${esc(stat.action)}" title="${esc(stat.title||'')}">${body}<span class="dash-stat-go">${ic('arrow-right')}</span></button>`;
 }
+function dashBlockHtml(title,explainer,body,extra){
+  return `<section class="dash-block"><div class="dash-block-head"><div><h3>${esc(title)}</h3><p>${esc(explainer)}</p></div>${extra||''}</div>${body}</section>`;
+}
 
+/* ---- the screen ---- */
+
+function dashScopeLine(scoped){
+  const summary=S.session.result.summary;
+  if(!dashIsScoped())return `Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(dashAuditedAt())}`;
+  return `Scoped: ${scoped.rows.length.toLocaleString()} of ${summary.rows.toLocaleString()} rows &middot; ${scoped.findings.length.toLocaleString()} of ${summary.findings.toLocaleString()} findings`;
+}
+function dashAuditedAt(){return S.session.auditedAt?new Date(S.session.auditedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'this session';}
+function dashShellHtml(){
+  const result=S.session.result,summary=result.summary,scoped=scopedResult();
+  const head=`<header class="dash-head">
+      <div class="dash-head-copy"><span class="eyebrow">Registry overview</span><h2>${esc(S.session.name||'This registry')}</h2><p class="${dashIsScoped()?'is-scoped':''}">${dashScopeLine(scoped)}</p></div>
+      <div class="dash-head-actions">${statusMarkup(summary)}${filterButtonHtml('dashFilters')}<button class="btn primary" type="button" id="dashOpenFindings">${ic('check-check')}Open findings</button><button class="btn" type="button" id="dashExport">${ic('file-down')}Export report</button></div>
+    </header>
+    ${filterChipRowHtml(true)}`;
+  if(!scoped.rows.length&&!scoped.findings.length)return `<section class="dash-shell" id="dashShell">${head}
+    <div class="dash-card dash-nothing">${ic('search')}<b>Nothing in scope</b><span>The filters you have set leave no rows and no findings. Clear one to bring the registry back.</span><button class="btn" type="button" data-filter-clear-all>Clear all filters</button></div>
+    <p class="dash-foot">${ic('lock')}Findings never leave this browser.</p></section>`;
+  /* The level tiles are the level SUMMARY: they follow the dimension scope
+     (discipline / milestone / UPN / building) but ignore the level filter itself,
+     so a hidden level still shows how many findings it is hiding. */
+  const levelScopeRows=new Set(scoped.rows.map(row=>auditNormId(row.equipmentId)));
+  const levelScopeFindings=dimActiveSets().length?(S.session.result.findings||[]).filter(finding=>{const row=registryRowFor(finding);return row&&levelScopeRows.has(auditNormId(row.equipmentId));}):(S.session.result.findings||[]);
+  const severityCounts=dashSeverityCounts(levelScopeFindings),overview=dashCheckOverview(scoped);
+  return `<section class="dash-shell" id="dashShell">
+    ${head}
+    <div class="dash-tiles">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityTileHtml(level,severityCounts[level]||0)).join('')}</div>
+    ${dashBlockHtml('Where the problems are','The same findings counted three ways. Pick a row to open the list narrowed to it.',
+      `<div class="dash-rank-grid">${dashRankCardHtml('discipline','By discipline','Findings per discipline',scoped.findings)}${dashRankCardHtml('upn','By UPN and system','Findings per system',scoped.findings)}${dashRankCardHtml('milestone','By L2 milestone','Findings per L2 phase',scoped.findings)}</div>`)}
+    ${dashBlockHtml('Milestone readiness','One row per L2 phase: how much equipment is in it, what is flagged, and how much of it is already clean.',
+      `<div class="dash-card">${dashMilestoneTableHtml(scoped)}</div>`)}
+    ${dashBlockHtml('Hierarchy health','How the registry is shaped, and how much of it sits on a branch with nothing flagged above it.',
+      `<div class="dash-stats dash-stats-6">${dashHierarchyTiles(dashHierarchyHealth(scoped)).map(dashStatHtml).join('')}</div>`)}
+    ${dashBlockHtml('Dependencies','Every dependency named in scope, resolved against the rows in scope.',
+      `<div class="dash-stats dash-stats-4">${dashDependencyTiles(dashDependencyStats(scoped)).map(dashStatHtml).join('')}</div>`)}
+    ${dashBlockHtml('Checks overview',`${overview.firing.toLocaleString()} of ${overview.total.toLocaleString()} checks found something. The rest ran and came back clean.`,
+      `<div class="dash-check-grid">${dashCheckOverviewHtml(overview)}</div>`,
+      `<button class="btn-link" type="button" id="dashSeeRules">See all in Rules${ic('arrow-right')}</button>`)}
+    ${dashBlockHtml('Structure at a glance','What this registry is made of, before any rule is applied.',
+      `<div class="dash-stats dash-stats-6">${dashStatTiles(dashStructureStats(scoped)).map(dashStatHtml).join('')}</div>`)}
+    <p class="dash-foot">${ic('lock')}Findings never leave this browser.</p>
+  </section>`;
+}
 export function renderDashboard(navigate){
   const result=S.session&&S.session.result;if(!result){S.homeMode='audit';navigate('upload');return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='dashboard';S.homeMode='audit';
-  const summary=result.summary,audited=S.session.auditedAt?new Date(S.session.auditedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'this session';
-  $('#view').innerHTML=`<section class="dash-shell">
-    <header class="dash-head">
-      <div class="dash-head-copy"><span class="eyebrow">Registry overview</span><h2>${esc(S.session.name||'This registry')}</h2><p>Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(audited)}</p></div>
-      <div class="dash-head-actions">${statusMarkup(summary)}<button class="btn primary" type="button" id="dashOpenFindings">${ic('check-check')}Open findings</button><button class="btn" type="button" id="dashExport">${ic('file-down')}Export report</button></div>
-    </header>
-    <div class="dash-tiles">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityTileHtml(level,summary.severity[level]||0)).join('')}</div>
-    <section class="dash-block">
-      <div class="dash-block-head"><div><h3>Where the problems are</h3><p>The same findings counted three ways. Pick a row to open the list narrowed to it.</p></div></div>
-      <div class="dash-rank-grid">${dashRankCardHtml('discipline','By discipline','Findings per discipline')}${dashRankCardHtml('upn','By UPN and system','Findings per system')}${dashRankCardHtml('milestone','By L2 milestone','Findings per L2 phase')}</div>
-    </section>
-    <section class="dash-block">
-      <div class="dash-block-head"><div><h3>Top checks firing</h3><p>The checks producing the most findings. Open one to see only its findings.</p></div><button class="btn-link" type="button" id="dashSeeRules">See all in Rules${ic('arrow-right')}</button></div>
-      <div class="dash-card dash-check-card">${dashCheckTableHtml()}</div>
-    </section>
-    <section class="dash-block">
-      <div class="dash-block-head"><div><h3>Structure at a glance</h3><p>What this registry is made of, before any rule is applied.</p></div></div>
-      <div class="dash-stats">${dashStatTiles(dashStructureStats()).map(dashStatHtml).join('')}</div>
-    </section>
-    <p class="dash-foot">${ic('lock')}Findings never leave this browser.</p>
-  </section>`;
-  renderSideNav(navigate);wireDashboard(navigate);
+  $('#view').innerHTML=`<div id="dashHost">${dashShellHtml()}</div>${filterPanelHtml()}`;
+  renderSideNav(navigate);
+  /* The panel lives outside #dashHost, so a live filter change can rebuild every
+     block underneath it without closing the panel or losing focus. */
+  filterRerender=()=>{const host=$('#dashHost');if(!host)return;host.innerHTML=dashShellHtml();wireDashboard(navigate);};
+  wireDashboard(navigate);wireFilterPanel();
 }
 function dashOpenFindings(navigate,apply){
-  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';clearDimFilters();
+  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';
+  /* The four registry dimensions are the dashboard's scope. A click narrows
+     inside that scope rather than throwing it away. */
   S.session.groupBy='none';S.session.collapsedGroups=[];S.session.cursor=-1;S.session.scrollTop=0;
   if(apply)apply();
   invalidateFindingCaches();S.homeMode='audit';navigate('audit');
 }
+/* The scope and the four counting passes are pure given S.session, so they are
+   exported for tests/ui-dashboard.test.mjs. The build strips the statement. */
+export { dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, scopedResult };
 function wireDashboard(navigate){
-  $('#dashOpenFindings').onclick=()=>dashOpenFindings(navigate);
-  $('#dashExport').onclick=exportSsmAuditXlsx;
-  $('#dashSeeRules').onclick=()=>{S.homeMode='rules';navigate('rules');};
+  $('#dashOpenFindings')?.addEventListener('click',()=>dashOpenFindings(navigate));
+  $('#dashExport')?.addEventListener('click',exportSsmAuditXlsx);
+  $('#dashSeeRules')?.addEventListener('click',()=>{S.homeMode='rules';navigate('rules');});
   $$('[data-dash-severity]').forEach(tile=>tile.onclick=()=>{const level=tile.dataset.dashSeverity;dashOpenFindings(navigate,()=>{S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);});});
   $$('[data-dash-rank]').forEach(row=>row.onclick=()=>dashOpenFindings(navigate,()=>{dimFilterMap()[row.dataset.dashRank]=[auditNormId(row.dataset.dashValue)];}));
+  $$('[data-dash-milestone]').forEach(row=>{
+    const open=()=>dashOpenFindings(navigate,()=>{dimFilterMap().milestone=[row.dataset.dashMilestone];});
+    row.onclick=open;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
+  });
   $$('[data-dash-rule]').forEach(row=>{
-    const open=()=>showOnlyRule(row.dataset.dashRule,navigate);
+    const open=()=>showOnlyRule(row.dataset.dashRule,navigate,true);
     row.onclick=open;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
   });
   $$('[data-dash-stat]').forEach(tile=>tile.onclick=()=>{
     const action=tile.dataset.dashStat;
-    if(action==='headers'){if(S.session.snapshot)navigate('hierarchy');return;}
-    if(action==='milestones'){dashOpenFindings(navigate,()=>{S.session.groupBy='milestone';});return;}
-    if(action==='site-classifications'){showOnlyRule(DASH_SITE_CLASS_RULE,navigate);return;}
-    if(action==='parent-also-dependency')showOnlyRule(DASH_PARENT_DEPENDENCY_RULE,navigate);
+    if(action==='hierarchy'){if(S.session.snapshot)navigate('hierarchy');return;}
+    if(action.startsWith('rule:'))showOnlyRule(action.slice(5),navigate,true);
   });
+  wireFilterButtons();wireFilterChips();
 }
 
 /* --------------------------------------------------------- hierarchy screen */
