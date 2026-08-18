@@ -2,7 +2,8 @@ import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S, resetSession } from '../state.js'
 import { readArrayBuffer } from '../io/workbook.js'
 import { auditNormId, auditSnapshotFromWorkbook, auditSplitReferences } from '../audit/model.js'
-import { runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
+import { auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
+import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
 import { exportSsmAuditXlsx, exportSsmComparisonXlsx } from '../audit/export.js'
@@ -130,7 +131,7 @@ function renderRuleCatalog(navigate){
 function showOnlyRule(ruleId,navigate){
   const result=S.session&&S.session.result;if(!result)return;
   const others=[...new Set(result.findings.map(finding=>finding.rule.id))].filter(id=>id!==ruleId);
-  S.session.hiddenRules=others;S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.search='';S.session.dashFilter=null;S.session.scrollTop=0;S.session.cursor=-1;
+  S.session.hiddenRules=others;S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.search='';clearDimFilters();S.session.scrollTop=0;S.session.cursor=-1;
   invalidateFindingCaches();S.homeMode='audit';navigate('audit');
 }
 export function renderRules(navigate){
@@ -301,11 +302,47 @@ function registryRowFor(finding){
   const index=sessionRowIndex();
   return index.bySource.get(`${auditNormId(finding.sheet)}|${finding.row||0}`)||index.byId.get(auditNormId(finding.equipmentId))||null;
 }
+/* ------------------------------------------------- registry dimension filters */
+
+/* Four registry columns a finding does not carry itself, so every match runs
+   through the finding's registry row. A dimension holds the values that stay
+   visible; an empty list means that dimension is not filtering at all, so
+   "everything ticked" and "nothing chosen yet" are the same state. */
+const DIM_KEYS=['discipline','milestone','upn','building'];
+const DIM_FIELDS={discipline:'discipline',milestone:'milestone',upn:'upn',building:'building'};
+const DIM_LABELS={discipline:'Discipline',milestone:'L2 milestone',upn:'UPN / system',building:'Building'};
+const DIM_ALL_LABELS={discipline:'All disciplines',milestone:'All milestones',upn:'All systems',building:'All buildings'};
+
+function dimFilterMap(){return S.session.dimFilters||(S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]])));}
+function dimSelected(dimension){return new Set(dimFilterMap()[dimension]||[]);}
+function clearDimFilters(){S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]]));}
+/* Options are the same buckets the dashboard ranks by, so a filter count and a
+   dashboard count can never disagree. */
+function dimOptions(dimension){
+  const cache=S.session.dimOptionCache||(S.session.dimOptionCache={});
+  if(cache[dimension])return cache[dimension];
+  const options=dashRankBuckets(dimension).map(bucket=>({key:auditNormId(bucket.value),label:bucket.label,count:bucket.count}))
+    .sort((a,b)=>(a.key?0:1)-(b.key?0:1)||natCmp(a.label,b.label));
+  cache[dimension]=options;return options;
+}
+function dimOptionLabel(dimension,key){const match=dimOptions(dimension).find(option=>option.key===key);return match?match.label:key||DASH_NO_MILESTONE;}
+/* Ticking every value is the same as filtering on none of them. */
+function setDimSelection(dimension,keys){
+  const options=dimOptions(dimension);
+  dimFilterMap()[dimension]=options.every(option=>keys.has(option.key))?[]:options.filter(option=>keys.has(option.key)).map(option=>option.key);
+}
+function dimActiveSets(){return DIM_KEYS.map(dimension=>[DIM_FIELDS[dimension],dimSelected(dimension)]).filter(entry=>entry[1].size);}
+function dimRowMatches(finding,active){
+  const row=registryRowFor(finding);if(!row)return false;
+  for(const [field,values] of active)if(!values.has(auditNormId(row[field])))return false;
+  return true;
+}
+
 function filteredFindings(){
-  const query=clean(S.session.search).toUpperCase(),hiddenSources=new Set(S.session.hiddenSources||[]),hiddenSeverities=new Set(S.session.hiddenSeverities||[]),hiddenCategories=new Set(S.session.hiddenCategories||[]),hiddenRules=new Set(S.session.hiddenRules||[]),slice=S.session.dashFilter;
-  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort,slice?`${slice.kind}|${slice.value}`:''].join('');
+  const query=clean(S.session.search).toUpperCase(),hiddenSources=new Set(S.session.hiddenSources||[]),hiddenSeverities=new Set(S.session.hiddenSeverities||[]),hiddenCategories=new Set(S.session.hiddenCategories||[]),hiddenRules=new Set(S.session.hiddenRules||[]),dimActive=dimActiveSets();
+  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort,DIM_KEYS.map(dimension=>(dimFilterMap()[dimension]||[]).join('~')).join('|')].join('');
   if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
-  let rows=S.session.result.findings.filter(finding=>!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query))&&(!slice||dashSliceMatches(finding,slice)));
+  let rows=S.session.result.findings.filter(finding=>!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query))&&(!dimActive.length||dimRowMatches(finding,dimActive)));
   const natural=(a,b)=>String(a||'').localeCompare(String(b||''),undefined,{numeric:true,sensitivity:'base'}),sort=S.session.sort;
   if(sort==='severity-asc')rows=[...rows].reverse();
   else if(sort==='equipment-asc'||sort==='equipment-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.equipmentId,b.equipmentId)||a.row-b.row));
@@ -340,7 +377,7 @@ function displayRows(){
 function severityStrip(summary){
   const hidden=new Set(S.session.hiddenSeverities||[]),active=SSM_AUDIT_SEVERITIES.filter(level=>!hidden.has(level));
   const chip=level=>`<button class="sev-chip ${level} ${hidden.has(level)?'':'on'}" type="button" data-audit-severity="${level}" aria-pressed="${hidden.has(level)?'false':'true'}"><span class="sev-dot"></span>${SEVERITY_PLURALS[level]}<b>${summary.severity[level].toLocaleString()}</b></button>`;
-  return `<div class="sev-strip"><button class="sev-chip all ${active.length===SSM_AUDIT_SEVERITIES.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${SSM_AUDIT_SEVERITIES.map(chip).join('')}${dashSliceChipHtml()}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
+  return `<div class="sev-strip"><button class="sev-chip all ${active.length===SSM_AUDIT_SEVERITIES.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${SSM_AUDIT_SEVERITIES.map(chip).join('')}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
 }
 function filterCount(){return ['hiddenSources','hiddenSeverities','hiddenCategories','hiddenRules'].reduce((total,key)=>total+(S.session[key]||[]).length,0);}
 function filterCheck(key,value,label,count){const checked=!(S.session[key]||[]).includes(value);return `<label class="audit-filter-option"><input type="checkbox" data-audit-filter-key="${key}" value="${esc(value)}" ${checked?'checked':''}><span>${esc(label)}</span><b>${Number(count||0).toLocaleString()}</b></label>`;}
@@ -355,16 +392,80 @@ function filterMenu(result){
     <fieldset><legend>Individual checks</legend>${rules.map(rule=>filterCheck('hiddenRules',rule.id,rule.title,counts.get(rule.id))).join('')}</fieldset></div>
   </div>`;
 }
+function dimButtonSummary(dimension){
+  const selected=dimFilterMap()[dimension]||[];
+  if(!selected.length)return DIM_ALL_LABELS[dimension];
+  if(selected.length===1)return dimOptionLabel(dimension,selected[0]);
+  return `${selected.length.toLocaleString()} selected`;
+}
+function dimMenuHtml(dimension){
+  const options=dimOptions(dimension),selected=dimSelected(dimension),open=S.session.dimOpen===dimension,label=DIM_LABELS[dimension];
+  const body=options.length?options.map(option=>`<label class="audit-filter-option"><input type="checkbox" data-dim-option="${dimension}" value="${esc(option.key)}" ${!selected.size||selected.has(option.key)?'checked':''}><span>${esc(option.label)}</span><b>${option.count.toLocaleString()}</b></label>`).join(''):`<p class="dim-menu-empty">No ${esc(label.toLowerCase())} values carry findings.</p>`;
+  return `<div class="dim-filter">
+    <button class="dim-button ${selected.size?'on':''}" type="button" data-dim-toggle="${dimension}" ${options.length?'':'disabled'} aria-expanded="${open?'true':'false'}" aria-haspopup="dialog"><b>${esc(label)}</b><span>${esc(dimButtonSummary(dimension))}</span>${ic('chevron-down')}</button>
+    <div class="dim-menu ${open?'open':''}" id="dimMenu-${dimension}" role="dialog" aria-label="Filter by ${esc(label)}" ${open?'':'hidden'}>
+      <div class="dim-menu-head"><b>${esc(label)}</b><button class="btn ghost sm" type="button" data-dim-all="${dimension}">${ic('rotate-ccw')}All</button></div>
+      <div class="dim-menu-scroll">${body}</div>
+    </div></div>`;
+}
+function dimChipsHtml(){
+  const chips=[];
+  for(const dimension of DIM_KEYS)for(const key of dimFilterMap()[dimension]||[]){
+    const label=dimOptionLabel(dimension,key);
+    chips.push(`<span class="dim-chip"><b>${esc(DIM_LABELS[dimension])}:</b><span>${esc(label)}</span><button class="dim-chip-x" type="button" data-dim-chip="${dimension}" data-dim-chip-value="${esc(key)}" title="Stop showing ${esc(label)}" aria-label="Stop showing ${esc(label)}">${ic('x')}</button></span>`);
+  }
+  if(!chips.length)return '';
+  return chips.join('')+`<button class="dim-clear" type="button" id="dimClearAll">Clear filters</button>`;
+}
+function dimBarHtml(){
+  return `<div class="dim-bar" id="dimBar"><span class="dim-bar-label">${ic('sliders-horizontal')}Filter by</span>${DIM_KEYS.map(dimMenuHtml).join('')}<div class="dim-chips">${dimChipsHtml()}</div></div>`;
+}
+function setDimMenuOpen(dimension){
+  S.session.dimOpen=dimension||'';
+  for(const key of DIM_KEYS){
+    const menu=$(`#dimMenu-${key}`),button=$(`[data-dim-toggle="${key}"]`),open=S.session.dimOpen===key;
+    if(menu){menu.hidden=!open;menu.classList.toggle('open',open);}
+    if(button)button.setAttribute('aria-expanded',open?'true':'false');
+  }
+}
+function renderDimBar(){
+  const bar=$('#dimBar');if(!bar)return;
+  const replacement=document.createElement('div');replacement.innerHTML=dimBarHtml();
+  bar.replaceWith(replacement.firstElementChild);wireDimBar();
+}
+/* The bar is rebuilt after every change so the button summaries and chips stay
+   truthful, which means focus has to be put back on the control that was used. */
+function applyDimChange(keepOpen,focusValue){
+  S.session.dimOpen=keepOpen||'';S.session.cursor=-1;invalidateFindingCaches();renderDimBar();rerenderRows(true);
+  if(!keepOpen)return;
+  const restore=focusValue==null?null:$$(`[data-dim-option="${keepOpen}"]`).find(box=>box.value===focusValue);
+  (restore||$(`[data-dim-toggle="${keepOpen}"]`))?.focus();
+}
+function wireDimBar(){
+  $$('[data-dim-toggle]').forEach(button=>button.onclick=event=>{event.stopPropagation();const dimension=button.dataset.dimToggle;setDimMenuOpen(S.session.dimOpen===dimension?'':dimension);});
+  $$('[data-dim-option]').forEach(input=>input.onchange=()=>{
+    const dimension=input.dataset.dimOption,keys=new Set();
+    $$(`[data-dim-option="${dimension}"]`).forEach(box=>{if(box.checked)keys.add(box.value);});
+    setDimSelection(dimension,keys);applyDimChange(dimension,input.value);
+  });
+  $$('[data-dim-all]').forEach(button=>button.onclick=()=>{const dimension=button.dataset.dimAll;dimFilterMap()[dimension]=[];applyDimChange(dimension);});
+  $$('[data-dim-chip]').forEach(button=>button.onclick=()=>{
+    const dimension=button.dataset.dimChip,value=button.dataset.dimChipValue;
+    dimFilterMap()[dimension]=(dimFilterMap()[dimension]||[]).filter(key=>key!==value);applyDimChange('');
+  });
+  const clear=$('#dimClearAll');if(clear)clear.onclick=()=>{clearDimFilters();applyDimChange('');};
+}
 function sortOptions(){const options=[['severity-desc','Most serious first'],['severity-asc','Least serious first'],['equipment-asc','Equipment A to Z'],['equipment-desc','Equipment Z to A'],['rule-asc','Check A to Z'],['rule-desc','Check Z to A'],['row-asc','Row, low to high'],['row-desc','Row, high to low']];return options.map(([value,label])=>`<option value="${value}" ${S.session.sort===value?'selected':''}>${label}</option>`).join('');}
 function groupOptions(){const options=[['none','No grouping'],['rule','Group by check'],['milestone','Group by L2 milestone']];return options.map(([value,label])=>`<option value="${value}" ${S.session.groupBy===value?'selected':''}>${label}</option>`).join('');}
 function statusMarkup(summary){const blockers=summary.severity.blocker||0,label=summary.status==='blocked'?`${SEVERITY_LABELS.blocker} &middot; ${blockers.toLocaleString()} ${blockers===1?'row':'rows'}`:summary.status==='review'?'Review required':'Ready';return `<span class="audit-status ${summary.status}">${ic(summary.status==='ready'?'check-check':'triangle-alert')}${label}</span>`;}
 
 export function renderAuditResult(navigate){
   const result=S.session&&S.session.result;if(!result){navigate('upload');return;}
-  S.screen='audit';const summary=result.summary,fullscreen=!!S.session.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
+  S.screen='audit';S.session.dimOpen='';const summary=result.summary,fullscreen=!!S.session.fullscreen;document.body.classList.toggle('audit-fullscreen',fullscreen);
   $('#view').innerHTML=`<section id="auditShell" class="audit-shell ${fullscreen?'fullscreen':''}">
     <div class="audit-head"><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><h2>Audit findings</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="auditDashboard">${ic('layout-dashboard')}Dashboard</button><button class="btn" id="auditBack">${ic('upload')}New registry</button><button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
     ${severityStrip(summary)}
+    ${dimBarHtml()}
     <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, checks, and explanations" value="${esc(S.session.search)}"></div><div class="audit-filter-wrap"><button class="btn audit-filter-button ${filterCount()?'active':''}" id="auditFilters" type="button" aria-expanded="${S.session.filterOpen?'true':'false'}" aria-haspopup="dialog">${ic('filter')}Filters <b id="auditFilterCount">${filterCount()||''}</b></button>${filterMenu(result)}</div><select id="auditGroup" aria-label="Group findings">${groupOptions()}</select><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
     <div class="audit-table-wrap" id="auditTableWrap" tabindex="0" role="group" aria-label="Findings list. Use the arrow keys to move and Enter to open."><table class="audit-table"><thead><tr><th>Severity</th><th>What was found</th><th>Equipment ID</th><th>Source</th><th>Sheet &middot; row</th><th aria-label="Open details"></th></tr></thead><tbody id="auditRows"></tbody></table></div>
   </section>`;
@@ -416,9 +517,9 @@ function activateCursor(){
   const row=$(`[data-row-index="${S.session.cursor}"]`);openFinding(item.finding.id,row);
 }
 function resetAuditFilters(){
-  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';S.session.dashFilter=null;S.session.cursor=-1;
+  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';clearDimFilters();S.session.cursor=-1;
   invalidateFindingCaches();const search=$('#auditSearch');if(search)search.value='';
-  $$('[data-audit-filter-key]').forEach(input=>input.checked=true);updateFilterButton();renderSeverityStrip();rerenderRows(true);
+  $$('[data-audit-filter-key]').forEach(input=>input.checked=true);updateFilterButton();renderSeverityStrip();renderDimBar();rerenderRows(true);
 }
 function renderSeverityStrip(){
   const strip=$('.sev-strip'),result=S.session.result;if(!strip||!result)return;
@@ -426,8 +527,6 @@ function renderSeverityStrip(){
   strip.replaceWith(replacement.firstElementChild);wireSeverityStrip();
 }
 function wireSeverityStrip(){
-  const clearSlice=$('#dashClearSlice');
-  if(clearSlice)clearSlice.onclick=()=>{S.session.dashFilter=null;S.session.cursor=-1;invalidateFindingCaches();renderSeverityStrip();rerenderRows(true);};
   $$('[data-audit-severity]').forEach(button=>button.onclick=()=>{
     const level=button.dataset.auditSeverity;
     if(level==='all')S.session.hiddenSeverities=[];
@@ -548,9 +647,16 @@ function wireAuditResult(navigate){
   $('#auditFilters').onclick=event=>{event.stopPropagation();setFilterOpen(!S.session.filterOpen);};
   $('#auditResetFilters').onclick=()=>resetAuditFilters();
   $$('[data-audit-filter-key]').forEach(input=>input.onchange=()=>{const key=input.dataset.auditFilterKey,values=new Set(S.session[key]||[]);if(input.checked)values.delete(input.value);else values.add(input.value);S.session[key]=[...values];S.session.cursor=-1;invalidateFindingCaches();updateFilterButton();renderSeverityStrip();rerenderRows(true);});
-  wireSeverityStrip();
-  auditOutsideHandler=event=>{if(S.session.filterOpen&&!event.target.closest('.audit-filter-wrap'))setFilterOpen(false);};document.addEventListener('pointerdown',auditOutsideHandler);
-  auditEscapeHandler=event=>{if(event.key==='Escape'&&S.session.filterOpen){setFilterOpen(false);$('#auditFilters')?.focus();}};document.addEventListener('keydown',auditEscapeHandler);
+  wireSeverityStrip();wireDimBar();
+  auditOutsideHandler=event=>{
+    if(S.session.filterOpen&&!event.target.closest('.audit-filter-wrap'))setFilterOpen(false);
+    if(S.session.dimOpen&&!event.target.closest('.dim-filter'))setDimMenuOpen('');
+  };document.addEventListener('pointerdown',auditOutsideHandler);
+  auditEscapeHandler=event=>{
+    if(event.key!=='Escape')return;
+    if(S.session.filterOpen){setFilterOpen(false);$('#auditFilters')?.focus();}
+    else if(S.session.dimOpen){const dimension=S.session.dimOpen;setDimMenuOpen('');$(`[data-dim-toggle="${dimension}"]`)?.focus();}
+  };document.addEventListener('keydown',auditEscapeHandler);
   const wrap=$('#auditTableWrap');
   wrap.onkeydown=event=>{
     if(event.key==='ArrowDown'){event.preventDefault();moveCursor(1);}
@@ -568,26 +674,10 @@ function wireAuditResult(navigate){
    up" in one screen, and every number on it is a way into the findings list. */
 const DASH_RANK_LIMIT=8,DASH_RULE_LIMIT=10,DASH_NO_MILESTONE='No L2 milestone';
 const DASH_SEVERITY_MEANINGS={blocker:'Contradicts the registry or the approved lists',error:'Breaks an SSM SOP rule',warning:'A strong pattern says look',info:'Worth knowing'};
-const DASH_SLICE_LABELS={discipline:'Discipline',upn:'System',milestone:'L2 milestone'};
-const DASH_SLICE_FIELDS={discipline:'discipline',upn:'upn',milestone:'milestone'};
-
-/* A dashboard row click narrows the findings list by a registry column the
-   findings themselves do not carry, so the match runs through the registry row. */
-function dashSliceMatches(finding,slice){
-  const field=DASH_SLICE_FIELDS[slice&&slice.kind];if(!field)return true;
-  const row=registryRowFor(finding);if(!row)return false;
-  return auditNormId(row[field])===auditNormId(slice.value);
-}
-function dashSliceChipHtml(){
-  const slice=S.session&&S.session.dashFilter;if(!slice)return '';
-  const label=clean(slice.label)||clean(slice.value)||DASH_NO_MILESTONE;
-  return `<span class="dash-slice-chip">${ic('filter')}<b>${esc(DASH_SLICE_LABELS[slice.kind]||'Filter')}</b><span>${esc(label)}</span><button class="dash-slice-clear" type="button" id="dashClearSlice" title="Clear this filter" aria-label="Clear the ${esc(label)} filter">${ic('x')}</button></span>`;
-}
-
 /* A UPN is labelled with the System Name most of its rows agree on — one row with
    a mistyped System Name should not become the name of the whole system. */
 function dashRankBuckets(kind){
-  const field=DASH_SLICE_FIELDS[kind],buckets=new Map();
+  const field=DIM_FIELDS[kind],buckets=new Map();
   for(const finding of S.session.result.findings){
     const row=registryRowFor(finding);if(!row)continue;
     const value=clean(row[field]);if(!value&&kind!=='milestone')continue;
@@ -616,18 +706,35 @@ function dashRuleRanking(){
   }
   return [...entries.values()].sort((a,b)=>b.count-a.count||severityRank(b.worst)-severityRank(a.worst)||natCmp(a.rule.title,b.rule.title));
 }
+/* Two of these tiles answer questions about the registry as it was written: which
+   Equipment Classifications are not on the approved Rev21 list, and how often a
+   Closest Parent is repeated in Dependencies (routine in electrical, worth a look
+   elsewhere). Both are counted here so the tiles read from one pass. */
+const DASH_SITE_CLASS_RULE=SSM_AUDIT_RULES.siteClassification.id,DASH_PARENT_DEPENDENCY_RULE=SSM_AUDIT_RULES.parentAlsoDependency.id,DASH_MOSTLY_ELECTRICAL=.7;
 function dashStructureStats(){
-  const result=S.session.result,rows=result.rows||[],upns=new Set(),disciplines=new Set(),milestones=new Set();
-  let roots=0,withDependencies=0,fullyPhased=0;
+  const result=S.session.result,rows=result.rows||[],upns=new Set(),disciplines=new Set(),milestones=new Set(),siteClassifications=new Set();
+  let roots=0,withDependencies=0,fullyPhased=0,siteClassificationRows=0;
   for(const row of rows){
+    const classification=clean(row.equipmentClassification);
+    if(classification&&!extoRev21Canonical('equipmentClassification',classification)){siteClassifications.add(auditNormId(classification));siteClassificationRows++;}
     const upn=auditNormId(row.upn),discipline=auditNormId(row.discipline),milestone=auditNormId(row.milestone),parent=auditNormId(row.closestParent);
     if(upn)upns.add(upn);if(discipline)disciplines.add(discipline);if(milestone)milestones.add(milestone);
     if(parent&&parent===auditNormId(row.systemName))roots++;
     if(auditSplitReferences(row.dependencies).length)withDependencies++;
     if(milestone&&auditNormId(row.milestoneParent))fullyPhased++;
   }
+  let siteClassificationFindings=0,parentAlsoDependency=0,parentAlsoDependencyElectrical=0;
+  for(const finding of result.findings){
+    if(finding.rule.id===DASH_SITE_CLASS_RULE){siteClassificationFindings++;continue;}
+    if(finding.rule.id!==DASH_PARENT_DEPENDENCY_RULE)continue;
+    parentAlsoDependency++;
+    const row=registryRowFor(finding);
+    if(row&&auditPolarity(row.discipline)==='top-down')parentAlsoDependencyElectrical++;
+  }
   return {rows:rows.length,roots,headers:(result.headerIds||[]).length,withDependencies,upns:upns.size,disciplines:disciplines.size,milestones:milestones.size,
-    phased:rows.length?Math.round(fullyPhased/rows.length*100):0};
+    phased:rows.length?Math.round(fullyPhased/rows.length*100):0,
+    siteClassifications:siteClassifications.size,siteClassificationRows,siteClassificationFindings,parentAlsoDependency,
+    mostlyElectrical:!!parentAlsoDependency&&parentAlsoDependencyElectrical/parentAlsoDependency>=DASH_MOSTLY_ELECTRICAL};
 }
 function dashStatTiles(stats){
   return [
@@ -639,6 +746,10 @@ function dashStatTiles(stats){
     {label:'Disciplines',value:stats.disciplines.toLocaleString(),note:'Discipline values in use'},
     {label:'L2 milestones in use',value:stats.milestones.toLocaleString(),note:'Distinct L2 phases',action:stats.milestones?'milestones':'',title:'Group the findings by L2 milestone'},
     {label:'Rows with L1 and L2',value:`${stats.phased}%`,note:'Both milestone levels filled in'},
+    {label:'Site-specific classifications',value:stats.siteClassifications.toLocaleString(),note:stats.siteClassifications?`${stats.siteClassificationRows.toLocaleString()} ${stats.siteClassificationRows===1?'row uses':'rows use'} them`:'Every classification is on the Rev21 list',
+      action:stats.siteClassificationFindings?'site-classifications':'',title:'Show the rows whose Equipment Classification is not in the Rev21 dropdown'},
+    {label:'Parent also a dependency',value:stats.parentAlsoDependency.toLocaleString(),note:stats.parentAlsoDependency?(stats.mostlyElectrical?'Mostly electrical':'Across disciplines'):'Nothing flagged',
+      action:stats.parentAlsoDependency?'parent-also-dependency':'',title:'Show the rows whose Closest Parent is also listed as a dependency'},
   ];
 }
 
@@ -702,7 +813,7 @@ export function renderDashboard(navigate){
   renderSideNav(navigate);wireDashboard(navigate);
 }
 function dashOpenFindings(navigate,apply){
-  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';S.session.dashFilter=null;
+  S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];S.session.search='';clearDimFilters();
   S.session.groupBy='none';S.session.collapsedGroups=[];S.session.cursor=-1;S.session.scrollTop=0;
   if(apply)apply();
   invalidateFindingCaches();S.homeMode='audit';navigate('audit');
@@ -712,7 +823,7 @@ function wireDashboard(navigate){
   $('#dashExport').onclick=exportSsmAuditXlsx;
   $('#dashSeeRules').onclick=()=>{S.homeMode='rules';navigate('rules');};
   $$('[data-dash-severity]').forEach(tile=>tile.onclick=()=>{const level=tile.dataset.dashSeverity;dashOpenFindings(navigate,()=>{S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);});});
-  $$('[data-dash-rank]').forEach(row=>row.onclick=()=>dashOpenFindings(navigate,()=>{S.session.dashFilter={kind:row.dataset.dashRank,value:row.dataset.dashValue,label:row.dataset.dashLabel};}));
+  $$('[data-dash-rank]').forEach(row=>row.onclick=()=>dashOpenFindings(navigate,()=>{dimFilterMap()[row.dataset.dashRank]=[auditNormId(row.dataset.dashValue)];}));
   $$('[data-dash-rule]').forEach(row=>{
     const open=()=>showOnlyRule(row.dataset.dashRule,navigate);
     row.onclick=open;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
@@ -720,7 +831,9 @@ function wireDashboard(navigate){
   $$('[data-dash-stat]').forEach(tile=>tile.onclick=()=>{
     const action=tile.dataset.dashStat;
     if(action==='headers'){if(S.session.snapshot)navigate('hierarchy');return;}
-    if(action==='milestones')dashOpenFindings(navigate,()=>{S.session.groupBy='milestone';});
+    if(action==='milestones'){dashOpenFindings(navigate,()=>{S.session.groupBy='milestone';});return;}
+    if(action==='site-classifications'){showOnlyRule(DASH_SITE_CLASS_RULE,navigate);return;}
+    if(action==='parent-also-dependency')showOnlyRule(DASH_PARENT_DEPENDENCY_RULE,navigate);
   });
 }
 
