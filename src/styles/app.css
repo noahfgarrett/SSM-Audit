@@ -1005,6 +1005,13 @@ body.visual-trainer-fullscreen{overflow:hidden}
   .visual-twist{width:32px;height:44px}
   .guide-nav nav button{min-height:46px}
 }
+@media (max-width:640px){
+  /* Icons only in the top bar; the label survives as the button title. */
+  .sidenav-item>span{display:none}
+  .sidenav.collapsed .sidenav-item>span{display:none}
+  .sidenav-item{padding:0 9px;min-width:38px;justify-content:center;gap:6px}
+  .sidenav-item .nav-count{margin-left:0}
+}
 @media (max-width:600px){
   .upload-intro{align-items:center}
   .upload-intro>#openGuide{padding:8px}
@@ -1645,12 +1652,20 @@ body.audit-fullscreen{overflow:hidden}
 /* ---- Narrow screens: the sidebar becomes a top bar ---- */
 @media (max-width:900px){
   .app-shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
-  .sidenav{flex-direction:row;align-items:center;gap:4px;width:auto;padding:6px 8px;border-right:0;border-bottom:1px solid var(--border);overflow-x:auto}
+  /* The bar must SCROLL when the labels do not fit, never overlap: every item is
+     flex-shrink:0 with its intrinsic width, both groups are non-shrinking rows,
+     and the foot group sits after a divider instead of floating right — a
+     margin-left:auto foot in a full bar slides under the primary items. */
+  .sidenav{flex-direction:row;align-items:center;gap:4px;width:auto;min-width:0;padding:6px 8px;border-right:0;border-bottom:1px solid var(--border);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
   .sidenav.collapsed{width:auto;padding:6px 8px}
-  .sidenav-items{flex-direction:row;gap:4px}
-  .sidenav-foot{flex-direction:row;gap:4px;margin:0 0 0 auto;padding:0 0 0 8px;border-top:0;border-left:1px solid var(--border)}
-  .sidenav-item,.sidenav-collapse{width:auto;white-space:nowrap}
+  .sidenav-items{flex:0 0 auto;flex-direction:row;gap:4px;min-width:0}
+  .sidenav-foot{flex:0 0 auto;flex-direction:row;gap:4px;margin:0 0 0 4px;padding:0 0 0 8px;border-top:0;border-left:1px solid var(--border)}
+  .sidenav-item,.sidenav-collapse{flex:0 0 auto;width:auto;white-space:nowrap}
+  .sidenav-item>span,.sidenav-collapse>span{flex:0 0 auto;overflow:visible}
   .sidenav-collapse{display:none}
+  /* No floating version badge over content on narrow screens — it moves into
+     the topbar's actions area, small and out of the way. */
+  .version-link{position:static;left:auto;bottom:auto;box-shadow:none;background:transparent;backdrop-filter:none;padding:4px 6px;font-size:10.5px;color:var(--ink-3)}
   .sidenav.collapsed .sidenav-item>span,.sidenav.collapsed .nav-count{display:block}
   .sidenav.collapsed .sidenav-item{justify-content:flex-start;padding:0 10px}
   .sidenav.collapsed .sidenav-item.active::after{display:none}
