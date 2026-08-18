@@ -8,7 +8,7 @@ import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
 import { exportSsmAuditXlsx, exportSsmComparisonXlsx } from '../audit/export.js'
 import { ic } from './icons.js'
-import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags } from './feedback.js'
+import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -550,7 +550,7 @@ function wireFilterChips(){
 function setFilterPanelOpen(open){
   const back=$('#filterSheetBack');if(!back)return;
   S.session.panelOpen=!!open;
-  back.hidden=!open;back.classList.toggle('show',!!open);
+  if(open)animateOpen(back);else animateClose(back);
   $$('[data-filter-button]').forEach(button=>button.setAttribute('aria-expanded',open?'true':'false'));
   document.body.classList.toggle('filter-sheet-open',!!open);
   if(open){
@@ -752,11 +752,11 @@ function openFinding(id,opener){
   if(previous)previous.onclick=()=>{const target=list[position-1];if(target)openFinding(target.id,opener);};
   if(next)next.onclick=()=>{const target=list[position+1];if(target)openFinding(target.id,opener);};
   if(inTree)inTree.onclick=()=>{closeDrawer();focusHierarchyOnEquipment(finding.equipmentId);};
-  const backdrop=$('#drawerBack');backdrop.classList.add('show');backdrop.setAttribute('aria-hidden','false');
+  const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');
   drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
 }
 export function closeDrawer(){
-  drawerTrapCleanup?.();drawerTrapCleanup=null;$('#drawerBack').classList.remove('show');$('#drawerBack').setAttribute('aria-hidden','true');const opener=S.session&&S.session.opener;if(opener&&document.contains(opener))opener.focus();
+  drawerTrapCleanup?.();drawerTrapCleanup=null;$('#drawerBack').setAttribute('aria-hidden','true');animateClose($('#drawerBack'));const opener=S.session&&S.session.opener;if(opener&&document.contains(opener))opener.focus();
 }
 function rerenderRows(reset){const wrap=$('#auditTableWrap');if(reset&&wrap)wrap.scrollTop=0;renderRows();}
 /* Every screen that can host the filter panel tears the previous one down first,
@@ -1252,7 +1252,7 @@ function openHierarchyNode(key,opener){
   const source=node.isSyntheticHeader?'Created from a New closest-parent reference':`${clean(node.source.sheet)||'Registry'} / row ${node.source.row||'N/A'}`;
   $('#drawerTitle').textContent='Equipment';
   $('#drawerBody').innerHTML=`<div class="hierarchy-drawer"><div class="hierarchy-drawer-heading"><span class="hierarchy-node-icon">${ic(hierarchyNodeIcon(node))}</span><div><h3>${copyTagHtml(node.tag)}</h3><p>${esc(node.description||'No description')}</p></div></div>${node.isSyntheticHeader?'<div class="hierarchy-generated-note">This header was created from a closest-parent reference, not a registry row.</div>':''}${nodeIsHeader(node)&&!node.isSyntheticHeader?'<div class="hierarchy-generated-note">Other equipment nests under this row, so it acts as an organizational header.</div>':''}${node.unresolvedParent?'<div class="hierarchy-warning-note">'+ic('triangle-alert')+'The closest parent is not in this registry.</div>':''}${node.cycleBreak?'<div class="hierarchy-warning-note">'+ic('triangle-alert')+'This parent chain loops back on itself.</div>':''}<dl class="hierarchy-metadata">${hierarchyDetailValue('Building',node.building)}${hierarchyDetailValue('Discipline',node.discipline)}${hierarchyDetailValue('UPN',node.upn)}${hierarchyDetailValue('System Name',node.systemName)}${hierarchyDetailValue('Classification',node.classification)}${hierarchyDetailValue('Closest parent',node.closestParent,true)}${hierarchyDetailValue('Source',source)}</dl><section class="hierarchy-drawer-section"><h4>Dependencies <span>${node.dependencies.length.toLocaleString()}</span></h4>${dependencies}</section><section class="hierarchy-drawer-section"><h4>Findings <span>${node.findings.length.toLocaleString()}</span></h4>${findings}</section></div>`;
-  wireCopyTags($('#drawerBody'));const backdrop=$('#drawerBack');backdrop.classList.add('show');backdrop.setAttribute('aria-hidden','false');drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
+  wireCopyTags($('#drawerBody'));const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
 }
 function focusHierarchyOnEquipment(equipmentId){
   const id=auditNormId(equipmentId);if(!id||!S.session.result||!S.session.snapshot)return;

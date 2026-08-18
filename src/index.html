@@ -23,7 +23,7 @@
   <nav class="sidenav" id="sideNav" aria-label="SSM Audit sections"></nav>
   <main id="view"></main>
 </div>
-<div id="overlay" role="status" aria-live="polite">
+<div id="overlay" role="status" aria-live="polite" hidden>
   <div class="loader">
     <div class="ring" role="progressbar" aria-label="Audit progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
       <div class="ring-spin">
@@ -74,7 +74,7 @@
     <div class="update-panel" id="changelogPanel" role="tabpanel" aria-labelledby="changelogTab" hidden></div>
   </div>
 </div>
-<div id="drawerBack" class="drawer-back" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" aria-hidden="true">
+<div id="drawerBack" class="drawer-back" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" aria-hidden="true" hidden>
   <aside class="drawer" id="drawer" tabindex="-1">
     <div class="drawer-head"><div class="drawer-title" id="drawerTitle"></div><button class="xbtn icon-btn" id="drawerClose" type="button" aria-label="Close details"></button></div>
     <div class="drawer-body" id="drawerBody"></div>

@@ -2,7 +2,7 @@ import { $, $$, esc } from './core/text.js'
 import { APP_VERSION } from './version.js'
 import { S } from './state.js'
 import { ic } from './ui/icons.js'
-import { activateFocusTrap } from './ui/feedback.js'
+import { activateFocusTrap, animateClose, animateOpen } from './ui/feedback.js'
 import { closeDrawer, renderAuditResult, renderComparisonResult, renderDashboard, renderHierarchyResult, renderRules, renderSideNav, renderUpload } from './ui/audit.js'
 import { closeUpdateModal, initUpdate } from './update/update.js'
 
@@ -30,8 +30,8 @@ function renderGuide(){
   $$('[data-guide]').forEach(button=>button.onclick=()=>{activeGuide=button.dataset.guide;renderGuide();});
   const openRules=$('#guideOpenRules');if(openRules)openRules.onclick=()=>{closeGuide();S.homeMode='rules';go('rules');};
 }
-function openGuide(){guideOpener=document.activeElement;renderGuide();const modal=$('#guideModal');modal.hidden=false;modal.classList.add('show');modal.setAttribute('aria-hidden','false');guideTrapCleanup?.();guideTrapCleanup=activateFocusTrap(modal,closeGuide);requestAnimationFrame(()=>$('#guideClose').focus());}
-function closeGuide(){const modal=$('#guideModal');if(!modal.classList.contains('show'))return;guideTrapCleanup?.();guideTrapCleanup=null;modal.classList.remove('show');modal.hidden=true;modal.setAttribute('aria-hidden','true');const opener=guideOpener;guideOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();}
+function openGuide(){guideOpener=document.activeElement;renderGuide();const modal=$('#guideModal');animateOpen(modal);modal.setAttribute('aria-hidden','false');guideTrapCleanup?.();guideTrapCleanup=activateFocusTrap(modal,closeGuide);requestAnimationFrame(()=>$('#guideClose').focus());}
+function closeGuide(){const modal=$('#guideModal');if(!modal.classList.contains('show'))return;guideTrapCleanup?.();guideTrapCleanup=null;modal.setAttribute('aria-hidden','true');animateClose(modal);const opener=guideOpener;guideOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();}
 
 function init(){
   $('#brandmark').innerHTML=ic('zap');$('#headerGuide').innerHTML=ic('book-open')+'<span>Guide</span>';$('#headerGuide').onclick=openGuide;

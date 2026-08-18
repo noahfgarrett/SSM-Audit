@@ -1,5 +1,6 @@
 
 :root{
+  --motion-fast:.16s; --motion-base:.24s; --ease-out:cubic-bezier(.2,.8,.2,1);
   --bg:#eceef0; --bg-grid:#e3e6e9;
   --surface:#ffffff; --surface-2:#f6f7f9; --surface-3:#f0f2f4;
   --border:#e2e6ea; --border-strong:#d3d8de;
@@ -269,8 +270,9 @@ mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padd
 .note .ic{width:17px;height:17px;flex:0 0 auto;margin-top:1px}
 .note b{font-weight:620}
 
-#overlay{position:fixed;inset:0;z-index:60;background:rgba(236,238,240,.74);backdrop-filter:blur(4px);display:none;place-items:center}
-#overlay.show{display:grid;animation:mfade .16s ease}
+#overlay{position:fixed;inset:0;z-index:60;background:rgba(236,238,240,.74);backdrop-filter:blur(4px);display:grid;place-items:center;opacity:0;pointer-events:none;transition:opacity var(--motion-fast) ease}
+#overlay[hidden]{display:none}
+#overlay.show{opacity:1;pointer-events:auto}
 .loader{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow-lg);padding:30px 38px 26px;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:268px;text-align:center;animation:mpop .18s cubic-bezier(.22,1,.36,1)}
 .ring{position:relative;width:96px;height:96px;margin-bottom:8px}
 .ring::before{content:"";position:absolute;inset:8px;border-radius:50%;background:radial-gradient(closest-side,rgba(234,88,12,.12),transparent 75%);animation:lpulse 2s ease-in-out infinite}
@@ -296,11 +298,13 @@ mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padd
 .loader .lsub{font-size:12.5px;color:var(--ink-2);font-family:var(--mono)}
 .lcount{font-size:11px;font-family:var(--mono);color:var(--accent-700);letter-spacing:.5px;text-transform:uppercase;margin-top:3px;min-height:14px;font-weight:680}
 
-.modal-back{position:fixed;inset:0;z-index:65;background:rgba(28,30,34,.42);backdrop-filter:blur(2px);display:none;place-items:center;padding:20px}
+.modal-back{position:fixed;inset:0;z-index:65;background:rgba(28,30,34,.42);backdrop-filter:blur(2px);display:grid;place-items:center;padding:20px;opacity:0;pointer-events:none;transition:opacity var(--motion-fast) ease}
 .modal-back[hidden]{display:none!important}
-.modal-back.show{display:grid;animation:mfade .14s ease}
-@keyframes mfade{from{opacity:0}to{opacity:1}}
-.modal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:22px 22px 18px;max-width:430px;width:100%;animation:mpop .16s ease}
+.modal-back.show{opacity:1;pointer-events:auto}
+.modal-back .modal-card{transform:translateY(10px) scale(.97);opacity:0;transition:transform var(--motion-base) var(--ease-out),opacity var(--motion-base) var(--ease-out)}
+.modal-back.show .modal-card{transform:none;opacity:1}
+.modal-back.is-closing .modal-card{transition-duration:var(--motion-fast);transform:translateY(6px) scale(.98)}
+.modal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-lg);padding:22px 22px 18px;max-width:430px;width:100%}
 @keyframes mpop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
 .modal-title{font-size:16px;font-weight:640;letter-spacing:-.2px}
 .modal-msg{color:var(--ink-2);font-size:13.5px;margin:8px 0 18px;line-height:1.5}
@@ -372,10 +376,12 @@ mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padd
 .srow.mel .sname .ic{color:#287a4b}
 
 /* cable schedule detail drawer */
-.drawer-back{position:fixed;inset:0;z-index:68;background:rgba(28,30,34,.38);backdrop-filter:blur(2px);display:none}
-.drawer-back.show{display:block;animation:mfade .14s ease}
-.drawer{position:absolute;top:0;right:0;height:100%;width:min(420px,92vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;animation:dslide .2s cubic-bezier(.22,1,.36,1)}
-@keyframes dslide{from{transform:translateX(100%)}to{transform:none}}
+.drawer-back{position:fixed;inset:0;z-index:68;background:rgba(28,30,34,.38);backdrop-filter:blur(2px);display:block;opacity:0;pointer-events:none;transition:opacity var(--motion-fast) ease}
+.drawer-back[hidden]{display:none}
+.drawer-back.show{opacity:1;pointer-events:auto}
+.drawer{position:absolute;top:0;right:0;height:100%;width:min(420px,92vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;transform:translateX(28px);opacity:0;transition:transform var(--motion-base) var(--ease-out),opacity var(--motion-base) var(--ease-out)}
+.drawer-back.show .drawer{transform:none;opacity:1}
+.drawer-back.is-closing .drawer{transition-duration:var(--motion-fast);transform:translateX(16px)}
 .drawer-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)}
 .drawer-title{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-weight:680;font-size:15px;letter-spacing:-.2px;flex:1;min-width:0}
 .drawer-title .ic{width:17px;height:17px;color:var(--accent-600);flex:0 0 auto}
@@ -1476,9 +1482,12 @@ body.audit-fullscreen{overflow:hidden}
 .filter-chip-clear:hover{color:var(--ink)}
 .filter-chip-clear:focus-visible{outline:none;box-shadow:var(--ring)}
 
-.filter-sheet-back{position:fixed;z-index:60;inset:0;display:flex;justify-content:flex-end;background:rgba(18,20,24,.34)}
+.filter-sheet-back{position:fixed;z-index:60;inset:0;display:flex;justify-content:flex-end;background:rgba(18,20,24,.34);opacity:0;pointer-events:none;transition:opacity var(--motion-fast) ease}
 .filter-sheet-back[hidden]{display:none}
-.filter-sheet{display:flex;flex-direction:column;width:min(420px,100vw);height:100%;border-left:1px solid var(--border-strong);background:var(--surface);box-shadow:var(--shadow-lg)}
+.filter-sheet-back.show{opacity:1;pointer-events:auto}
+.filter-sheet{display:flex;flex-direction:column;width:min(420px,100vw);height:100%;border-left:1px solid var(--border-strong);background:var(--surface);box-shadow:var(--shadow-lg);transform:translateX(28px);opacity:0;transition:transform var(--motion-base) var(--ease-out),opacity var(--motion-base) var(--ease-out)}
+.filter-sheet-back.show .filter-sheet{transform:none;opacity:1}
+.filter-sheet-back.is-closing .filter-sheet{transition-duration:var(--motion-fast);transform:translateX(16px)}
 .filter-sheet:focus{outline:none}
 .filter-sheet-head{display:flex;align-items:center;gap:12px;padding:14px 12px 14px 18px;border-bottom:1px solid var(--border);background:var(--surface-2)}
 .filter-sheet-head>div{min-width:0;flex:1}
