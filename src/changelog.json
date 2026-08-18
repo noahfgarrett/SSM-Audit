@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.11.1",
+    "date": "2026-08-18",
+    "type": "fix",
+    "notes": "- Tightened every transition so the app feels snappy as well as smooth: panels open in 180ms and close in 110ms, control feedback is 120ms, and screen changes settle in 160ms"
+  },
+  {
     "version": "1.11.0",
     "date": "2026-08-18",
     "type": "feature",
