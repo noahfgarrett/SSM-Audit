@@ -1,9 +1,12 @@
+import { zipDeflateAvailable, zipEntries } from './zip.js'
+
 export function downloadBlob(filename,blob){
   const url=URL.createObjectURL(blob),anchor=document.createElement('a');
   anchor.href=url;anchor.download=filename;anchor.rel='noopener';
   document.body.appendChild(anchor);anchor.click();anchor.remove();
   setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
+
 
 const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export function workbookBytes(workbook,options={}){
@@ -38,11 +41,14 @@ function sheetExtrasXml(extras){
   const validations=extras.dataValidations||[];
   return formats+(validations.length?`<dataValidations count="${validations.length}">${validations.join('')}</dataValidations>`:'');
 }
-export function workbookApplyXmlExtras(workbook,bytes,options={}){
+function workbookExtrasPending(workbook){
   const names=workbook&&workbook.SheetNames||[];
-  const touched=names.filter(name=>{const extras=workbook.Sheets[name]&&workbook.Sheets[name][XML_EXTRA_KEY];return extras&&(extras.dataValidations.length||extras.conditionalFormatting.length);});
-  const dxfs=Array.isArray(workbook.Dxfs)?workbook.Dxfs:[];
-  if(!touched.length&&!dxfs.length)return bytes;
+  const touched=names.some(name=>{const extras=workbook.Sheets[name]&&workbook.Sheets[name][XML_EXTRA_KEY];return extras&&(extras.dataValidations.length||extras.conditionalFormatting.length);});
+  return touched||(Array.isArray(workbook.Dxfs)&&workbook.Dxfs.length>0);
+}
+/* Opens the written xlsx as a zip container and splices the extras in place. */
+function workbookContainerWithExtras(workbook,bytes){
+  const names=workbook&&workbook.SheetNames||[],dxfs=Array.isArray(workbook.Dxfs)?workbook.Dxfs:[];
   const container=XLSX.CFB.read(new Uint8Array(bytes),{type:'array'}),decoder=new TextDecoder(),encoder=new TextEncoder();
   const replace=(path,transform)=>{const entry=XLSX.CFB.find(container,path);if(!entry)return;const next=transform(decoder.decode(entry.content));entry.content=encoder.encode(next);entry.size=entry.content.length;};
   names.forEach((name,index)=>{
@@ -51,8 +57,36 @@ export function workbookApplyXmlExtras(workbook,bytes,options={}){
     replace(`/xl/worksheets/sheet${index+1}.xml`,xml=>spliceSheetXml(xml,fragment));
   });
   if(dxfs.length)replace('/xl/styles.xml',xml=>xml.replace(/<dxfs count="0"\/>|<dxfs\/>/,`<dxfs count="${dxfs.length}">${dxfs.join('')}</dxfs>`));
-  return XLSX.CFB.write(container,{fileType:'zip',type:'array',compression:options.compression!==false});
+  return container;
 }
+export function workbookApplyXmlExtras(workbook,bytes,options={}){
+  if(!workbookExtrasPending(workbook))return bytes;
+  return XLSX.CFB.write(workbookContainerWithExtras(workbook,bytes),{fileType:'zip',type:'array',compression:options.compression!==false});
+}
+/* The zip entries of a written workbook (extras applied), [Content_Types].xml
+   first as Excel expects. */
+function workbookZipEntries(workbook,bytes){
+  const container=workbookContainerWithExtras(workbook,bytes),entries=[];
+  container.FullPaths.forEach((fullPath,index)=>{
+    const name=fullPath.replace(/^Root Entry\/?/,'');const file=container.FileIndex[index];
+    if(!name||name.endsWith('/')||name.startsWith('\u0001')||!file||!file.content)return;
+    entries.push({name,data:file.content instanceof Uint8Array?file.content:new Uint8Array(file.content)});
+  });
+  const rank=name=>name==='[Content_Types].xml'?0:name==='_rels/.rels'?1:2;
+  return entries.sort((left,right)=>rank(left.name)-rank(right.name));
+}
+/* Compact output: SheetJS writes the XML, a real deflate (CompressionStream)
+   zips it. SheetJS's bundled compressor leaves large workbooks ~3x bigger than
+   zlib does. Falls back to SheetJS's own bytes where CompressionStream is
+   missing. Shared strings are on: the same finding text repeats on thousands
+   of lines and is stored once. */
+export async function workbookBytesCompact(workbook,options={}){
+  const writeOptions=Object.assign({bookSST:true},options);
+  if(!zipDeflateAvailable())return workbookBytes(workbook,Object.assign({compression:true},writeOptions));
+  const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'array',cellStyles:true,compression:false},writeOptions));
+  return zipEntries(workbookZipEntries(workbook,bytes));
+}
+export async function workbookBlobCompact(workbook,options={}){return new Blob([await workbookBytesCompact(workbook,options)],{type:XLSX_MIME});}
 
 /* ---- worksheet decoration helpers ----
    Style objects follow the SheetJS per-cell `s` shape (font / fill / alignment /

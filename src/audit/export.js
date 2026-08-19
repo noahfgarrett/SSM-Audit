@@ -1,7 +1,7 @@
 import { clean, natCmp } from '../core/text.js'
-import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob } from '../core/download.js'
+import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob, workbookBlobCompact } from '../core/download.js'
 import { S } from '../state.js'
-import { toast } from '../ui/feedback.js'
+import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
 import { auditColumnName, auditNormId } from './model.js'
 
@@ -14,7 +14,7 @@ const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'C
    to end: the full equipment tree of that milestone, one line per finding, and an
    `Actioned` column with a tick-box dropdown (☐ / ☑). Index and Dashboard read
    those ticks back with live COUNTIF formulas, so progress updates itself. */
-const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules';
+const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules',AUDIT_EXPORT_CALC_SHEET='Calc';
 const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDIT_EXPORT_WIDE_BAR_SEGMENTS=25,AUDIT_EXPORT_BACK_LINK='← Index';
 export const AUDIT_EXPORT_TICK='☑',AUDIT_EXPORT_UNTICKED='☐';
 const AUDIT_EXPORT_ACTIONED_NOTE=`Click the Actioned cell on an equipment’s first line and choose ${AUDIT_EXPORT_TICK} when it is closed out. The row turns green, and Index and Dashboard progress update from those ticks. Cells shaded red are the ones the finding is about.`;
@@ -193,11 +193,29 @@ export function auditExportGroups(result){
    Dashboard only read it back. Every formula carries a cached value so the file
    is readable before Excel recalculates. */
 function auditExportActionedCell(group,style){return sheetFormulaCell(`COUNTIF(${auditExportSheetRef(group.sheetName)}!A:A,"${AUDIT_EXPORT_TICK}")`,0,style||AUDIT_EXPORT_STYLES.number);}
-/* Actioned equipment in one discipline: the ticks on every milestone tab whose
-   Discipline column matches, summed across tabs. */
-function auditExportDisciplineActionedCell(groups,discipline,style){
-  const terms=groups.map(group=>`COUNTIFS(${auditExportSheetRef(group.sheetName)}!G:G,"${String(discipline).replace(/"/g,'""')}",${auditExportSheetRef(group.sheetName)}!A:A,"${AUDIT_EXPORT_TICK}")`);
-  return sheetFormulaCell(terms.length?terms.join('+'):'0',0,style);
+/* Actioned equipment in one discipline: one COUNTIFS per milestone tab lives on
+   the hidden Calc sheet (one formula per cell, always short); the Dashboard sums
+   that column. Chaining every tab into one Dashboard formula overran Excel's
+   8,192-character formula limit on registries with many milestones. */
+function auditExportDisciplineActionedCell(disciplineIndex,groupCount,style){
+  const column=auditColumnName(disciplineIndex+1),first=2,last=first+Math.max(0,groupCount-1);
+  return sheetFormulaCell(groupCount?`SUM(${auditExportSheetRef(AUDIT_EXPORT_CALC_SHEET)}!${column}${first}:${column}${last})`:'0',0,style);
+}
+/* Calc: rows = milestone tabs, columns = disciplines; each cell counts that tab's
+   ticked rows in that discipline. Hidden, but it is a normal sheet. */
+function auditExportCalcSheet(groups,disciplines){
+  const aoa=[['Milestone tab',...disciplines.map(discipline=>discipline.label)]];
+  for(const group of groups)aoa.push([group.sheetName,...disciplines.map(()=>0)]);
+  const sheet=XLSX.utils.aoa_to_sheet(aoa.length>1?aoa:[['Milestone tab','(no milestones)']]);
+  groups.forEach((group,rowOffset)=>{
+    const rowIndex=rowOffset+2,tab=auditExportSheetRef(group.sheetName);
+    disciplines.forEach((discipline,columnOffset)=>{
+      const value=String(discipline.label).replace(/"/g,'""');
+      sheetSetCell(sheet,`${auditColumnName(columnOffset+1)}${rowIndex}`,sheetFormulaCell(`COUNTIFS(${tab}!G:G,"${value}",${tab}!A:A,"${AUDIT_EXPORT_TICK}")`,0,AUDIT_EXPORT_STYLES.number));
+    });
+  });
+  sheet['!cols']=[{wch:34},...disciplines.map(()=>({wch:14}))];
+  return sheet;
 }
 function auditExportPercentCell(equipmentCell,actionedCell,style){return sheetFormulaCell(`IF(${equipmentCell}=0,0,${actionedCell}/${equipmentCell})`,0,style);}
 function auditExportBarCell(percentCell,style,segments=AUDIT_EXPORT_BAR_SEGMENTS){
@@ -290,7 +308,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   auditExportHeaderRow(sheet,disciplineFirst-1,columns,['left','right','right','right','right','left']);
   disciplines.forEach((discipline,offset)=>{
     const rowIndex=disciplineFirst+offset,band=offset%2===1;
-    progressRow(rowIndex,band,auditExportDisciplineActionedCell(groups,discipline.label,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),null);
+    progressRow(rowIndex,band,auditExportDisciplineActionedCell(offset,groups.length,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),null);
   });
   auditExportHeaderRow(sheet,milestoneHeader,['Milestone','Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
   groups.forEach((group,offset)=>{
@@ -440,25 +458,37 @@ function auditExportRulesSheet(result){
 
 export function buildAuditWorkbook(result,sessionName,options={}){
   const workbook=XLSX.utils.book_new(),groups=auditExportGroups(result);
-  const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET].map(name=>name.toLowerCase()));
+  const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET,AUDIT_EXPORT_CALC_SHEET].map(name=>name.toLowerCase()));
   for(const group of groups)group.sheetName=auditExportSheetName(group.label,used);
   const generated=options.generatedAt instanceof Date?options.generatedAt:new Date();
   workbook.Dxfs=[...AUDIT_EXPORT_DXFS];
-  addSheet(workbook,auditExportDashboardSheet(result,groups,auditExportDisciplines(result),sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
+  const disciplines=auditExportDisciplines(result);
+  addSheet(workbook,auditExportDashboardSheet(result,groups,disciplines,sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
   addSheet(workbook,auditExportIndexSheet(groups),AUDIT_EXPORT_INDEX_SHEET);
   for(const group of groups)addSheet(workbook,auditExportMilestoneSheet(group),group.sheetName);
   addSheet(workbook,auditExportFindingsSheet(result,groups),AUDIT_EXPORT_FINDINGS_SHEET);
   addSheet(workbook,auditExportRulesSheet(result),AUDIT_EXPORT_RULES_SHEET);
+  addSheet(workbook,auditExportCalcSheet(groups,disciplines),AUDIT_EXPORT_CALC_SHEET);
+  workbook.Workbook=workbook.Workbook||{};workbook.Workbook.Sheets=workbook.SheetNames.map(name=>({name,Hidden:name===AUDIT_EXPORT_CALC_SHEET?1:0}));
   return workbook;
 }
 
-export function exportSsmAuditXlsx(){
+export async function exportSsmAuditXlsx(){
   const result=S.session&&S.session.result;if(!result){toast('Run an SSM Audit first');return;}
-  const workbook=buildAuditWorkbook(result,S.session.name);
   const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
-  /* A milestone workbook carries every equipment row and every finding, so it is
-     written compressed — uncompressed it runs several times larger. */
-  downloadBlob(`${base}-Audit.xlsx`,workbookBlob(workbook,{compression:true}));toast('SSM Audit report exported');
+  /* A milestone workbook carries every equipment row and every finding. It is
+     built then zipped with a real deflate, which takes a few seconds on a large
+     registry, so the progress overlay stays up for the whole job. */
+  try{
+    await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
+      report(.1);await checkpoint();
+      const workbook=buildAuditWorkbook(result,S.session.name);
+      report(.45);await checkpoint();
+      const blob=await workbookBlobCompact(workbook);
+      report(1);downloadBlob(`${base}-Audit.xlsx`,blob);
+    });
+    toast('SSM Audit report exported');
+  }catch(error){console.error('SSM Audit export failed',error);toast('The report could not be built');}
 }
 
 export function exportSsmComparisonXlsx(){

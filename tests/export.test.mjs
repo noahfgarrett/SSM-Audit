@@ -62,7 +62,7 @@ function grid(sheet) {
 }
 
 function milestoneSheetNames(book) {
-  return book.SheetNames.filter(name => !['Dashboard', 'Index', 'All Findings', 'Rules'].includes(name))
+  return book.SheetNames.filter(name => !['Dashboard', 'Index', 'All Findings', 'Rules', 'Calc'].includes(name))
 }
 
 function linkTarget(cell) {
@@ -85,7 +85,7 @@ test('the audit workbook opens on a dashboard and closes on the rules reference'
   const book = workbook()
   assert.equal(book.SheetNames[0], 'Dashboard')
   assert.equal(book.SheetNames[1], 'Index')
-  assert.deepEqual(book.SheetNames.slice(-2), ['All Findings', 'Rules'])
+  assert.deepEqual(book.SheetNames.slice(-3), ['All Findings', 'Rules', 'Calc'])
   assert.equal(milestoneSheetNames(book).length, 3)
 })
 
@@ -132,7 +132,7 @@ test('index rows hyperlink to milestone tabs that exist in the workbook', () => 
 test('every sheet outside Index and Dashboard offers a way back to the index', () => {
   const book = workbook()
   for (const name of book.SheetNames) {
-    if (name === 'Dashboard' || name === 'Index') continue
+    if (name === 'Dashboard' || name === 'Index' || name === 'Calc') continue
     assert.equal(book.Sheets[name].A1.v, '← Index', name)
     assert.equal(linkTarget(book.Sheets[name].A1), 'Index', name)
   }
@@ -216,7 +216,15 @@ test('the dashboard has a per-discipline progress table that sums ticks across m
   assert.equal(tableRows.length, disciplines.size)
   const firstRow = header + 2
   const cell = book.Sheets.Dashboard[`D${firstRow}`]
-  for (const name of milestoneSheetNames(book)) assert.ok(cell.f.includes(`COUNTIFS('${name}'!G:G,"${rows[header + 1][0]}",'${name}'!A:A,"${AUDIT_EXPORT_TICK}")`), cell.f)
+  const tabs = milestoneSheetNames(book)
+  assert.equal(cell.f, `SUM('Calc'!B2:B${1 + tabs.length})`, 'the Dashboard sums the hidden Calc column for that discipline')
+  const calc = book.Sheets.Calc
+  tabs.forEach((name, offset) => {
+    assert.equal(calc[`A${offset + 2}`].v, name)
+    assert.equal(calc[`B${offset + 2}`].f, `COUNTIFS('${name}'!G:G,"${rows[header + 1][0]}",'${name}'!A:A,"${AUDIT_EXPORT_TICK}")`)
+  })
+  assert.equal(book.Workbook.Sheets.find(sheet => sheet.name === 'Calc').Hidden, 1, 'Calc is hidden')
+  assert.ok(book.Workbook.Sheets.filter(sheet => sheet.name !== 'Calc').every(sheet => !sheet.Hidden))
   const equipmentTotal = tableRows.reduce((sum, line) => sum + line[1], 0)
   assert.equal(equipmentTotal, result.summary.rows)
 })
@@ -377,7 +385,37 @@ test('the workbook survives a SheetJS write and read with its links and formulas
 
 test('an empty audit result still produces a readable workbook', () => {
   const book = buildAuditWorkbook({ rows: [], findings: [], summary: { rows: 0, findings: 0, severity: {} }, standard: 'Registry Integrity' }, '')
-  assert.deepEqual(book.SheetNames, ['Dashboard', 'Index', 'All Findings', 'Rules'])
+  assert.deepEqual(book.SheetNames, ['Dashboard', 'Index', 'All Findings', 'Rules', 'Calc'])
   assert.equal(book.Sheets.Dashboard.F6.v, 0)
   assert.ok(!book.Sheets.Dashboard.F6.f)
+})
+
+test('no formula in the workbook approaches Excel\'s 8,192-character limit, even with many milestone tabs', () => {
+  /* 120 milestones: one row each is enough to produce 120 tabs. */
+  const rows = []
+  for (let i = 0; i < 120; i++) rows.push(row({ equipmentId: `B1-EQ-${String(i).padStart(4, '0')}`, closestParent: SYSTEM, closestParentStatus: 'NEW', upn: '1820', discipline: i % 2 ? 'ELECTRICAL' : 'MECHANICAL WET', systemName: SYSTEM, milestone: `L2-M1-182 Phase ${i}`, milestoneParent: 'L1-M1 30% Capacity' }))
+  const snapshot = auditSnapshotFromAoa([headers, ...rows], { file: 'many.xlsx', sheet: 'Registry' })
+  const book = buildAuditWorkbook(runSsmAudit(snapshot), 'many.xlsx')
+  assert.equal(milestoneSheetNames(book).length, 120)
+  let longest = 0
+  for (const name of book.SheetNames) for (const [key, cell] of Object.entries(book.Sheets[name])) if (key[0] !== '!' && cell.f && cell.f.length > longest) longest = cell.f.length
+  assert.ok(longest < 1000, `longest formula is ${longest} characters`)
+})
+
+test('the compact writer produces a smaller, valid xlsx with the extras and all sheets intact', async () => {
+  const { workbookBytes, workbookBytesCompact } = await import('../src/core/download.js')
+  const book = workbook()
+  const plain = workbookBytes(book, { compression: true })
+  const compact = await workbookBytesCompact(book)
+  assert.ok(compact.length < plain.length, `compact ${compact.length} should be smaller than ${plain.length}`)
+  const reopened = XLSX.read(compact, { type: 'array', cellStyles: true })
+  assert.deepEqual(reopened.SheetNames, book.SheetNames)
+  assert.equal(reopened.Sheets.Index.D5.f, book.Sheets.Index.D5.f)
+  assert.equal(reopened.Workbook.Sheets.find(sheet => sheet.name === 'Calc').Hidden, 1)
+  const container = XLSX.CFB.read(new Uint8Array(compact), { type: 'array' }), decoder = new TextDecoder()
+  const firstMilestone = milestoneSheetNames(book)[0], index = book.SheetNames.indexOf(firstMilestone) + 1
+  assert.ok(decoder.decode(XLSX.CFB.find(container, `/xl/worksheets/sheet${index}.xml`).content).includes('<dataValidations'), 'tick dropdown survives the compact zip')
+  assert.match(decoder.decode(XLSX.CFB.find(container, '/xl/styles.xml').content), /<dxfs count="1">/)
+  /* [Content_Types].xml leads the archive, as Excel expects. */
+  assert.equal(new TextDecoder().decode(compact.slice(30, 30 + 19)), '[Content_Types].xml')
 })

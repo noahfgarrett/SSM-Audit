@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.13.2",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- The Excel report is now about a quarter of the size (a 20,000-row registry drops from roughly 24 MB to 6 MB): the workbook is zipped with a proper compressor and repeated finding text is stored once\n- Fixed Excel asking to repair large reports: per-discipline progress is now calculated on a hidden Calc sheet instead of one very long formula that exceeded Excel's limit on registries with many milestones\n- The export shows a progress overlay while it builds"
+  },
+  {
     "version": "1.13.1",
     "date": "2026-08-19",
     "type": "fix",
