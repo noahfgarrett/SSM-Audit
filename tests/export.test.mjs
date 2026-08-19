@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook } from '../src/audit/export.js'
+import { AUDIT_EXPORT_TICK, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook } from '../src/audit/export.js'
 
 /* The application loads SheetJS as a plain browser script into one shared realm.
    Tests evaluate the vendored copy the same way so the modules find the global
@@ -180,18 +180,45 @@ test('a row whose parent sits on another milestone still starts a branch of its 
   assert.deepEqual(auditExportOrderRows([child, parent]).map(entry => entry.equipmentId), ['B14-AHU-9001', 'B14-AHU-9001-VFD'])
 })
 
-test('progress formulas count the Y column of the milestone tab they belong to', () => {
+function dashboardMilestoneRows(book) {
+  const sheet = book.Sheets.Dashboard, rows = grid(sheet)
+  const header = rows.findIndex(line => line[0] === 'Milestone')
+  assert.ok(header > 0, 'dashboard has a milestone table')
+  return { first: header + 2, header: header + 1 }
+}
+
+test('progress formulas count the ticks in the Actioned column of the milestone tab they belong to', () => {
   const book = workbook()
   const tabs = milestoneSheetNames(book)
+  const { first } = dashboardMilestoneRows(book)
   tabs.forEach((name, offset) => {
-    const indexRow = 5 + offset, dashboardRow = 9 + offset
-    assert.equal(book.Sheets.Index[`D${indexRow}`].f, `COUNTIF('${name}'!A:A,"Y")`)
-    assert.equal(book.Sheets.Dashboard[`D${dashboardRow}`].f, `COUNTIF('${name}'!A:A,"Y")`)
+    const indexRow = 5 + offset, dashboardRow = first + offset
+    assert.equal(book.Sheets.Index[`D${indexRow}`].f, `COUNTIF('${name}'!A:A,"${AUDIT_EXPORT_TICK}")`)
+    assert.equal(book.Sheets.Dashboard[`D${dashboardRow}`].f, `COUNTIF('${name}'!A:A,"${AUDIT_EXPORT_TICK}")`)
     assert.equal(book.Sheets.Index[`E${indexRow}`].f, `IF(B${indexRow}=0,0,D${indexRow}/B${indexRow})`)
     assert.equal(book.Sheets.Index[`E${indexRow}`].z, '0%')
     assert.match(book.Sheets.Index[`F${indexRow}`].f, /^REPT\("█",MIN\(10,ROUND\(E\d+\*10,0\)\)\)&REPT\("░",10-MIN\(10,ROUND\(E\d+\*10,0\)\)\)$/)
+    assert.match(book.Sheets.Dashboard[`F${dashboardRow}`].f, /^REPT\("█",MIN\(25,/, 'dashboard bars are the wide 25-segment kind')
   })
-  assert.match(book.Sheets.Dashboard.G6.f, /^IF\(SUM\(B9:B11\)=0,0,SUM\(D9:D11\)\/SUM\(B9:B11\)\)$/)
+  const last = first + tabs.length - 1
+  assert.equal(book.Sheets.Dashboard.F6.f, `IF(SUM(B${first}:B${last})=0,0,SUM(D${first}:D${last})/SUM(B${first}:B${last}))`)
+  assert.match(book.Sheets.Dashboard.A6.f, /^REPT\("█",MIN\(25,ROUND\(F6\*25,0\)\)\)/, 'the overall bar is the big one at the top')
+  assert.ok(book.Sheets.Dashboard.A6.s.font.sz >= 18, 'overall bar uses a large font')
+})
+
+test('the dashboard has a per-discipline progress table that sums ticks across milestone tabs', () => {
+  const book = workbook(), result = auditResult()
+  const rows = grid(book.Sheets.Dashboard)
+  const header = rows.findIndex(line => line[0] === 'Discipline')
+  assert.ok(header > 0)
+  const disciplines = new Set(result.rows.map(row => row.discipline || 'No discipline'))
+  const tableRows = rows.slice(header + 1).filter(line => line[0] && line[0] !== 'Milestone' && disciplines.has(line[0]))
+  assert.equal(tableRows.length, disciplines.size)
+  const firstRow = header + 2
+  const cell = book.Sheets.Dashboard[`D${firstRow}`]
+  for (const name of milestoneSheetNames(book)) assert.ok(cell.f.includes(`COUNTIFS('${name}'!G:G,"${rows[header + 1][0]}",'${name}'!A:A,"${AUDIT_EXPORT_TICK}")`), cell.f)
+  const equipmentTotal = tableRows.reduce((sum, line) => sum + line[1], 0)
+  assert.equal(equipmentTotal, result.summary.rows)
 })
 
 test('milestone equipment and finding counts agree with the audit result', () => {
@@ -241,28 +268,87 @@ test('severity cells carry a fill so the tab reads at a glance', () => {
   for (const name of milestoneSheetNames(book)) {
     const sheet = book.Sheets[name], lines = grid(sheet).slice(2)
     lines.forEach((line, offset) => {
-      const cell = sheet[`I${offset + 3}`]
-      if (line[8]) assert.ok(cell.s && cell.s.fill, `${name} row ${offset + 3} severity fill`)
+      const cell = sheet[`L${offset + 3}`]
+      if (line[11]) assert.ok(cell.s && cell.s.fill, `${name} row ${offset + 3} severity fill`)
     })
   }
 })
 
-test('nest level tints the equipment cell so depth is visible without reading the number', () => {
+test('nest level tints the equipment cell with a distinct hue per level and keeps the ID black', () => {
   const book = workbook()
   const sheet = tabHolding(book, 'B14-AHU-2201')
   const lines = grid(sheet).slice(2)
-  const fills = ['B14-AHU-2201', 'B14-AHU-2201-VFD', 'B14-AHU-2201-VFD-IO']
-    .map(tag => sheet[`C${lines.findIndex(line => String(line[2]).trim() === tag) + 3}`].s.fill.fgColor.rgb)
+  const cells = ['B14-AHU-2201', 'B14-AHU-2201-VFD', 'B14-AHU-2201-VFD-IO']
+    .map(tag => sheet[`C${lines.findIndex(line => String(line[2]).trim() === tag) + 3}`])
+  const fills = cells.map(cell => cell.s.fill.fgColor.rgb)
   assert.deepEqual(fills, [...new Set(fills)])
+  /* Different hues, not shades of one: the dominant RGB channel differs between neighbours. */
+  const dominant = rgb => ['R', 'G', 'B'][[0, 2, 4].map(at => parseInt(rgb.slice(at, at + 2), 16)).reduce((best, value, index, all) => value > all[best] ? index : best, 0)]
+  assert.notEqual(dominant(fills[0]), dominant(fills[1]))
+  for (const cell of cells) assert.equal(cell.s.font.color.rgb, '000000')
+  for (const line of lines) {
+    const rowIndex = lines.indexOf(line) + 3
+    assert.equal(sheet[`C${rowIndex}`].s.font.color.rgb, '000000', `row ${rowIndex} equipment ID is black`)
+  }
+})
+
+test('the cell a finding is about is shaded red on that finding\'s line', () => {
+  const result = auditResult(), book = buildAuditWorkbook(result, 'synthetic-registry.xlsx')
+  const columns = { 'Closest Parent': 'E', 'Dependencies': 'F', 'UPN': 'H', 'System Name': 'I', 'Equipment ID': 'C' }
+  let checked = 0
+  for (const finding of result.findings) {
+    const column = columns[finding.field]; if (!column) continue
+    const sheet = tabHolding(book, finding.equipmentId), lines = grid(sheet).slice(2)
+    const rowIndex = lines.findIndex(line => String(line[2]).trim() === finding.equipmentId && line[12] === finding.rule.title) + 3
+    assert.ok(rowIndex >= 3, `${finding.equipmentId} / ${finding.rule.title}`)
+    assert.equal(sheet[`${column}${rowIndex}`].s.fill.fgColor.rgb, 'FBE3E1', `${finding.equipmentId} ${finding.field}`)
+    checked++
+  }
+  assert.ok(checked > 0, 'the fixture raises findings on flaggable fields')
+})
+
+test('the Actioned column starts unticked on each equipment line and the written file carries the tick dropdown and green-row format', async () => {
+  const { workbookBytes } = await import('../src/core/download.js')
+  const book = workbook()
+  for (const name of milestoneSheetNames(book)) {
+    const lines = grid(book.Sheets[name]).slice(2)
+    const seen = new Set()
+    for (const line of lines) {
+      const tag = String(line[2]).trim()
+      assert.equal(line[0], seen.has(tag) ? '' : '☐', `${name} ${tag}`)
+      seen.add(tag)
+    }
+  }
+  const bytes = workbookBytes(book, { compression: true })
+  const container = XLSX.CFB.read(new Uint8Array(bytes), { type: 'array' })
+  const decoder = new TextDecoder()
+  const styles = decoder.decode(XLSX.CFB.find(container, '/xl/styles.xml').content)
+  assert.match(styles, /<dxfs count="1"><dxf><fill><patternFill><bgColor rgb="FFE3F5E8"\/><\/patternFill><\/fill><\/dxf><\/dxfs>/)
+  book.SheetNames.forEach((name, index) => {
+    const xml = decoder.decode(XLSX.CFB.find(container, `/xl/worksheets/sheet${index + 1}.xml`).content)
+    const isMilestone = milestoneSheetNames(book).includes(name)
+    assert.equal(xml.includes('<dataValidation type="list"'), isMilestone, name)
+    assert.equal(xml.includes('<conditionalFormatting'), isMilestone, name)
+    if (isMilestone) {
+      assert.ok(xml.includes(`<formula1>"${AUDIT_EXPORT_TICK},☐"</formula1>`), name)
+      const validationAt = xml.indexOf('<dataValidations'), hyperlinksAt = xml.indexOf('<hyperlinks'), sheetDataEnd = xml.indexOf('</sheetData>')
+      assert.ok(validationAt > sheetDataEnd, 'extras follow sheetData')
+      if (hyperlinksAt !== -1) assert.ok(validationAt < hyperlinksAt, 'extras precede hyperlinks (schema order)')
+      assert.ok(xml.indexOf('<conditionalFormatting') < validationAt, 'conditional formatting precedes data validation')
+    }
+  })
+  const reopened = XLSX.read(bytes, { type: 'array' })
+  assert.deepEqual(reopened.SheetNames, book.SheetNames)
 })
 
 test('milestone tabs filter and freeze on the header row', () => {
   const book = workbook()
   for (const name of milestoneSheetNames(book)) {
     const sheet = book.Sheets[name]
-    assert.match(sheet['!autofilter'].ref, /^A2:N\d+$/)
+    assert.match(sheet['!autofilter'].ref, /^A2:Q\d+$/)
     assert.equal(sheet['!freeze'], 'A3')
-    assert.equal(sheet['!cols'].length, 14)
+    assert.equal(sheet['!cols'].length, 17)
+    assert.deepEqual(grid(sheet)[1].slice(2, 6), ['Equipment ID', 'Description', 'Closest Parent', 'Dependencies'], 'Dependencies follows Closest Parent')
   }
   assert.match(book.Sheets['All Findings']['!autofilter'].ref, /^A2:L\d+$/)
   assert.match(book.Sheets.Rules['!autofilter'].ref, /^A2:E\d+$/)
@@ -286,12 +372,12 @@ test('the workbook survives a SheetJS write and read with its links and formulas
   assert.deepEqual(reopened.SheetNames, book.SheetNames)
   assert.equal(linkTarget(reopened.Sheets.Index.A5), linkTarget(book.Sheets.Index.A5))
   assert.equal(reopened.Sheets.Index.D5.f, book.Sheets.Index.D5.f)
-  assert.equal(reopened.Sheets.Dashboard.G6.f, book.Sheets.Dashboard.G6.f)
+  assert.equal(reopened.Sheets.Dashboard.F6.f, book.Sheets.Dashboard.F6.f)
 })
 
 test('an empty audit result still produces a readable workbook', () => {
   const book = buildAuditWorkbook({ rows: [], findings: [], summary: { rows: 0, findings: 0, severity: {} }, standard: 'Registry Integrity' }, '')
   assert.deepEqual(book.SheetNames, ['Dashboard', 'Index', 'All Findings', 'Rules'])
-  assert.equal(book.Sheets.Dashboard.G6.v, 0)
-  assert.ok(!book.Sheets.Dashboard.G6.f)
+  assert.equal(book.Sheets.Dashboard.F6.v, 0)
+  assert.ok(!book.Sheets.Dashboard.F6.f)
 })
