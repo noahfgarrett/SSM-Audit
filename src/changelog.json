@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.11.2",
+    "date": "2026-08-18",
+    "type": "fix",
+    "notes": "- The update check is no longer silent: the Changelog window now says whether you are on the latest version, whether a newer one is available, or why the check could not run, with a Check again button\n- When GitHub limits checks from a busy network (60 an hour per site address), SSM Audit falls back to a second source so the update still shows\n- The automatic check quietly retries once if the first attempt runs before the network is ready"
+  },
+  {
     "version": "1.11.1",
     "date": "2026-08-18",
     "type": "fix",

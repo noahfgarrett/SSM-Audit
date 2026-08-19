@@ -333,6 +333,11 @@ mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padd
 .release-notes li{margin:3px 0}
 .release-notes p{margin:0 0 8px}
 .release-notes p:last-child{margin-bottom:0}
+.update-check{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:9px 12px;border:1px solid var(--border);border-left:3px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2);flex:0 0 auto}
+.update-check-text{flex:1;min-width:160px;font-size:12.5px;color:var(--ink-2)}
+.update-check.current{border-left-color:var(--ok)}.update-check.update{border-left-color:var(--accent)}.update-check.update .update-check-text{color:var(--accent-700);font-weight:600}
+.update-check.rate-limited,.update-check.unreachable{border-left-color:var(--warn);background:var(--warn-bg)}.update-check.rate-limited .update-check-text,.update-check.unreachable .update-check-text{color:var(--warn)}
+.update-check .btn.sm{height:30px;padding:0 10px;font-size:12px}
 .changelog-intro{font-size:12.5px;color:var(--ink-2);margin:0 0 10px;flex:0 0 auto}
 .changelog-list{flex:1;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:8px;padding-right:2px}
 .change-entry{border-left:3px solid var(--border-strong);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--surface-2);overflow:hidden;flex:0 0 auto}

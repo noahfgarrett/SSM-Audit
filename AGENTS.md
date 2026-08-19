@@ -15,3 +15,4 @@
   - Added a new feature to ...
 - Never mention disabled features, disabled checks, or disabled audit rules in changelogs, patch notes, update notes, or release notes.
 - Keep release version values synchronized across `package.json`, `src/boot.js`, `src/changelog.json`, and release assets.
+- Every release must also update `latest.json` on the `main` branch of `noahfgarrett/SSM-Audit-Releases` (`{version, downloadUrl, releaseNotes, publishedAt}`; `downloadUrl` must end with `SSM-Audit-v<version>.html`). The updater reads it from raw.githubusercontent.com when the GitHub API check is rate-limited or blocked, so a stale manifest means old copies stop seeing new releases.
