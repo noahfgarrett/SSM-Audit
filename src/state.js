@@ -6,6 +6,8 @@ export const S={
   session:null,
   comparison:null,
   updateInfo:null,
+  updateCheck:null,
+  updateRetried:false,
   updateModalDismissed:false,
 };
 
