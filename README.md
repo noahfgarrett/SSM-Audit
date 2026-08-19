@@ -53,6 +53,6 @@ The build produces `SSM-Audit.html`, a single offline HTML file. The audit engin
 
 ## Release Model
 
-- Private source: `noahfgarrett/SSM-Audit`
-- Public artifacts only: `noahfgarrett/SSM-Audit-Releases`
+- Source: `noahfgarrett/SSM-Audit` (public) — each version is also published as a GitHub release here
+- Release artifacts and the updater's source of truth: `noahfgarrett/SSM-Audit-Releases` (`latest.json` lives on its `main` branch)
 - Release assets: `SSM-Audit-vX.Y.Z.html` and `SSM-Audit-vX.Y.Z.html.gz`
