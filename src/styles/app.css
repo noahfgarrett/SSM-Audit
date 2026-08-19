@@ -1051,6 +1051,40 @@ body.visual-trainer-fullscreen{overflow:hidden}
 .row.open > .twist .ic,.row > .twist .ic,.audit-group-toggle>.ic,.change-chev{transition:transform var(--motion-fast) ease}
 #view.view-enter>*{animation:viewEnter .16s var(--ease-out) both}
 @keyframes viewEnter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---- worked example modal (Rules screen) ---- */
+.example-card{position:relative;width:min(960px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);overflow:auto;padding:24px 26px 22px}
+.example-card .example-x{position:absolute;top:12px;right:12px;z-index:2}
+.example-card h3{margin:4px 0 6px;font-size:18px;letter-spacing:-.2px}
+.ex-statement{margin:0 0 14px;color:var(--ink-2);font-size:13px;line-height:1.5;max-width:70ch}
+.ex-legend{display:flex;gap:16px;margin:0 0 8px;color:var(--ink-3);font-size:11.5px}
+.ex-legend span{display:inline-flex;align-items:center;gap:6px}
+.ex-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--border-strong)}
+.ex-swatch.flag{background:#fbe3e1;border-color:#efc5c1}
+.ex-swatch.bad{background:#f8b4ac;border-color:#d9531e}
+.ex-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.ex-table{width:100%;border-collapse:collapse;font-size:12px}
+.ex-table th{position:sticky;top:0;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface-2);color:var(--ink-3);font:700 10px var(--mono);text-align:left;text-transform:uppercase;white-space:nowrap}
+.ex-table td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--ink);font-family:var(--mono);font-size:12px;white-space:nowrap;vertical-align:top}
+.ex-table tr:last-child td{border-bottom:0}
+.ex-table td.ex-flag{background:#fbe3e1;box-shadow:inset 0 0 0 1px #efc5c1;font-weight:650}
+.ex-table tr.ex-row-flag td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.ex-table td.ex-flag.ex-flag:first-child{box-shadow:inset 3px 0 0 var(--danger),inset 0 0 0 1px #efc5c1}
+.ex-table mark.ex-bad{background:#f8b4ac;color:#7a1410;border-radius:2px;padding:0 1px;font-weight:800;text-decoration:underline wavy var(--danger);text-underline-offset:2px}
+.ex-empty{color:var(--ink-3);font-style:italic;font-family:var(--sans)}
+.ex-notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.ex-note{padding:12px 14px;border:1px solid var(--border);border-left:3px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2)}
+.ex-note b{display:block;margin-bottom:4px;color:var(--ink-3);font:700 10px var(--mono);text-transform:uppercase;letter-spacing:.2px}
+.ex-note p{margin:0;color:var(--ink);font-size:12.5px;line-height:1.5}
+.ex-note.why{border-left-color:var(--danger)}
+.ex-note.says{border-left-color:var(--accent)}
+.ex-note.says .audit-severity{margin-right:6px;vertical-align:middle}
+.ex-note.fix{border-left-color:var(--ok)}
+.rule-example-btn{display:inline-flex;align-items:center;gap:5px;min-height:23px;padding:3px 9px;border:1px solid var(--border-strong);border-radius:4px;background:var(--surface);color:var(--ink-2);font:650 10px var(--sans);cursor:pointer;white-space:nowrap}
+.rule-example-btn .ic{width:13px;height:13px;color:var(--accent-700)}
+.rule-example-btn:hover{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
+.rule-example-btn:focus-visible{outline:none;box-shadow:var(--ring)}
+@media (max-width:760px){.ex-notes{grid-template-columns:1fr}.example-card{padding:20px 16px 16px}}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation-duration:.001ms!important}
   #overlay.show .ring-spin,#overlay.show .ring::before,#overlay.show .ring-dots i{animation:none!important}

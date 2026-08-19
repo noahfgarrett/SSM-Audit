@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.13.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Every check on the Rules screen now has an Example button: a small made-up registry that shows exactly what gets flagged, with the cell shaded and the offending characters marked, alongside why it is flagged, what the audit says about it, and what right looks like\n- Each example is run through the real audit engine when opened, so the verdict shown is live, not a copy"
+  },
+  {
     "version": "1.12.0",
     "date": "2026-08-19",
     "type": "feature",
