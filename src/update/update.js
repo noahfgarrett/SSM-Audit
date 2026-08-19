@@ -1,5 +1,4 @@
 import { $, $$, esc } from '../core/text.js'
-import { downloadBlob } from '../core/download.js'
 import { APP_VERSION, UPDATE_REPOSITORY } from '../version.js'
 import { S } from '../state.js'
 import { ic } from '../ui/icons.js'
@@ -87,14 +86,19 @@ function showUpdate(info){
   const notes=$('#updateNotes'),html=notesHtml(info.releaseNotes);notes.innerHTML=html;notes.hidden=!html;$('#updateStatus').innerHTML='';
   const button=$('#updateDownload');button.disabled=false;button.innerHTML=ic('download')+`Download v${esc(info.version)}`;openUpdateModal('update');
 }
-async function downloadUpdate(){
-  const info=S.updateInfo;if(!info)return;const button=$('#updateDownload'),status=$('#updateStatus');button.disabled=true;button.textContent='Preparing...';status.innerHTML='';
+/* GitHub serves release assets from a host that sends no CORS headers, so the
+   page cannot read the file in JavaScript to check it first. The download is
+   handed to the browser instead: GitHub serves the asset as an attachment, the
+   file lands in Downloads under its versioned name, and the updater only ever
+   points at the exact `SSM-Audit-v<version>.html` asset it matched. */
+function downloadUpdate(){
+  const info=S.updateInfo;if(!info)return;const button=$('#updateDownload'),status=$('#updateStatus');
   try{
-    const response=await fetch(info.downloadUrl,{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);
-    const blob=await response.blob(),text=await blob.text();
-    if(text.length<100000||!text.includes('<title>SSM Audit</title>')||!text.includes(`APP_VERSION='${info.version}'`))throw new Error('The release asset did not pass validation');
-    downloadBlob(versionedFilename(info.version),new Blob([text],{type:'text/html'}));status.innerHTML=`<div class="update-status">Download ready: ${esc(versionedFilename(info.version))}</div>`;button.innerHTML=ic('check')+'Downloaded';
-  }catch(error){console.error('Update download failed',error);status.innerHTML='<div class="update-error">Download failed. Check the connection and try again.</div>';button.disabled=false;button.innerHTML=ic('download')+`Download v${esc(info.version)}`;}
+    const anchor=document.createElement('a');anchor.href=info.downloadUrl;anchor.download=versionedFilename(info.version);anchor.rel='noopener';anchor.target='_blank';
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    status.innerHTML=`<div class="update-status">Your browser is downloading ${esc(versionedFilename(info.version))}. Open that file from now on — this one stays at v${esc(APP_VERSION)}.</div>`;
+    button.innerHTML=ic('check')+'Download started';
+  }catch(error){console.error('Update download failed',error);status.innerHTML=`<div class="update-error">The download could not start. Open <a href="${esc(info.downloadUrl)}" target="_blank" rel="noopener">the release file</a> directly.</div>`;}
 }
 async function fetchLatestRelease(){
   let reason='unreachable';

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.13.1",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Fixed the update download: GitHub changed where release files are served from, which blocked the in-app fetch. The Download button now hands the file straight to the browser, so it lands in Downloads as SSM-Audit-v<version>.html"
+  },
+  {
     "version": "1.13.0",
     "date": "2026-08-19",
     "type": "feature",
