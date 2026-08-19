@@ -9,6 +9,7 @@ import { buildSsmHierarchy } from '../audit/hierarchy.js'
 import { exportSsmAuditXlsx, exportSsmComparisonXlsx } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
+import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -112,8 +113,49 @@ function ruleRowHtml(rule,counts,query){
   return `<article class="rule-reference-row ${rule.enabled?'':'is-off'}">
     <span class="rule-reference-icon">${ic(rule.category==='dependencies'?'git-branch':rule.category==='metadata'?'database':rule.category==='headers'?'folder-tree':rule.category==='milestones'?'clipboard-list':rule.category==='item-masters'?'tag':'list-tree')}</span>
     <div><h4>${highlightHtml(rule.title,query)}</h4><p>${highlightHtml(rule.statement,query)}</p></div>
-    <div class="rule-reference-tags"><span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
+    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
   </article>`;
+}
+
+/* ---- worked example modal ----
+   The mock rows are run through the real engine when the modal opens, so the
+   "What the audit says" line is the live finding text, not a copy of it. */
+let exampleTrapCleanup=null,exampleOpener=null;
+function exampleCellHtml(example,rowIndex,field){
+  const value=String(example.rows[rowIndex][field]||'');
+  const mark=example.marks.find(entry=>entry.row===rowIndex&&entry.field===field);
+  const focused=example.focus.some(cell=>cell.row===rowIndex&&cell.field===field);
+  let inner;
+  if(mark)inner=mark.parts.map(([text,bad])=>bad?`<mark class="ex-bad">${esc(text)}</mark>`:esc(text)).join('');
+  else inner=value?esc(value):'<span class="ex-empty">(blank)</span>';
+  return `<td class="${focused?'ex-flag':''}">${inner}</td>`;
+}
+export function closeRuleExample(){
+  const modal=$('#exampleModal');if(!modal||!modal.classList.contains('show'))return;
+  exampleTrapCleanup?.();exampleTrapCleanup=null;modal.setAttribute('aria-hidden','true');animateClose(modal);
+  const opener=exampleOpener;exampleOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
+}
+export function openRuleExample(ruleId){
+  const rule=Object.values(SSM_AUDIT_RULES).find(entry=>entry.id===ruleId),example=SSM_AUDIT_EXAMPLES[ruleId];if(!rule||!example)return;
+  const result=runSsmAudit(auditExampleSnapshot(example),example.options||{});
+  const focusedTags=new Set(example.focus.map(cell=>example.rows[cell.row].equipmentId));
+  const finding=result.findings.find(entry=>entry.rule.id===ruleId&&focusedTags.has(entry.equipmentId))||result.findings.find(entry=>entry.rule.id===ruleId)||null;
+  const columns=auditExampleColumns(example);
+  const table=`<div class="ex-table-wrap"><table class="ex-table"><thead><tr>${columns.map(field=>`<th>${esc(AUDIT_EXAMPLE_FIELD_LABELS[field]||field)}</th>`).join('')}</tr></thead><tbody>${example.rows.map((row,rowIndex)=>`<tr class="${example.focus.some(cell=>cell.row===rowIndex)?'ex-row-flag':''}">${columns.map(field=>exampleCellHtml(example,rowIndex,field)).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const severity=finding?finding.severity:'';
+  $('#exampleBody').innerHTML=`<span class="eyebrow">Worked example · mock data</span><h3 id="exampleTitle">${esc(rule.title)}</h3><p class="ex-statement">${esc(rule.statement)}</p>
+    <div class="ex-legend"><span><i class="ex-swatch flag"></i>Cell the check is about</span><span><i class="ex-swatch bad"></i>The exact characters</span></div>
+    ${table}
+    <div class="ex-notes">
+      <div class="ex-note why"><b>Why it is flagged</b><p>${esc(example.caption)}</p></div>
+      <div class="ex-note says"><b>What the audit says</b>${finding?`<p><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span> ${esc(finding.why)}</p>`:'<p>Run on this data, the check did not fire — the example needs attention.</p>'}</div>
+      <div class="ex-note fix"><b>What right looks like</b><p>${esc(example.fix)}</p></div>
+    </div>`;
+  const modal=$('#exampleModal');exampleOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+  exampleTrapCleanup?.();exampleTrapCleanup=activateFocusTrap(modal,closeRuleExample);
+  $('#exampleClose').onclick=closeRuleExample;modal.onclick=event=>{if(event.target===modal)closeRuleExample();};
+  const firstFlag=$('#exampleBody .ex-table td.ex-flag'),wrap=$('#exampleBody .ex-table-wrap');if(firstFlag&&wrap)wrap.scrollLeft=Math.max(0,firstFlag.offsetLeft-wrap.clientWidth/2+firstFlag.offsetWidth/2);
+  $('#exampleClose').focus();
 }
 function renderRuleCatalog(navigate){
   const rows=ruleCatalogRows(),container=$('#ruleCatalog'),count=$('#ruleResultCount'),counts=ruleFindingCounts(),query=clean(S.rules.search).toUpperCase();if(!container)return;
@@ -127,6 +169,7 @@ function renderRuleCatalog(navigate){
       ${categories.map(category=>`<div class="rule-category"><h5>${esc(RULE_CATEGORY_LABELS[category]||category)}<span>${matches.filter(rule=>rule.category===category).length}</span></h5>${matches.filter(rule=>rule.category===category).map(rule=>ruleRowHtml(rule,counts,query)).join('')}</div>`).join('')}</section>`;
   }).join('');
   $$('[data-rule-findings]',container).forEach(button=>button.onclick=()=>showOnlyRule(button.dataset.ruleFindings,navigate));
+  $$('[data-rule-example]',container).forEach(button=>button.onclick=()=>openRuleExample(button.dataset.ruleExample));
 }
 /* `keepScope` leaves the four registry dimensions alone. The dashboard passes it
    so clicking a number inside a scoped dashboard stays inside that scope; the

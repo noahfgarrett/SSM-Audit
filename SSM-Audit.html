@@ -1058,6 +1058,40 @@ body.visual-trainer-fullscreen{overflow:hidden}
 .row.open > .twist .ic,.row > .twist .ic,.audit-group-toggle>.ic,.change-chev{transition:transform var(--motion-fast) ease}
 #view.view-enter>*{animation:viewEnter .16s var(--ease-out) both}
 @keyframes viewEnter{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---- worked example modal (Rules screen) ---- */
+.example-card{position:relative;width:min(960px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);overflow:auto;padding:24px 26px 22px}
+.example-card .example-x{position:absolute;top:12px;right:12px;z-index:2}
+.example-card h3{margin:4px 0 6px;font-size:18px;letter-spacing:-.2px}
+.ex-statement{margin:0 0 14px;color:var(--ink-2);font-size:13px;line-height:1.5;max-width:70ch}
+.ex-legend{display:flex;gap:16px;margin:0 0 8px;color:var(--ink-3);font-size:11.5px}
+.ex-legend span{display:inline-flex;align-items:center;gap:6px}
+.ex-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--border-strong)}
+.ex-swatch.flag{background:#fbe3e1;border-color:#efc5c1}
+.ex-swatch.bad{background:#f8b4ac;border-color:#d9531e}
+.ex-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.ex-table{width:100%;border-collapse:collapse;font-size:12px}
+.ex-table th{position:sticky;top:0;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface-2);color:var(--ink-3);font:700 10px var(--mono);text-align:left;text-transform:uppercase;white-space:nowrap}
+.ex-table td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--ink);font-family:var(--mono);font-size:12px;white-space:nowrap;vertical-align:top}
+.ex-table tr:last-child td{border-bottom:0}
+.ex-table td.ex-flag{background:#fbe3e1;box-shadow:inset 0 0 0 1px #efc5c1;font-weight:650}
+.ex-table tr.ex-row-flag td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.ex-table td.ex-flag.ex-flag:first-child{box-shadow:inset 3px 0 0 var(--danger),inset 0 0 0 1px #efc5c1}
+.ex-table mark.ex-bad{background:#f8b4ac;color:#7a1410;border-radius:2px;padding:0 1px;font-weight:800;text-decoration:underline wavy var(--danger);text-underline-offset:2px}
+.ex-empty{color:var(--ink-3);font-style:italic;font-family:var(--sans)}
+.ex-notes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.ex-note{padding:12px 14px;border:1px solid var(--border);border-left:3px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface-2)}
+.ex-note b{display:block;margin-bottom:4px;color:var(--ink-3);font:700 10px var(--mono);text-transform:uppercase;letter-spacing:.2px}
+.ex-note p{margin:0;color:var(--ink);font-size:12.5px;line-height:1.5}
+.ex-note.why{border-left-color:var(--danger)}
+.ex-note.says{border-left-color:var(--accent)}
+.ex-note.says .audit-severity{margin-right:6px;vertical-align:middle}
+.ex-note.fix{border-left-color:var(--ok)}
+.rule-example-btn{display:inline-flex;align-items:center;gap:5px;min-height:23px;padding:3px 9px;border:1px solid var(--border-strong);border-radius:4px;background:var(--surface);color:var(--ink-2);font:650 10px var(--sans);cursor:pointer;white-space:nowrap}
+.rule-example-btn .ic{width:13px;height:13px;color:var(--accent-700)}
+.rule-example-btn:hover{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
+.rule-example-btn:focus-visible{outline:none;box-shadow:var(--ring)}
+@media (max-width:760px){.ex-notes{grid-template-columns:1fr}.example-card{padding:20px 16px 16px}}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation-duration:.001ms!important}
   #overlay.show .ring-spin,#overlay.show .ring::before,#overlay.show .ring-dots i{animation:none!important}
@@ -1916,6 +1950,12 @@ body.audit-fullscreen{overflow:hidden}
     <div class="guide-main"><button class="icon-btn" id="guideClose" type="button" aria-label="Close guide"></button><div id="guideBody"></div></div>
   </div>
 </div>
+<div id="exampleModal" class="modal-back" role="dialog" aria-modal="true" aria-labelledby="exampleTitle" aria-hidden="true" hidden>
+  <div class="modal-card example-card">
+    <button class="xbtn icon-btn example-x" id="exampleClose" type="button" aria-label="Close example"></button>
+    <div id="exampleBody"></div>
+  </div>
+</div>
 <div id="updateModal" class="modal-back update-back" role="dialog" aria-modal="true" aria-labelledby="updateTitle" aria-hidden="true" hidden>
   <div class="modal-card update-card wide">
     <button class="xbtn icon-btn update-x" id="updateCloseX" type="button" aria-label="Close changelog or update modal"></button>
@@ -1953,7 +1993,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Excel report Dashboard redesigned: a large overall progress bar at the top, the level totals, and wide progress bars with live percentages per discipline and per L2 phase (the Index keeps its compact form)\n- Actioned is now a tick box: click the cell and choose ☑; the row turns green and every progress figure updates\n- Milestone tabs: each nest level has its own colour (not shades of one), equipment IDs are always black, Dependencies sits right after Closest Parent, Building and Item Master are included, and the cell a finding is about (UPN, Closest Parent, Dependencies, System Name, …) is shaded light red"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- The update check is no longer silent: the Changelog window now says whether you are on the latest version, whether a newer one is available, or why the check could not run, with a Check again button\n- When GitHub limits checks from a busy network (60 an hour per site address), SSM Audit falls back to a second source so the update still shows\n- The automatic check quietly retries once if the first attempt runs before the network is ready"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Tightened every transition so the app feels snappy as well as smooth: panels open in 180ms and close in 110ms, control feedback is 120ms, and screen changes settle in 160ms"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Full UI motion pass: the Guide, update window, finding drawer, Filters panel, and progress overlay now ease in and ease out (backdrop fade, panel slide or scale) instead of snapping\n- Switching screens slides the new content in; buttons, chips, tiles, tabs, tree toggles, and table rows share one consistent hover and press feel\n- Everything respects the operating system's reduced-motion setting"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu overlapping itself on narrow windows: the top bar now scrolls when its items do not fit, drops to icons under 640px, and the version badge moves into the top bar instead of floating over content"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- Replaced the row of filter dropdowns with one Filters panel covering level, discipline, L2 milestone, UPN, building, source, topic, and individual checks; only the active filters show on the page, as removable chips\n- The Dashboard now scopes to the same filters, so it can be narrowed to one building, discipline, or phase, and it gained milestone readiness per L2 phase, hierarchy health, a dependencies view, a checks overview that also shows which checks passed, and an Item Master migration gauge"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection — deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree — a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen now has an Example button: a small made-up registry that shows exactly what gets flagged, with the cell shaded and the offending characters marked, alongside why it is flagged, what the audit says about it, and what right looks like\n- Each example is run through the real audit engine when opened, so the verdict shown is live, not a copy"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Excel report Dashboard redesigned: a large overall progress bar at the top, the level totals, and wide progress bars with live percentages per discipline and per L2 phase (the Index keeps its compact form)\n- Actioned is now a tick box: click the cell and choose ☑; the row turns green and every progress figure updates\n- Milestone tabs: each nest level has its own colour (not shades of one), equipment IDs are always black, Dependencies sits right after Closest Parent, Building and Item Master are included, and the cell a finding is about (UPN, Closest Parent, Dependencies, System Name, …) is shaded light red"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- The update check is no longer silent: the Changelog window now says whether you are on the latest version, whether a newer one is available, or why the check could not run, with a Check again button\n- When GitHub limits checks from a busy network (60 an hour per site address), SSM Audit falls back to a second source so the update still shows\n- The automatic check quietly retries once if the first attempt runs before the network is ready"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Tightened every transition so the app feels snappy as well as smooth: panels open in 180ms and close in 110ms, control feedback is 120ms, and screen changes settle in 160ms"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Full UI motion pass: the Guide, update window, finding drawer, Filters panel, and progress overlay now ease in and ease out (backdrop fade, panel slide or scale) instead of snapping\n- Switching screens slides the new content in; buttons, chips, tiles, tabs, tree toggles, and table rows share one consistent hover and press feel\n- Everything respects the operating system's reduced-motion setting"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu overlapping itself on narrow windows: the top bar now scrolls when its items do not fit, drops to icons under 640px, and the version badge moves into the top bar instead of floating over content"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- Replaced the row of filter dropdowns with one Filters panel covering level, discipline, L2 milestone, UPN, building, source, topic, and individual checks; only the active filters show on the page, as removable chips\n- The Dashboard now scopes to the same filters, so it can be narrowed to one building, discipline, or phase, and it gained milestone readiness per L2 phase, hierarchy health, a dependencies view, a checks overview that also shows which checks passed, and an Item Master migration gauge"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection — deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree — a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -1964,7 +2004,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.12.0';
+const APP_VERSION='1.13.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -2620,6 +2660,294 @@ function isLikelyHeaderName(row,children){
   return !description||/HEADER|CLUSTER|RING|GROUP|ROLL[- ]?UP|PIPING|DUCTWORK|SKID/.test(description)&&!auditIsInstrument(row)&&!auditIsController(row);
 }
 
+/* src/audit/examples.js */
+/* ---- Worked examples for the Rules screen ----
+   One small, made-up registry per check, built so the check fires on exactly the
+   row it is meant to illustrate. `focus` names the cells to shade; `marks`
+   optionally splits one cell into plain / offending runs so the exact characters
+   stand out. Tags, buildings and descriptions are invented ("B1-…"); UPNs,
+   System Names, disciplines and VF Item Master names are the Rev21 / VF
+   vocabulary that already ships in the app. tests/examples.test.mjs runs the
+   real engine over every example and asserts it flags the focused row. */
+
+const sys=upn=>(extoRev21SystemsForUpn(upn)||[])[0]||'';
+const MECH='MECHANICAL WET',MECH_EXH='MECHANICAL EXHAUST',ELEC='ELECTRICAL',FMS='FACILITIES MONITORING SYSTEM',LSS='LIFE SAFETY SYSTEM',UPW='UPW';
+const B='B1';
+
+/* r(...) writes one registry row in the Rev21 field names the engine reads. */
+function r(values){
+  return {
+    equipmentId:values.id||'',equipmentDescription:values.desc||'',closestParent:values.parent||'',
+    /* A row whose parent is its own System Name is a system root; registries mark those New. */
+    closestParentStatus:values.status||(values.parent&&values.parent===(values.sys!==undefined?values.sys:(values.upn?sys(values.upn):''))?'NEW':''),
+    dependencies:values.deps||'',dependencyProject:values.depProject||'',upn:values.upn||'',systemName:values.sys!==undefined?values.sys:(values.upn?sys(values.upn):''),
+    discipline:values.disc||'',building:values.bldg||B,itemMaster:values.im||'',milestone:values.l2||'',milestoneParent:values.l1||'',
+    equipmentClassification:values.cls||'',
+  };
+}
+function ex(rule,example){return [rule,Object.freeze({rows:Object.freeze(example.rows.map(Object.freeze)),focus:Object.freeze(example.focus||[]),marks:Object.freeze(example.marks||[]),caption:example.caption||'',fix:example.fix||'',options:example.options||null,columns:example.columns||null})];}
+
+/* A routine mechanical system the electrical/controls examples can lean on. */
+const AHU={id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'};
+const PANEL={id:'B1-PNL-6041',desc:'Electrical panel',parent:sys('604'),upn:'604',disc:ELEC,im:'VF_EL_PANEL'};
+const PLC={id:'B1-PLC-6501',desc:'PLC controller',parent:sys('650'),upn:'650',disc:FMS,im:'VF_I&C_PLC_TELE'};
+
+const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
+  /* ---------------- registry integrity ---------------- */
+  ex('identity.duplicate-equipment-id',{
+    rows:[r({...AHU}),r({id:'B1-AHU-1041',desc:'Air handler (duplicate row)',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'}),r({id:'B1-AHU-1042',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'equipmentId'},{row:1,field:'equipmentId'}],
+    caption:'B1-AHU-1041 is on two rows. Only one of them can be the real equipment.',fix:'Delete the duplicate, or give the second unit its own tag (B1-AHU-1043).'}),
+  ex('parent.blank',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:'',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'closestParent'}],
+    caption:'The Closest Parent is empty, so Exto cannot place this row anywhere in the SSM.',fix:`Name the parent equipment — or, when this is the top of the system, its System Name: ${sys('104')}.`}),
+  ex('parent.self',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:'B1-AHU-1041',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'closestParent'}],
+    caption:'The row names itself as its own parent — a loop one row long.',fix:`Point Closest Parent at the real parent, or the System Name ${sys('104')}.`}),
+  ex('parent.unresolved',{
+    rows:[r({...AHU}),r({id:'B1-SF-1041',desc:'Supply fan',parent:'B1-AHU-1O41',upn:'104',disc:MECH,im:'VF_MD_EXHAUST FAN'})],
+    focus:[{row:1,field:'closestParent'}],
+    marks:[{row:1,field:'closestParent',parts:[['B1-AHU-1',false],['O',true],['41',false]]}],
+    caption:'The parent is typed with the letter O instead of the digit 0, so no row in the registry matches it.',fix:'Correct the tag to B1-AHU-1041 (or set Closest Parent Status to Existing if it really lives in another project).'}),
+  ex('parent.generated-header-review',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:'CHW PUMP GROUP',status:'NEW',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:'CHW PUMP GROUP',status:'NEW',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:0,field:'closestParent'},{row:1,field:'closestParent'}],
+    caption:'"CHW PUMP GROUP" is marked New and is not any equipment row — it would be created as a header on upload.',fix:'If the header is intended, add a row for it with a VF_Blank Item Master; otherwise parent the pumps to equipment or the System Name.'}),
+  ex('parent.cross-upn',{
+    rows:[r({...PANEL}),r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:'B1-PNL-6041',deps:'',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:1,field:'closestParent'},{row:1,field:'upn'}],
+    caption:'The pump is on UPN 111 but its parent is on UPN 604. A structural parent must be inside the same UPN.',fix:`Keep B1-PNL-6041 as a dependency and parent the pump inside 111 — to equipment or to ${sys('111')}.`}),
+  ex('parent.cross-discipline',{
+    rows:[r({id:'B1-XFMR-6021',desc:'Medium voltage transformer',parent:sys('602'),upn:'602',disc:ELEC,im:'VF_EL_MV_XFMR'}),r({id:'B1-PMP-6021',desc:'Cooling pump',parent:'B1-XFMR-6021',upn:'602',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:1,field:'closestParent'},{row:1,field:'discipline'}],
+    caption:'A mechanical pump is nested under electrical gear. Only controls devices may cross disciplines to sit under the equipment they serve.',fix:'Record the transformer as a dependency and parent the pump inside its own discipline.'}),
+  ex('parent.cycle',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:'B1-SF-1041',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'}),r({id:'B1-SF-1041',desc:'Supply fan',parent:'B1-AHU-1041',upn:'104',disc:MECH,im:'VF_MD_EXHAUST FAN'})],
+    focus:[{row:0,field:'closestParent'},{row:1,field:'closestParent'}],
+    caption:'The AHU’s parent is the fan and the fan’s parent is the AHU — following parents upward never reaches a top.',fix:`Parent the AHU to ${sys('104')} and leave the fan under the AHU.`}),
+  ex('dependency.self',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'B1-AHU-1041',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'dependencies'}],
+    caption:'The row lists itself as something it depends on.',fix:'Remove the self-reference from Dependencies.'}),
+  ex('dependency.duplicate',{
+    rows:[r({...PANEL}),r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'B1-PNL-6041; B1-PNL-6041',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:1,field:'dependencies'}],
+    marks:[{row:1,field:'dependencies',parts:[['B1-PNL-6041; ',false],['B1-PNL-6041',true]]}],
+    caption:'The same panel is listed twice on one row.',fix:'Keep one entry per dependency: B1-PNL-6041.'}),
+  ex('dependency.unresolved',{
+    rows:[r({...PANEL}),r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'B1-PNL-6O41',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:1,field:'dependencies'}],
+    marks:[{row:1,field:'dependencies',parts:[['B1-PNL-6',false],['O',true],['41',false]]}],
+    caption:'The dependency is typed with the letter O, so it matches no tag in the registry and no other project is named.',fix:'Correct it to B1-PNL-6041, or fill Dependency Project when it lives elsewhere.'}),
+  ex('dependency.precedence-cycle',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),deps:'B1-PMP-1112',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),deps:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:0,field:'dependencies'},{row:1,field:'dependencies'}],
+    caption:'Pump 1111 depends on 1112 and 1112 depends on 1111 — neither can start first.',fix:'Keep the dependency in one direction only (whichever truly must run first).'}),
+  ex('dependency.same-upn-bottom-up',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),deps:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:1,field:'dependencies'}],
+    caption:'In a bottom-up (mechanical) discipline, two pumps in the same UPN are normally sequenced by the hierarchy, not by a dependency.',fix:'Confirm the sequencing is intended; otherwise remove the same-system dependency.'}),
+  ex('metadata.upn-not-approved',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),upn:'1040',sys:sys('104'),disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'upn'}],
+    marks:[{row:0,field:'upn',parts:[['104',false],['0',true]]}],
+    caption:'1040 is not a UPN in the Rev21 upload template — UPNs are three digits (or RR / SEC / MISC).',fix:'Use the approved UPN: 104.'}),
+  ex('metadata.system-upn-mismatch',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('111'),upn:'104',sys:sys('111'),disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'systemName'},{row:0,field:'upn'}],
+    marks:[{row:0,field:'systemName',parts:[['111',true],[sys('111').slice(3),false]]}],
+    caption:`The row is on UPN 104 but its System Name belongs to UPN 111.`,fix:`Use the Rev21 System Name for 104: ${sys('104')}.`}),
+  ex('metadata.ic-discipline',{
+    rows:[r({id:'B1-RIO-6501',desc:'Remote I/O panel',parent:sys('650'),upn:'650',disc:'I&C',im:'VF_I&C_RIO W/O SUD'})],
+    focus:[{row:0,field:'discipline'}],
+    caption:'"I&C" is not the approved controls discipline in the Rev21 dropdown.',fix:`Use ${FMS}.`}),
+  ex('metadata.upn-inconsistent',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH_EXH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1113',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:0,field:'discipline'},{row:1,field:'discipline'}],
+    caption:'Rows on UPN 111 carry different disciplines. Every row on a UPN should agree on System Name and Discipline.',fix:`Set all three pumps to ${MECH}.`}),
+  ex('identity.tag-looks-like-description',{
+    rows:[r({id:'Chilled water pumps',desc:'',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Blank'})],
+    focus:[{row:0,field:'equipmentId'}],
+    marks:[{row:0,field:'equipmentId',parts:[['Chilled ',true],['water ',true],['pumps',true]]}],
+    caption:'Lowercase words in the Equipment ID column read like a description typed where the tag belongs.',fix:'Use a tag (B1-CHW-PUMPS-HDR) and put the words in Equipment Description.'}),
+  ex('metadata.classification-not-in-list',{
+    rows:[r({id:'B1-XV-1111',desc:'Isolation valve',parent:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_I&C_VALVE',cls:'XV'}),r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',cls:'PMP'})],
+    focus:[{row:0,field:'equipmentClassification'}],
+    caption:'"XV" is not in the Rev21 Equipment Classification dropdown. It may be a legitimate site code — the count tells you whether to add it.',fix:'Pick the Rev21 classification, or raise the site code for addition to the list.'}),
+
+  /* ---------------- milestones ---------------- */
+  ex('milestone.incomplete-pair',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L2-M1-111 30% Capacity'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'',l2:'L2-M1-111 30% Capacity'})],
+    focus:[{row:1,field:'milestoneParent'}],
+    caption:'This project uses milestones, but the second pump is missing its L1 Milestone Parent.',fix:'Fill both L1 and L2 on every row.'}),
+  ex('milestone.l2-upn-mismatch',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L2-M1-104 30% Capacity'})],
+    focus:[{row:0,field:'milestone'},{row:0,field:'upn'}],
+    marks:[{row:0,field:'milestone',parts:[['L2-M1-',false],['104',true],[' 30% Capacity',false]]}],
+    caption:'The row is on UPN 111 but its L2 milestone names UPN 104.',fix:'Assign the L2 milestone for 111 (L2-M1-111 …), or move the row to the right UPN.'}),
+  ex('milestone.intent-mismatch',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L2-M1-111 100% Capacity'})],
+    focus:[{row:0,field:'milestoneParent'},{row:0,field:'milestone'}],
+    marks:[{row:0,field:'milestoneParent',parts:[['L1-M1 ',false],['30%',true],[' Capacity',false]]},{row:0,field:'milestone',parts:[['L2-M1-111 ',false],['100%',true],[' Capacity',false]]}],
+    caption:'L1 says 30% capacity and L2 says 100% — the two levels describe different phases.',fix:'Make L1 and L2 describe the same phase.'}),
+  ex('milestone.parent-inconsistent',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L2-M1-111 30% Capacity'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M2 100% Capacity',l2:'L2-M1-111 30% Capacity'})],
+    focus:[{row:0,field:'milestoneParent'},{row:1,field:'milestoneParent'}],
+    caption:'The same L2 milestone rolls up to a 30% L1 on one row and a 100% L1 on another.',fix:'Give every row of that L2 milestone the same L1 Milestone Parent.'}),
+  ex('milestone.local-cohort-outlier',{
+    rows:[...Array.from({length:10},(_,index)=>r({id:`B1-PMP-11${String(index+11).padStart(2,'0')}`,desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L2-M1-111 30% Capacity'})),
+      r({id:'B1-PMP-1121',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M2 100% Capacity',l2:'L2-M2-111 100% Capacity'})],
+    focus:[{row:10,field:'milestoneParent'},{row:10,field:'milestone'}],
+    caption:'Eleven identical pumps in the same building and system — ten share one milestone pair, the eleventh does not.',fix:'Confirm the odd pump really belongs to a later phase; otherwise match its peers.'}),
+  ex('milestone.level-field-mismatch',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L1-M1 30% Capacity'})],
+    focus:[{row:0,field:'milestone'}],
+    marks:[{row:0,field:'milestone',parts:[['L1',true],['-M1 30% Capacity',false]]}],
+    caption:'An L1-shaped identifier is sitting in the L2 Milestone column.',fix:'Put the L2 identifier (L2-M1-111 …) in L2 Milestone.'}),
+  ex('milestone.branch-outlier',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH',l1:'L1-M1 30% Capacity',l2:'L2-M1-104 30% Capacity'}),
+      ...['SF','RF','CC','PF','FF'].map((kind,index)=>r({id:`B1-${kind}-1041`,desc:['Supply fan','Return fan','Cooling coil','Pre-filter','Final filter'][index],parent:'B1-AHU-1041',upn:'104',disc:MECH,im:'VF_MD_EXHAUST FAN',l1:'L1-M1 30% Capacity',l2:'L2-M1-104 30% Capacity'})),
+      r({id:'B1-HC-1041',desc:'Heating coil',parent:'B1-AHU-1041',upn:'104',disc:MECH,im:'VF_MD_HEATING COIL',l1:'L1-M2 100% Capacity',l2:'L2-M2-104 100% Capacity'})],
+    focus:[{row:6,field:'milestoneParent'},{row:6,field:'milestone'}],
+    caption:'The heating coil carries a different milestone pair from its parent AHU and its five sibling components.',fix:'Match the branch unless the later phase is documented.'}),
+
+  /* ---------------- item masters & headers ---------------- */
+  ex('item-master.standardized-assignment',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'CA_MD_GAH/GMAH'}),r({id:'B1-AHU-1042',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'}),r({id:'B1-AHU-1043',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'itemMaster'}],
+    marks:[{row:0,field:'itemMaster',parts:[['CA',true],['_MD_GAH/GMAH',false]]}],
+    caption:'A legacy project-prefixed Item Master (CA_…) where the VF standard name exists.',fix:'Replace with VF_MD_GAH/GMAH.'}),
+  ex('header.item-master-not-blank',{
+    rows:[r({id:'B1-CHW-PIPING',desc:'Chilled water piping',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-TT-1112',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-PT-1111',desc:'Pressure transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
+    focus:[{row:0,field:'itemMaster'}],
+    caption:'Three instruments nest under "Chilled water piping", which only groups them — yet it carries a real pump Item Master, so pump checklists would be applied to piping.',fix:'Give the header VF_Blank.'}),
+  ex('header.has-dependency',{
+    rows:[r({id:'B1-CHW-PIPING',desc:'Chilled water piping',parent:sys('111'),deps:'B1-PNL-6041',upn:'111',disc:MECH,im:'VF_Blank'}),r({...PANEL}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
+    focus:[{row:0,field:'dependencies'}],
+    caption:'A header (VF_Blank) only groups equipment; it should not depend on anything itself.',fix:'Move the dependency onto the equipment that actually needs the panel.'}),
+  ex('header.unused',{
+    rows:[r({id:'B1-CHW-PIPING',desc:'Chilled water piping',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Blank'}),r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:0,field:'itemMaster'},{row:0,field:'equipmentId'}],
+    caption:'A row set up as a header (VF_Blank) with nothing nested under it.',fix:'Nest the equipment it was meant to group under it, or remove the header row.'}),
+  ex('dependency.parent-also-listed',{
+    rows:[r({id:'B1-SWGR-6021',desc:'Medium voltage switchgear',parent:sys('602'),upn:'602',disc:ELEC,im:'VF_EL_MV_GEAR'}),r({id:'B1-XFMR-6021',desc:'Medium voltage transformer',parent:'B1-SWGR-6021',deps:'B1-SWGR-6021',upn:'602',disc:ELEC,im:'VF_EL_MV_XFMR'})],
+    focus:[{row:1,field:'closestParent'},{row:1,field:'dependencies'}],
+    caption:'The switchgear is this row’s Closest Parent and is listed as a dependency too. Electrical routinely records the feeder in both places — elsewhere it is worth a look.',fix:'Leave it if deliberate; otherwise remove the duplicate dependency.'}),
+  ex('dependency.on-header',{
+    rows:[r({id:'B1-CHW-PIPING',desc:'Chilled water piping',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Blank'}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'B1-CHW-PIPING',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:2,field:'dependencies'}],
+    caption:'The AHU depends on "Chilled water piping", which is only a header. Dependencies should point at the equipment that is actually needed.',fix:'Depend on the pump or valve inside that header instead.'}),
+  ex('parent.cross-building',{
+    rows:[r({id:'B1-PNL-6041',desc:'Electrical panel',parent:sys('604'),upn:'604',disc:ELEC,bldg:'B1',im:'VF_EL_PANEL'}),r({id:'B2-PNL-6042',desc:'Electrical panel',parent:'B1-PNL-6041',upn:'604',disc:ELEC,bldg:'B2',im:'VF_EL_PANEL'})],
+    focus:[{row:1,field:'closestParent'},{row:1,field:'building'}],
+    caption:'The B2 panel is nested under a B1 panel. A structural child stays in its parent’s building.',fix:`Keep B1-PNL-6041 as a dependency and parent the B2 panel inside B2 (or to ${sys('604')}).`}),
+  ex('dependency.project-not-needed',{
+    rows:[r({...PANEL}),r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'B1-PNL-6041',depProject:'PH2-EXPANSION',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:1,field:'dependencyProject'}],
+    caption:'Dependency Project names another project, but every dependency on the row is a tag in this registry.',fix:'Clear Dependency Project; it is only for dependencies that live elsewhere.'}),
+  ex('structure.system-without-root',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:'B1-PMP-1112',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:0,field:'systemName'},{row:0,field:'closestParent'},{row:1,field:'closestParent'}],
+    caption:`${sys('111')} is in use, but no row sits at the top of it (none has the System Name as its Closest Parent).`,fix:`Make the first pump’s Closest Parent ${sys('111')}.`}),
+
+  /* ---------------- commissioning logic ---------------- */
+  ex('logic.control-link-missing',{
+    rows:[r({...PLC}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:sys('111'),deps:'',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
+    focus:[{row:1,field:'closestParent'},{row:1,field:'dependencies'}],
+    caption:'A transmitter with no RIO, PLC, VFD or control panel anywhere in its parent or dependencies — nothing controls it.',fix:'Add its RIO or PLC as a dependency (or parent).'}),
+  ex('logic.driven-electrical-path-missing',{
+    rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),deps:'',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
+    focus:[{row:0,field:'dependencies'}],
+    caption:'A pump with no path back to any electrical gear — no panel, MCC, VFD or switchgear as parent or dependency.',fix:'Add the panel or VFD that powers it as a dependency.'}),
+  ex('logic.control-electrical-path-missing',{
+    rows:[r({id:'B1-RIO-6501',desc:'Remote I/O panel',parent:sys('650'),deps:'',upn:'650',disc:FMS,im:'VF_I&C_RIO W/O SUD'})],
+    focus:[{row:0,field:'dependencies'}],
+    caption:'An RIO with no path to an electrical supply.',fix:'Add the panel that powers it as a dependency.'}),
+  ex('logic.rio-control-path-missing',{
+    rows:[r({...PANEL}),r({id:'B1-RIO-6501',desc:'Remote I/O panel',parent:sys('650'),deps:'B1-PNL-6041',upn:'650',disc:FMS,im:'VF_I&C_RIO W/O SUD'})],
+    focus:[{row:1,field:'dependencies'}],
+    caption:'The RIO has power but names no PLC, I/O cluster or upstream RIO that runs it.',fix:'Add the PLC (B1-PLC-6501) as a dependency.'}),
+  ex('logic.drive-parent-unexpected',{
+    rows:[r({...PANEL}),r({...AHU}),r({id:'B1-VFD-1041',desc:'Variable frequency drive',parent:'B1-PNL-6041',deps:'B1-PLC-6501',upn:'104',disc:ELEC,im:'VF_EL_VFD'}),r({...PLC})],
+    focus:[{row:2,field:'closestParent'}],
+    caption:'The VFD is nested under the electrical panel. A drive nests under the equipment it drives; the panel is its power dependency.',fix:'Parent the VFD to B1-AHU-1041 and list B1-PNL-6041 as a dependency.'}),
+  ex('sop.vfd-dependencies',{
+    rows:[r({...PANEL}),r({...AHU}),r({id:'B1-VFD-1041',desc:'Variable frequency drive',parent:'B1-AHU-1041',deps:'B1-PNL-6041',upn:'104',disc:ELEC,im:'VF_EL_VFD'}),r({...PLC})],
+    focus:[{row:2,field:'dependencies'}],
+    caption:'Per the SOP a VFD lists both its electrical panel and its PLC. This one has the panel but no PLC.',fix:'Add B1-PLC-6501 to Dependencies.'}),
+  ex('logic.heat-trace-chain-missing',{
+    rows:[r({id:'B1-XFMR-6101',desc:'Heat trace transformer',parent:sys('610'),upn:'610',disc:ELEC,im:'VF_EL_Branch_XFMR'}),r({id:'B1-HTP-6101',desc:'Heat trace panel',parent:sys('610'),upn:'610',disc:ELEC,im:'VF_EL_HTP'})],
+    focus:[{row:1,field:'closestParent'}],
+    caption:'The heat-trace panel sits directly under the System Name instead of under its transformer.',fix:'Parent B1-HTP-6101 to B1-XFMR-6101.'}),
+  ex('logic.fdu-supported-equipment-missing',{
+    rows:[r({id:'B1-FDU-6501',desc:'Fiber optic distribution unit (FDU)',parent:sys('650'),deps:'',upn:'650',disc:FMS,im:'VF_I&C_FDU'})],
+    focus:[{row:0,field:'dependencies'}],
+    caption:'A fiber distribution unit with nothing listed that it enables.',fix:'Add the equipment or system the FDU serves as a dependency.'}),
+  ex('logic.vesda-fire-alarm-missing',{
+    rows:[r({id:'B1-FAP-0001',desc:'Fire alarm panel',parent:sys('630'),upn:'630',disc:LSS,im:'VF_LSS_FAP CARD'}),r({id:'B1-VESDA-0001',desc:'VESDA aspirating smoke detection',parent:sys('630'),deps:'',upn:'630',disc:LSS,im:'VF_LSS_FAP CARD'})],
+    focus:[{row:1,field:'dependencies'}],
+    caption:'Per the SOP a VESDA system depends on its fire alarm panel. This one lists nothing.',fix:'Add B1-FAP-0001 to Dependencies.'}),
+
+  /* ---------------- SOP nesting ---------------- */
+  ex('sop.instrument-parent-upn',{
+    rows:[r({...AHU}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:'B1-AHU-1041',upn:'104',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
+    focus:[{row:1,field:'equipmentId'},{row:1,field:'closestParent'}],
+    marks:[{row:1,field:'equipmentId',parts:[['B1-TT-',false],['111',true],['1',false]]}],
+    caption:'The transmitter’s tag carries UPN 111, yet it is nested under an AHU in UPN 104 and the row itself says 104.',fix:'Nest it under equipment in 111, or correct the tag if the row is right.'}),
+  ex('sop.fms-io-under-vfd',{
+    rows:[r({...AHU}),r({id:'B1-VFD-1041',desc:'Variable frequency drive',parent:'B1-AHU-1041',deps:'B1-PNL-6041; B1-PLC-6501',upn:'104',disc:ELEC,im:'VF_EL_VFD'}),r({id:'B1-VFD-1041-IO',desc:'FMS hardwired I/O for VFD',parent:'B1-AHU-1041',deps:'B1-PLC-6501',upn:'104',disc:FMS,im:'VF_I&C_DIGITAL I/O'}),r({...PANEL}),r({...PLC})],
+    focus:[{row:2,field:'closestParent'}],
+    caption:'The FMS hardwired I/O for the drive is nested under the AHU instead of under the VFD it belongs to.',fix:'Parent B1-VFD-1041-IO to B1-VFD-1041.'}),
+  ex('sop.lcp-placement',{
+    rows:[r({id:'B1-MAH-1041',desc:'Makeup air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'}),r({id:'B1-LCP-1041',desc:'Local control panel',parent:'B1-PNL-6041',upn:'104',disc:FMS,im:'VF_I&C_LCP W/O SUD'}),r({...PANEL})],
+    focus:[{row:1,field:'closestParent'}],
+    caption:'The local control panel is nested under an electrical panel in another UPN. An LCP sits with the equipment or skid it serves (MAH > SKID > LCP), or is a system root.',fix:'Parent B1-LCP-1041 to B1-MAH-1041 and keep the panel as a dependency.'}),
+  ex('sop.untied-instrument-rollup',{
+    rows:[r({id:'B1-CHW-PIPING',desc:'Chilled water piping roll-up',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Blank'}),r({id:'B1-PT-1041',desc:'Pressure transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-TT-1112',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
+    focus:[{row:1,field:'equipmentId'},{row:1,field:'closestParent'}],
+    marks:[{row:1,field:'equipmentId',parts:[['B1-PT-',false],['104',true],['1',false]]}],
+    caption:'An instrument tagged for UPN 104 is parked under a piping roll-up header that belongs to UPN 111.',fix:'Move it under the 104 roll-up or equipment, or fix the tag.'}),
+  ex('sop.control-valve-parent',{
+    rows:[r({...AHU}),r({id:'B1-TCV-1041',desc:'Temperature control valve',parent:sys('104'),upn:'104',disc:FMS,im:'VF_I&C_VALVE'})],
+    focus:[{row:1,field:'closestParent'}],
+    caption:'A control valve parented straight to the System Name. Per the SOP it nests under the equipment it serves.',fix:'Parent B1-TCV-1041 to B1-AHU-1041.'}),
+  ex('sop.room-sensor-parent',{
+    rows:[r({...AHU}),r({id:'B1-RTS-1041',desc:'Room temperature sensor',parent:sys('104'),upn:'104',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
+    focus:[{row:1,field:'closestParent'}],
+    caption:'A room sensor parented to the area system rather than the equipment it controls.',fix:'Parent B1-RTS-1041 to B1-AHU-1041.'}),
+]));
+
+const AUDIT_EXAMPLE_FIELD_LABELS=Object.freeze(Object.fromEntries(EXTO_REV21_COLUMNS.map(column=>[column.field,column.header])));
+const AUDIT_EXAMPLE_COLUMN_ORDER=Object.freeze(['equipmentId','equipmentDescription','closestParent','closestParentStatus','dependencies','dependencyProject','upn','systemName','discipline','building','itemMaster','milestoneParent','milestone','equipmentClassification']);
+
+/* The columns worth showing for one example: every column any row fills in,
+   plus every focused column, in registry order. */
+function auditExampleColumns(example){
+  const focused=new Set(example.focus.map(cell=>cell.field)),wanted=new Set(focused);
+  for(const row of example.rows)for(const field of AUDIT_EXAMPLE_COLUMN_ORDER)if(String(row[field]||'').trim())wanted.add(field);
+  /* Closest Parent Status is implied (New) on every system root; it only earns a
+     column when a row's status says something the parent does not already. */
+  if(!focused.has('closestParentStatus')&&!example.rows.some(row=>String(row.closestParentStatus||'').trim()&&row.closestParent!==row.systemName))wanted.delete('closestParentStatus');
+  const lead=['equipmentId','equipmentDescription'].filter(field=>wanted.has(field));
+  const flagged=AUDIT_EXAMPLE_COLUMN_ORDER.filter(field=>focused.has(field)&&!lead.includes(field));
+  const rest=AUDIT_EXAMPLE_COLUMN_ORDER.filter(field=>wanted.has(field)&&!lead.includes(field)&&!focused.has(field));
+  return [...lead,...flagged,...rest];
+}
+
+/* A snapshot the engine can run: every Rev21 field present, plus the _source
+   the engine expects on a row. */
+function auditExampleSnapshot(example){
+  const rows=example.rows.map((row,index)=>{
+    const record={};
+    for(const column of EXTO_REV21_COLUMNS)record[column.field]=String(row[column.field]||'');
+    record._source=Object.freeze({file:'example',sheet:'Example',row:index+2,columns:Object.freeze({})});
+    return Object.freeze(record);
+  });
+  return Object.freeze({rows:Object.freeze(rows)});
+}
+
 /* src/audit/compare.js */
 const SSM_COMPARISON_SCHEMA_VERSION=1;
 const EMPTY_ROLE='Unclassified equipment';
@@ -3083,7 +3411,7 @@ function styleHeaderRow(sheet,rowIndex=0){
 }
 
 /* src/ui/icons.js */
-const ICONS = {"upload":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"17 8 12 3 7 8\"/><line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\"/>","file-spreadsheet":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M8 13h2\"/><path d=\"M14 13h2\"/><path d=\"M8 17h2\"/><path d=\"M14 17h2\"/>","file-text":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/>","file":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/>","x":"<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>","check":"<path d=\"M20 6 9 17l-5-5\"/>","check-check":"<path d=\"M18 6 7 17l-5-5\"/><path d=\"m22 10-7.5 7.5L13 16\"/>","search":"<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>","chevron-right":"<path d=\"m9 18 6-6-6-6\"/>","chevron-down":"<path d=\"m6 9 6 6 6-6\"/>","chevrons-down":"<path d=\"m7 6 5 5 5-5\"/><path d=\"m7 13 5 5 5-5\"/>","chevrons-up":"<path d=\"m17 11-5-5-5 5\"/><path d=\"m17 18-5-5-5 5\"/>","download":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/>","arrow-left":"<path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/>","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\"/>","git-branch":"<line x1=\"6\" x2=\"6\" y1=\"3\" y2=\"15\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M18 9a9 9 0 0 1-9 9\"/>","tag":"<path d=\"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z\"/><circle cx=\"7.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/>","layers":"<path d=\"m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z\"/><path d=\"m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65\"/><path d=\"m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65\"/>","list-tree":"<path d=\"M21 12h-8\"/><path d=\"M21 6H8\"/><path d=\"M21 18h-8\"/><path d=\"M3 6v4c0 1.1.9 2 2 2h3\"/><path d=\"M3 10v6c0 1.1.9 2 2 2h3\"/>","network":"<rect x=\"16\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"2\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"9\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\"/><path d=\"M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3\"/><path d=\"M12 12V8\"/>","hash":"<line x1=\"4\" x2=\"20\" y1=\"9\" y2=\"9\"/><line x1=\"4\" x2=\"20\" y1=\"15\" y2=\"15\"/><line x1=\"10\" x2=\"8\" y1=\"3\" y2=\"21\"/><line x1=\"16\" x2=\"14\" y1=\"3\" y2=\"21\"/>","triangle-alert":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>","loader-circle":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"/>","table-2":"<path d=\"M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18\"/>","sliders-horizontal":"<line x1=\"21\" x2=\"14\" y1=\"4\" y2=\"4\"/><line x1=\"10\" x2=\"3\" y1=\"4\" y2=\"4\"/><line x1=\"21\" x2=\"12\" y1=\"12\" y2=\"12\"/><line x1=\"8\" x2=\"3\" y1=\"12\" y2=\"12\"/><line x1=\"21\" x2=\"16\" y1=\"20\" y2=\"20\"/><line x1=\"12\" x2=\"3\" y1=\"20\" y2=\"20\"/><line x1=\"14\" x2=\"14\" y1=\"2\" y2=\"6\"/><line x1=\"8\" x2=\"8\" y1=\"10\" y2=\"14\"/><line x1=\"16\" x2=\"16\" y1=\"18\" y2=\"22\"/>","info":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>","trash-2":"<path d=\"M3 6h18\"/><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"/><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"/><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"/><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"/>","file-json":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1\"/><path d=\"M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1\"/>","file-down":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M12 18v-6\"/><path d=\"m9 15 3 3 3-3\"/>","plus":"<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>","rotate-ccw":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\"/><path d=\"M3 3v5h5\"/>","circle-check":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m9 12 2 2 4-4\"/>","folder-tree":"<path d=\"M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z\"/><path d=\"M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z\"/><path d=\"M3 5a2 2 0 0 0 2 2h3\"/><path d=\"M3 3v13a2 2 0 0 0 2 2h3\"/>","corner-down-right":"<polyline points=\"15 10 20 15 15 20\"/><path d=\"M4 4v7a4 4 0 0 0 4 4h12\"/>","filter":"<polygon points=\"22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3\"/>","minus":"<path d=\"M5 12h14\"/>","database":"<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M3 5V19A9 3 0 0 0 21 19V5\"/><path d=\"M3 12A9 3 0 0 0 21 12\"/>","square-stack":"<path d=\"M4 10c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2\"/><path d=\"M10 16c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2\"/><rect width=\"8\" height=\"8\" x=\"14\" y=\"14\" rx=\"2\"/>","spline":"<circle cx=\"19\" cy=\"5\" r=\"2\"/><circle cx=\"5\" cy=\"19\" r=\"2\"/><path d=\"M5 17A12 12 0 0 1 17 5\"/>","panel-left-close":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/><path d=\"m16 15-3-3 3-3\"/>"};
+const ICONS = {"upload":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"17 8 12 3 7 8\"/><line x1=\"12\" x2=\"12\" y1=\"3\" y2=\"15\"/>","file-spreadsheet":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M8 13h2\"/><path d=\"M14 13h2\"/><path d=\"M8 17h2\"/><path d=\"M14 17h2\"/>","file-text":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/>","file":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/>","x":"<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>","check":"<path d=\"M20 6 9 17l-5-5\"/>","check-check":"<path d=\"M18 6 7 17l-5-5\"/><path d=\"m22 10-7.5 7.5L13 16\"/>","search":"<circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/>","chevron-right":"<path d=\"m9 18 6-6-6-6\"/>","chevron-down":"<path d=\"m6 9 6 6 6-6\"/>","chevrons-down":"<path d=\"m7 6 5 5 5-5\"/><path d=\"m7 13 5 5 5-5\"/>","chevrons-up":"<path d=\"m17 11-5-5-5 5\"/><path d=\"m17 18-5-5-5 5\"/>","download":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/>","arrow-left":"<path d=\"m12 19-7-7 7-7\"/><path d=\"M19 12H5\"/>","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\"/>","git-branch":"<line x1=\"6\" x2=\"6\" y1=\"3\" y2=\"15\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"M18 9a9 9 0 0 1-9 9\"/>","tag":"<path d=\"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z\"/><circle cx=\"7.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/>","layers":"<path d=\"m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z\"/><path d=\"m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65\"/><path d=\"m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65\"/>","list-tree":"<path d=\"M21 12h-8\"/><path d=\"M21 6H8\"/><path d=\"M21 18h-8\"/><path d=\"M3 6v4c0 1.1.9 2 2 2h3\"/><path d=\"M3 10v6c0 1.1.9 2 2 2h3\"/>","network":"<rect x=\"16\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"2\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"9\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\"/><path d=\"M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3\"/><path d=\"M12 12V8\"/>","hash":"<line x1=\"4\" x2=\"20\" y1=\"9\" y2=\"9\"/><line x1=\"4\" x2=\"20\" y1=\"15\" y2=\"15\"/><line x1=\"10\" x2=\"8\" y1=\"3\" y2=\"21\"/><line x1=\"16\" x2=\"14\" y1=\"3\" y2=\"21\"/>","triangle-alert":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>","loader-circle":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"/>","table-2":"<path d=\"M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18\"/>","sliders-horizontal":"<line x1=\"21\" x2=\"14\" y1=\"4\" y2=\"4\"/><line x1=\"10\" x2=\"3\" y1=\"4\" y2=\"4\"/><line x1=\"21\" x2=\"12\" y1=\"12\" y2=\"12\"/><line x1=\"8\" x2=\"3\" y1=\"12\" y2=\"12\"/><line x1=\"21\" x2=\"16\" y1=\"20\" y2=\"20\"/><line x1=\"12\" x2=\"3\" y1=\"20\" y2=\"20\"/><line x1=\"14\" x2=\"14\" y1=\"2\" y2=\"6\"/><line x1=\"8\" x2=\"8\" y1=\"10\" y2=\"14\"/><line x1=\"16\" x2=\"16\" y1=\"18\" y2=\"22\"/>","info":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>","trash-2":"<path d=\"M3 6h18\"/><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"/><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"/><line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\"/><line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\"/>","file-json":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1\"/><path d=\"M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1\"/>","file-down":"<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/><path d=\"M12 18v-6\"/><path d=\"m9 15 3 3 3-3\"/>","plus":"<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>","rotate-ccw":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\"/><path d=\"M3 3v5h5\"/>","circle-check":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m9 12 2 2 4-4\"/>","folder-tree":"<path d=\"M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z\"/><path d=\"M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z\"/><path d=\"M3 5a2 2 0 0 0 2 2h3\"/><path d=\"M3 3v13a2 2 0 0 0 2 2h3\"/>","corner-down-right":"<polyline points=\"15 10 20 15 15 20\"/><path d=\"M4 4v7a4 4 0 0 0 4 4h12\"/>","filter":"<polygon points=\"22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3\"/>","minus":"<path d=\"M5 12h14\"/>","database":"<ellipse cx=\"12\" cy=\"5\" rx=\"9\" ry=\"3\"/><path d=\"M3 5V19A9 3 0 0 0 21 19V5\"/><path d=\"M3 12A9 3 0 0 0 21 12\"/>","square-stack":"<path d=\"M4 10c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2\"/><path d=\"M10 16c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2\"/><rect width=\"8\" height=\"8\" x=\"14\" y=\"14\" rx=\"2\"/>","spline":"<circle cx=\"19\" cy=\"5\" r=\"2\"/><circle cx=\"5\" cy=\"19\" r=\"2\"/><path d=\"M5 17A12 12 0 0 1 17 5\"/>","eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>","panel-left-close":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/><path d=\"M9 3v18\"/><path d=\"m16 15-3-3 3-3\"/>"};
 ICONS['maximize-2']='<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>';
 ICONS['minimize-2']='<polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/>';
 ICONS['book-open']='<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V5a2 2 0 0 1 2-2h5a3 3 0 0 1 3 3v15a3 3 0 0 0-3-3Z"/><path d="M21 18a1 1 0 0 0 1-1V5a2 2 0 0 0-2-2h-5a3 3 0 0 0-3 3v15a3 3 0 0 1 3-3Z"/>';
@@ -3932,8 +4260,49 @@ function ruleRowHtml(rule,counts,query){
   return `<article class="rule-reference-row ${rule.enabled?'':'is-off'}">
     <span class="rule-reference-icon">${ic(rule.category==='dependencies'?'git-branch':rule.category==='metadata'?'database':rule.category==='headers'?'folder-tree':rule.category==='milestones'?'clipboard-list':rule.category==='item-masters'?'tag':'list-tree')}</span>
     <div><h4>${highlightHtml(rule.title,query)}</h4><p>${highlightHtml(rule.statement,query)}</p></div>
-    <div class="rule-reference-tags"><span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
+    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
   </article>`;
+}
+
+/* ---- worked example modal ----
+   The mock rows are run through the real engine when the modal opens, so the
+   "What the audit says" line is the live finding text, not a copy of it. */
+let exampleTrapCleanup=null,exampleOpener=null;
+function exampleCellHtml(example,rowIndex,field){
+  const value=String(example.rows[rowIndex][field]||'');
+  const mark=example.marks.find(entry=>entry.row===rowIndex&&entry.field===field);
+  const focused=example.focus.some(cell=>cell.row===rowIndex&&cell.field===field);
+  let inner;
+  if(mark)inner=mark.parts.map(([text,bad])=>bad?`<mark class="ex-bad">${esc(text)}</mark>`:esc(text)).join('');
+  else inner=value?esc(value):'<span class="ex-empty">(blank)</span>';
+  return `<td class="${focused?'ex-flag':''}">${inner}</td>`;
+}
+function closeRuleExample(){
+  const modal=$('#exampleModal');if(!modal||!modal.classList.contains('show'))return;
+  exampleTrapCleanup?.();exampleTrapCleanup=null;modal.setAttribute('aria-hidden','true');animateClose(modal);
+  const opener=exampleOpener;exampleOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
+}
+function openRuleExample(ruleId){
+  const rule=Object.values(SSM_AUDIT_RULES).find(entry=>entry.id===ruleId),example=SSM_AUDIT_EXAMPLES[ruleId];if(!rule||!example)return;
+  const result=runSsmAudit(auditExampleSnapshot(example),example.options||{});
+  const focusedTags=new Set(example.focus.map(cell=>example.rows[cell.row].equipmentId));
+  const finding=result.findings.find(entry=>entry.rule.id===ruleId&&focusedTags.has(entry.equipmentId))||result.findings.find(entry=>entry.rule.id===ruleId)||null;
+  const columns=auditExampleColumns(example);
+  const table=`<div class="ex-table-wrap"><table class="ex-table"><thead><tr>${columns.map(field=>`<th>${esc(AUDIT_EXAMPLE_FIELD_LABELS[field]||field)}</th>`).join('')}</tr></thead><tbody>${example.rows.map((row,rowIndex)=>`<tr class="${example.focus.some(cell=>cell.row===rowIndex)?'ex-row-flag':''}">${columns.map(field=>exampleCellHtml(example,rowIndex,field)).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const severity=finding?finding.severity:'';
+  $('#exampleBody').innerHTML=`<span class="eyebrow">Worked example · mock data</span><h3 id="exampleTitle">${esc(rule.title)}</h3><p class="ex-statement">${esc(rule.statement)}</p>
+    <div class="ex-legend"><span><i class="ex-swatch flag"></i>Cell the check is about</span><span><i class="ex-swatch bad"></i>The exact characters</span></div>
+    ${table}
+    <div class="ex-notes">
+      <div class="ex-note why"><b>Why it is flagged</b><p>${esc(example.caption)}</p></div>
+      <div class="ex-note says"><b>What the audit says</b>${finding?`<p><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span> ${esc(finding.why)}</p>`:'<p>Run on this data, the check did not fire — the example needs attention.</p>'}</div>
+      <div class="ex-note fix"><b>What right looks like</b><p>${esc(example.fix)}</p></div>
+    </div>`;
+  const modal=$('#exampleModal');exampleOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+  exampleTrapCleanup?.();exampleTrapCleanup=activateFocusTrap(modal,closeRuleExample);
+  $('#exampleClose').onclick=closeRuleExample;modal.onclick=event=>{if(event.target===modal)closeRuleExample();};
+  const firstFlag=$('#exampleBody .ex-table td.ex-flag'),wrap=$('#exampleBody .ex-table-wrap');if(firstFlag&&wrap)wrap.scrollLeft=Math.max(0,firstFlag.offsetLeft-wrap.clientWidth/2+firstFlag.offsetWidth/2);
+  $('#exampleClose').focus();
 }
 function renderRuleCatalog(navigate){
   const rows=ruleCatalogRows(),container=$('#ruleCatalog'),count=$('#ruleResultCount'),counts=ruleFindingCounts(),query=clean(S.rules.search).toUpperCase();if(!container)return;
@@ -3947,6 +4316,7 @@ function renderRuleCatalog(navigate){
       ${categories.map(category=>`<div class="rule-category"><h5>${esc(RULE_CATEGORY_LABELS[category]||category)}<span>${matches.filter(rule=>rule.category===category).length}</span></h5>${matches.filter(rule=>rule.category===category).map(rule=>ruleRowHtml(rule,counts,query)).join('')}</div>`).join('')}</section>`;
   }).join('');
   $$('[data-rule-findings]',container).forEach(button=>button.onclick=()=>showOnlyRule(button.dataset.ruleFindings,navigate));
+  $$('[data-rule-example]',container).forEach(button=>button.onclick=()=>openRuleExample(button.dataset.ruleExample));
 }
 /* `keepScope` leaves the four registry dimensions alone. The dashboard passes it
    so clicking a number inside a scoped dashboard stays inside that scope; the
@@ -5231,7 +5601,7 @@ function wireComparisonResult(navigate){
 }
 
 /* src/boot.js */
-const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
+const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Every check has an <b>Example</b> button — a small made-up registry showing exactly what gets flagged, with the cell shaded and the offending characters marked. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
 const GUIDE_SECTIONS=[
   {id:'start',label:'Getting started',icon:'upload',title:'Run an audit in three steps',body:'<p>Choose a completed Cx Registry workbook. SSM Audit finds the registry tab on its own, reads it in this browser only, and checks every equipment row.</p><ol><li>Drop an .xlsx or .xls workbook on the upload area, or click <b>Choose workbook</b>.</li><li>Wait a moment — 20,000 rows take about a second.</li><li>Start with <b>Invalid</b>, then <b>Rule broken</b>, then <b>Check this</b>. <b>Notes</b> are for review at your pace.</li></ol><div class="guide-note">'+ic('lock')+'The workbook is never uploaded or saved. Closing or refreshing the page clears it.</div>'},
   {id:'around',label:'Finding your way',icon:'panel-left-open',title:'The workspace',body:'<p>The menu on the left moves between the five views. Counts on each item show what is waiting there.</p><ol><li><b>Dashboard</b> — where an audit lands: totals by level, where the problems sit, milestone readiness, hierarchy health, dependencies, every check that ran, and what the registry is made of. Every number opens the findings list already narrowed to it, and the whole dashboard follows whatever you set in <b>Filters</b> — scope it to one building or discipline and every block recounts.</li><li><b>Audit findings</b> — every issue, most serious first. The level chips are the quick filter; <b>Filters</b> opens one panel for everything else — level, discipline, L2 milestone, UPN, building, source, topic, and individual checks — and whatever you pick shows as chips you can remove one at a time. Deselect a discipline to set it aside — for example, hide Electrical to see which other disciplines list a parent as a dependency.</li><li><b>SSM hierarchy</b> — the registry as a tree from Building down to equipment, with a finding count on every branch. Turn on <b>Findings only</b> to hide clean branches.</li><li><b>Compare projects</b> — line one registry up against a completed one, UPN by UPN.</li><li><b>Rules</b> — every check in plain language, with how many times it fired.</li></ol><p>Use <b>Collapse</b> at the bottom of the menu for more room, or the expand button on any view for a full-screen table.</p>'},
@@ -5263,10 +5633,10 @@ function closeGuide(){const modal=$('#guideModal');if(!modal.classList.contains(
 function init(){
   $('#brandmark').innerHTML=ic('zap');$('#headerGuide').innerHTML=ic('book-open')+'<span>Guide</span>';$('#headerGuide').onclick=openGuide;
   $('#versionLink').textContent=`v${APP_VERSION}`;$('#guideClose').classList.add('xbtn');$('#guideClose').innerHTML=ic('x');$('#guideClose').onclick=closeGuide;
-  $('#guideModal').onclick=event=>{if(event.target===$('#guideModal'))closeGuide();};document.addEventListener('ssm-audit:guide',openGuide);
+  $('#guideModal').onclick=event=>{if(event.target===$('#guideModal'))closeGuide();};$('#exampleClose').innerHTML=ic('x');document.addEventListener('ssm-audit:guide',openGuide);
   document.addEventListener('ssm-audit:navigate',event=>go(event.detail&&event.detail.screen||'upload'));
   $('#drawerClose').innerHTML=ic('x');$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=event=>{if(event.target===$('#drawerBack'))closeDrawer();};
-  document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if($('#drawerBack').classList.contains('show'))closeDrawer();else if($('#guideModal').classList.contains('show'))closeGuide();else if($('#updateModal').classList.contains('show'))closeUpdateModal();});
+  document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if($('#drawerBack').classList.contains('show'))closeDrawer();else if($('#exampleModal').classList.contains('show'))closeRuleExample();else if($('#guideModal').classList.contains('show'))closeGuide();else if($('#updateModal').classList.contains('show'))closeUpdateModal();});
   /* Narrow screens: the fixed version badge floats over content, so it moves
      into the topbar actions and back again as the window crosses 900px. */
   const badgeHome=$('#versionLink').parentElement,mq=window.matchMedia('(max-width:900px)');
