@@ -1,5 +1,5 @@
 import { clean, natCmp } from '../core/text.js'
-import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, styleHeaderRow, workbookBlob } from '../core/download.js'
+import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob } from '../core/download.js'
 import { S } from '../state.js'
 import { toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
@@ -11,18 +11,28 @@ const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'C
 
 /* ---- SSM Audit workbook ----
    One tab per L2 milestone so a commissioning engineer can work a milestone end
-   to end: the full equipment tree of that milestone, one line per finding, and a
-   plain `Actioned` column they type Y into. Index and Dashboard read those Y
-   marks back with live COUNTIF formulas, so progress updates itself. */
+   to end: the full equipment tree of that milestone, one line per finding, and an
+   `Actioned` column with a tick-box dropdown (☐ / ☑). Index and Dashboard read
+   those ticks back with live COUNTIF formulas, so progress updates itself. */
 const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules';
-const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDIT_EXPORT_BACK_LINK='← Index';
-const AUDIT_EXPORT_ACTIONED_NOTE='Type Y in the Actioned column on an equipment’s first line when it is closed out. Index and Dashboard progress update from those marks.';
-const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',muted:'8A96A3',repeat:'AAB4BE',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA'});
-const AUDIT_EXPORT_NEST_FILLS=Object.freeze(['FFFFFF','EDF3F8','DCE8F1','CBDCEA','B9D0E3','A8C5DC','97BAD5']);
+const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDIT_EXPORT_WIDE_BAR_SEGMENTS=25,AUDIT_EXPORT_BACK_LINK='← Index';
+export const AUDIT_EXPORT_TICK='☑',AUDIT_EXPORT_UNTICKED='☐';
+const AUDIT_EXPORT_ACTIONED_NOTE=`Click the Actioned cell on an equipment’s first line and choose ${AUDIT_EXPORT_TICK} when it is closed out. The row turns green, and Index and Dashboard progress update from those ticks. Cells shaded red are the ones the finding is about.`;
+const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',black:'000000',muted:'8A96A3',repeat:'5B6773',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA',flag:'FBE3E1',done:'E3F5E8',barTrack:'FDEFE6'});
+/* One distinct hue per nest level (not shades of one colour) so siblings under
+   the same parent read as a band and a child is obviously a different band. All
+   light enough for black text. Level 7+ cycles. */
+const AUDIT_EXPORT_NEST_FILLS=Object.freeze(['DCE8F4','DFF2E3','FFF0CC','EADDF6','D6F0F3','FBE0EA','ECEFD3','F4E3D2']);
 const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'INVALID',error:'RULE BROKEN',warning:'CHECK THIS',info:'NOTE'});
 const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'8C1D18',color:'FFFFFF'},error:{fill:'D9531E',color:'FFFFFF'},warning:{fill:'F2B441',color:'40320A'},info:{fill:'6E8598',color:'FFFFFF'}});
-const AUDIT_EXPORT_MILESTONE_HEADERS=Object.freeze(['Actioned','Nest','Equipment ID','Description','Closest Parent','Discipline','UPN','System Name','Severity','Finding','Why','What to do','Actioned By','Note']);
-const AUDIT_EXPORT_MILESTONE_WIDTHS=Object.freeze([10,6,36,40,28,24,8,30,12,32,54,54,16,30]);
+/* Milestone tab columns. Closest Parent and Dependencies sit side by side so a
+   hierarchy question can be checked without scrolling. */
+const AUDIT_EXPORT_MILESTONE_HEADERS=Object.freeze(['Actioned','Nest','Equipment ID','Description','Closest Parent','Dependencies','Discipline','UPN','System Name','Building','Item Master','Severity','Finding','Why','What to do','Actioned By','Note']);
+const AUDIT_EXPORT_MILESTONE_WIDTHS=Object.freeze([10,6,36,38,28,34,22,8,30,10,26,12,32,54,54,16,30]);
+const AUDIT_EXPORT_MILESTONE_ALIGN=Object.freeze(['center','center','left','left','left','left','left','right','left','left','left','center','left','left','left','left','left']);
+/* Which column a finding's `field` points at, so that cell can be shaded. */
+const AUDIT_EXPORT_FIELD_COLUMNS=Object.freeze({'Equipment ID':'C','Closest Parent':'E','Dependencies':'F','Dependency Project':'F','Discipline':'G','UPN':'H','System Name':'I','Building':'J','Item Master Unique Identifier':'K'});
+const AUDIT_EXPORT_ROW_COLUMNS=Object.freeze(['D','E','F','G','H','I','J','K']);
 const AUDIT_EXPORT_FINDING_HEADERS=Object.freeze(['Severity','Milestone','Equipment ID','Description','Rule','Why','What to do','Field','Found','Expected','Sheet','Row']);
 const AUDIT_EXPORT_FINDING_WIDTHS=Object.freeze([12,34,30,40,34,54,54,26,44,44,22,8]);
 const AUDIT_EXPORT_RULE_HEADERS=Object.freeze(['Rule','What must be true','Source','Confidence','Findings count']);
@@ -31,11 +41,16 @@ const AUDIT_EXPORT_RULE_WIDTHS=Object.freeze([36,84,24,20,16]);
 const AUDIT_EXPORT_STYLES=Object.freeze({
   title:sheetCellStyle({bold:true,size:18,color:AUDIT_EXPORT_PALETTE.ink}),
   subtitle:sheetCellStyle({size:11,color:AUDIT_EXPORT_PALETTE.muted}),
+  section:sheetCellStyle({bold:true,size:12,color:AUDIT_EXPORT_PALETTE.ink,vertical:'center'}),
   note:sheetCellStyle({italic:true,size:10,color:AUDIT_EXPORT_PALETTE.muted}),
   back:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.link,underline:true}),
   kpiLabel:sheetCellStyle({bold:true,size:9,color:AUDIT_EXPORT_PALETTE.muted,align:'center',bottom:AUDIT_EXPORT_PALETTE.accent,bottomWeight:'medium'}),
   kpiValue:sheetCellStyle({bold:true,size:16,color:AUDIT_EXPORT_PALETTE.ink,align:'center'}),
   kpiPercent:sheetCellStyle({bold:true,size:16,color:AUDIT_EXPORT_PALETTE.accent,align:'center',numFmt:'0%'}),
+  overallLabel:sheetCellStyle({bold:true,size:10,color:AUDIT_EXPORT_PALETTE.muted}),
+  overallBar:sheetCellStyle({size:20,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center'}),
+  overallPercent:sheetCellStyle({bold:true,size:26,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'center',vertical:'center',numFmt:'0%'}),
+  overallCaption:sheetCellStyle({bold:true,size:11,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center'}),
   header:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.headerText,fill:AUDIT_EXPORT_PALETTE.ink,align:'left',vertical:'center',wrap:true}),
   headerRight:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.headerText,fill:AUDIT_EXPORT_PALETTE.ink,align:'right',vertical:'center',wrap:true}),
   headerCenter:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.headerText,fill:AUDIT_EXPORT_PALETTE.ink,align:'center',vertical:'center',wrap:true}),
@@ -44,27 +59,41 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   wrapMuted:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.muted,vertical:'top',wrap:true}),
   muted:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.muted,vertical:'top'}),
   repeat:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.repeat,vertical:'top'}),
+  flag:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,fill:AUDIT_EXPORT_PALETTE.flag,vertical:'top'}),
   linkText:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.link,underline:true,vertical:'top'}),
   linkBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.link,underline:true,fill:AUDIT_EXPORT_PALETTE.band,vertical:'top'}),
+  label:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.body,vertical:'center'}),
+  labelBand:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.body,fill:AUDIT_EXPORT_PALETTE.band,vertical:'center'}),
   number:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.body,align:'right'}),
   numberBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.body,fill:AUDIT_EXPORT_PALETTE.band,align:'right'}),
+  numberMid:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.body,align:'right',vertical:'center'}),
+  numberMidBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.body,fill:AUDIT_EXPORT_PALETTE.band,align:'right',vertical:'center'}),
   percent:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,align:'right',numFmt:'0%'}),
   percentBand:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'right',numFmt:'0%'}),
+  percentBig:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,align:'right',vertical:'center',numFmt:'0%'}),
+  percentBigBand:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'right',vertical:'center',numFmt:'0%'}),
   bar:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.accent,align:'left'}),
   barBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.band,align:'left'}),
-  nest:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.muted,align:'center'}),
-  nestRepeat:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.repeat,align:'center'}),
-  actioned:sheetCellStyle({align:'center',bold:true,color:AUDIT_EXPORT_PALETTE.ink,border:AUDIT_EXPORT_PALETTE.line}),
+  barWide:sheetCellStyle({size:14,color:AUDIT_EXPORT_PALETTE.accent,align:'left',vertical:'center'}),
+  barWideBand:sheetCellStyle({size:14,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.band,align:'left',vertical:'center'}),
+  nest:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,align:'center'}),
+  actioned:sheetCellStyle({align:'center',size:14,color:AUDIT_EXPORT_PALETTE.ink,border:AUDIT_EXPORT_PALETTE.line}),
   actionedRepeat:sheetCellStyle({align:'center',fill:AUDIT_EXPORT_PALETTE.band,border:AUDIT_EXPORT_PALETTE.line}),
   entry:sheetCellStyle({border:AUDIT_EXPORT_PALETTE.line,vertical:'top'}),
 });
+/* Equipment IDs are always black: bold on the equipment's own line, regular on
+   the repeat lines that carry its further findings. */
 const AUDIT_EXPORT_NEST_STYLES=Object.freeze(AUDIT_EXPORT_NEST_FILLS.map(fill=>Object.freeze({
-  own:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.body,fill,vertical:'top'}),
-  repeat:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.repeat,fill,vertical:'top'}),
+  own:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,fill,vertical:'top'}),
+  repeat:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.black,fill,vertical:'top'}),
+  level:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,fill,align:'center'}),
 })));
 const AUDIT_EXPORT_SEVERITY_STYLES=Object.freeze(Object.fromEntries(Object.entries(AUDIT_EXPORT_SEVERITY_COLORS).map(([severity,colors])=>[severity,sheetCellStyle({bold:true,size:10,color:colors.color,fill:colors.fill,align:'center',vertical:'center'})])));
+/* Differential style 0: the green an actioned row turns. Referenced by the
+   conditional format each milestone tab carries. */
+const AUDIT_EXPORT_DXFS=Object.freeze([`<dxf><fill><patternFill><bgColor rgb="FF${AUDIT_EXPORT_PALETTE.done}"/></patternFill></fill></dxf>`]);
 
-function auditExportEmptyBar(){return '░'.repeat(AUDIT_EXPORT_BAR_SEGMENTS);}
+function auditExportEmptyBar(segments=AUDIT_EXPORT_BAR_SEGMENTS){return '░'.repeat(segments);}
 function auditExportDate(value){
   try{return value.toLocaleString(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
   catch(_){return value.toISOString();}
@@ -163,11 +192,27 @@ export function auditExportGroups(result){
 /* Live progress: the milestone tab owns the truth (column A, typed Y), Index and
    Dashboard only read it back. Every formula carries a cached value so the file
    is readable before Excel recalculates. */
-function auditExportActionedCell(group){return sheetFormulaCell(`COUNTIF(${auditExportSheetRef(group.sheetName)}!A:A,"Y")`,0,AUDIT_EXPORT_STYLES.number);}
+function auditExportActionedCell(group,style){return sheetFormulaCell(`COUNTIF(${auditExportSheetRef(group.sheetName)}!A:A,"${AUDIT_EXPORT_TICK}")`,0,style||AUDIT_EXPORT_STYLES.number);}
+/* Actioned equipment in one discipline: the ticks on every milestone tab whose
+   Discipline column matches, summed across tabs. */
+function auditExportDisciplineActionedCell(groups,discipline,style){
+  const terms=groups.map(group=>`COUNTIFS(${auditExportSheetRef(group.sheetName)}!G:G,"${String(discipline).replace(/"/g,'""')}",${auditExportSheetRef(group.sheetName)}!A:A,"${AUDIT_EXPORT_TICK}")`);
+  return sheetFormulaCell(terms.length?terms.join('+'):'0',0,style);
+}
 function auditExportPercentCell(equipmentCell,actionedCell,style){return sheetFormulaCell(`IF(${equipmentCell}=0,0,${actionedCell}/${equipmentCell})`,0,style);}
-function auditExportBarCell(percentCell,style){
-  const filled=`MIN(${AUDIT_EXPORT_BAR_SEGMENTS},ROUND(${percentCell}*${AUDIT_EXPORT_BAR_SEGMENTS},0))`;
-  return sheetFormulaCell(`REPT("█",${filled})&REPT("░",${AUDIT_EXPORT_BAR_SEGMENTS}-${filled})`,auditExportEmptyBar(),style);
+function auditExportBarCell(percentCell,style,segments=AUDIT_EXPORT_BAR_SEGMENTS){
+  const filled=`MIN(${segments},ROUND(${percentCell}*${segments},0))`;
+  return sheetFormulaCell(`REPT("█",${filled})&REPT("░",${segments}-${filled})`,auditExportEmptyBar(segments),style);
+}
+function auditExportTickValidation(range){return `<dataValidation type="list" allowBlank="1" showDropDown="0" showErrorMessage="1" errorTitle="Actioned" error="Pick ${AUDIT_EXPORT_TICK} or ${AUDIT_EXPORT_UNTICKED} from the list." sqref="${range}"><formula1>"${AUDIT_EXPORT_TICK},${AUDIT_EXPORT_UNTICKED}"</formula1></dataValidation>`;}
+function auditExportDoneFormat(range,firstRow){return `<conditionalFormatting sqref="${range}"><cfRule type="expression" dxfId="0" priority="1"><formula>$A${firstRow}="${AUDIT_EXPORT_TICK}"</formula></cfRule></conditionalFormatting>`;}
+function auditExportDisciplines(result){
+  const totals=new Map();
+  for(const row of result&&result.rows||[]){const label=clean(row.discipline)||'No discipline';const entry=totals.get(label)||{label,equipmentCount:0,findingCount:0};entry.equipmentCount++;totals.set(label,entry);}
+  const keyFor=row=>clean(row.discipline)||'No discipline';
+  const rowsByKey=new Map();for(const row of result&&result.rows||[])rowsByKey.set(auditExportRowKey(row),keyFor(row));
+  for(const finding of result&&result.findings||[]){const label=rowsByKey.get(auditExportFindingKey(finding));if(label&&totals.has(label))totals.get(label).findingCount++;}
+  return [...totals.values()].sort((left,right)=>right.equipmentCount-left.equipmentCount||natCmp(left.label,right.label));
 }
 function auditExportHeaderRow(sheet,rowIndex,headers,alignments){
   for(let column=0;column<headers.length;column++){
@@ -182,44 +227,75 @@ function auditExportBackLink(sheet){
   sheetLinkCell(sheet,'A1',`#${auditExportSheetRef(AUDIT_EXPORT_INDEX_SHEET)}!A1`,'Back to the milestone index');
 }
 
-function auditExportDashboardSheet(result,groups,sessionName,generated){
-  const summary=result&&result.summary||{},severity=summary.severity||{},firstRow=9,lastRow=firstRow+Math.max(0,groups.length-1);
+/* Dashboard layout (columns A–F):
+     1–3  title block
+     5    OVERALL PROGRESS caption        6  wide bar (A–E merged) + big % (F)
+     8–9  KPI strip
+     11   "By discipline" header, rows follow        (bars 25 segments, tall rows)
+     then "By milestone" header, rows follow          (same bars; links to tabs)
+   Every progress number is a formula over the ticks on the milestone tabs. */
+function auditExportDashboardSheet(result,groups,disciplines,sessionName,generated){
+  const summary=result&&result.summary||{},severity=summary.severity||{};
+  const columns=['Discipline','Equipment','Findings','Actioned','%','Progress'];
   const aoa=[
-    [`SSM Audit — ${clean(sessionName)||'Registry'}`,'','','','','',''],
-    [`Generated ${auditExportDate(generated)}`,'','','','','',''],
-    [`Standard: ${clean(result&&result.standard)}`,'','','','','',''],
-    ['','','','','','',''],
-    ['Rows audited','Findings','Invalid','Rule broken','Check this','Notes','Actioned'],
-    [summary.rows||0,summary.findings||0,severity.blocker||0,severity.error||0,severity.warning||0,severity.info||0,0],
-    ['','','','','','',''],
-    ['Milestone','Equipment','Findings','Actioned','Progress','%'],
+    [`SSM Audit — ${clean(sessionName)||'Registry'}`,'','','','',''],
+    [`Generated ${auditExportDate(generated)}`,'','','','',''],
+    [`Standard: ${clean(result&&result.standard)}`,'','','','',''],
+    ['','','','','',''],
+    ['OVERALL PROGRESS — equipment actioned across every milestone','','','','',''],
+    [auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS),'','','','',0],
+    ['','','','','',''],
+    ['Rows audited','Findings','Invalid','Rule broken','Check this','Notes'],
+    [summary.rows||0,summary.findings||0,severity.blocker||0,severity.error||0,severity.warning||0,severity.info||0],
+    ['','','','','',''],
+    columns,
   ];
-  for(const group of groups)aoa.push([group.label,group.equipmentCount,group.findingCount,0,auditExportEmptyBar(),0]);
+  const disciplineFirst=aoa.length+1;
+  for(const discipline of disciplines)aoa.push([discipline.label,discipline.equipmentCount,discipline.findingCount,0,0,auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS)]);
+  if(!disciplines.length)aoa.push(['No equipment rows in this registry','','','','','']);
+  const disciplineLast=disciplineFirst+Math.max(0,disciplines.length-1);
+  aoa.push(['','','','','','']);
+  aoa.push(['Milestone','Equipment','Findings','Actioned','%','Progress']);
+  const milestoneHeader=aoa.length,milestoneFirst=aoa.length+1;
+  for(const group of groups)aoa.push([group.label,group.equipmentCount,group.findingCount,0,0,auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS)]);
   if(!groups.length)aoa.push(['No equipment rows in this registry','','','','','']);
+  const milestoneLast=milestoneFirst+Math.max(0,groups.length-1);
   const sheet=XLSX.utils.aoa_to_sheet(aoa);
-  sheet['!cols']=[{wch:44},{wch:12},{wch:11},{wch:11},{wch:16},{wch:9},{wch:12}];
-  sheet['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:6}},{s:{r:2,c:0},e:{r:2,c:6}}];
-  sheet['!rows']=[{hpt:30},{hpt:18},{hpt:18},{hpt:10},{hpt:18},{hpt:28}];
+  sheet['!cols']=[{wch:46},{wch:12},{wch:11},{wch:11},{wch:9},{wch:62}];
+  sheet['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}},{s:{r:2,c:0},e:{r:2,c:5}},{s:{r:4,c:0},e:{r:4,c:5}},{s:{r:5,c:0},e:{r:5,c:4}}];
+  sheet['!rows']=[{hpt:30},{hpt:18},{hpt:18},{hpt:10},{hpt:18},{hpt:46},{hpt:12},{hpt:18},{hpt:28},{hpt:14}];
   sheetStyleCell(sheet,'A1',AUDIT_EXPORT_STYLES.title);
   sheetStyleCell(sheet,'A2',AUDIT_EXPORT_STYLES.subtitle);
   sheetStyleCell(sheet,'A3',AUDIT_EXPORT_STYLES.subtitle);
-  for(let column=0;column<7;column++){
-    sheetStyleCell(sheet,`${auditColumnName(column)}5`,AUDIT_EXPORT_STYLES.kpiLabel);
-    sheetStyleCell(sheet,`${auditColumnName(column)}6`,column===6?AUDIT_EXPORT_STYLES.kpiPercent:AUDIT_EXPORT_STYLES.kpiValue);
+  sheetStyleCell(sheet,'A5',AUDIT_EXPORT_STYLES.overallLabel);
+  /* Overall: ticks over equipment, summed from the milestone rows below. */
+  const overallPercent=groups.length?`IF(SUM(B${milestoneFirst}:B${milestoneLast})=0,0,SUM(D${milestoneFirst}:D${milestoneLast})/SUM(B${milestoneFirst}:B${milestoneLast}))`:'';
+  if(overallPercent)sheetSetCell(sheet,'F6',sheetFormulaCell(overallPercent,0,AUDIT_EXPORT_STYLES.overallPercent));else sheetStyleCell(sheet,'F6',AUDIT_EXPORT_STYLES.overallPercent);
+  if(overallPercent)sheetSetCell(sheet,'A6',auditExportBarCell('F6',AUDIT_EXPORT_STYLES.overallBar,AUDIT_EXPORT_WIDE_BAR_SEGMENTS));else sheetStyleCell(sheet,'A6',AUDIT_EXPORT_STYLES.overallBar);
+  for(const column of ['B','C','D','E'])sheetStyleCell(sheet,`${column}6`,AUDIT_EXPORT_STYLES.overallBar);
+  for(let column=0;column<6;column++){
+    sheetStyleCell(sheet,`${auditColumnName(column)}8`,AUDIT_EXPORT_STYLES.kpiLabel);
+    sheetStyleCell(sheet,`${auditColumnName(column)}9`,AUDIT_EXPORT_STYLES.kpiValue);
   }
-  if(groups.length)sheetSetCell(sheet,'G6',sheetFormulaCell(`IF(SUM(B${firstRow}:B${lastRow})=0,0,SUM(D${firstRow}:D${lastRow})/SUM(B${firstRow}:B${lastRow}))`,0,AUDIT_EXPORT_STYLES.kpiPercent));
-  auditExportHeaderRow(sheet,8,['Milestone','Equipment','Findings','Actioned','Progress','%'],['left','right','right','right','left','right']);
+  const progressRow=(rowIndex,band,actionedCell,link)=>{
+    sheet['!rows'][rowIndex-1]={hpt:24};
+    if(link){sheetStyleCell(sheet,`A${rowIndex}`,band?AUDIT_EXPORT_STYLES.linkBand:AUDIT_EXPORT_STYLES.linkText);sheetLinkCell(sheet,`A${rowIndex}`,link.target,link.tooltip);}
+    else sheetStyleCell(sheet,`A${rowIndex}`,band?AUDIT_EXPORT_STYLES.labelBand:AUDIT_EXPORT_STYLES.label);
+    sheetStyleCell(sheet,`B${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
+    sheetStyleCell(sheet,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
+    sheetSetCell(sheet,`D${rowIndex}`,actionedCell);
+    sheetSetCell(sheet,`E${rowIndex}`,auditExportPercentCell(`B${rowIndex}`,`D${rowIndex}`,band?AUDIT_EXPORT_STYLES.percentBigBand:AUDIT_EXPORT_STYLES.percentBig));
+    sheetSetCell(sheet,`F${rowIndex}`,auditExportBarCell(`E${rowIndex}`,band?AUDIT_EXPORT_STYLES.barWideBand:AUDIT_EXPORT_STYLES.barWide,AUDIT_EXPORT_WIDE_BAR_SEGMENTS));
+  };
+  auditExportHeaderRow(sheet,disciplineFirst-1,columns,['left','right','right','right','right','left']);
+  disciplines.forEach((discipline,offset)=>{
+    const rowIndex=disciplineFirst+offset,band=offset%2===1;
+    progressRow(rowIndex,band,auditExportDisciplineActionedCell(groups,discipline.label,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),null);
+  });
+  auditExportHeaderRow(sheet,milestoneHeader,['Milestone','Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
   groups.forEach((group,offset)=>{
-    const rowIndex=firstRow+offset,band=offset%2===1;
-    sheetStyleCell(sheet,`A${rowIndex}`,band?AUDIT_EXPORT_STYLES.linkBand:AUDIT_EXPORT_STYLES.linkText);
-    sheetLinkCell(sheet,`A${rowIndex}`,`#${auditExportSheetRef(group.sheetName)}!A1`,`Open ${group.label}`);
-    sheetStyleCell(sheet,`B${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberBand:AUDIT_EXPORT_STYLES.number);
-    sheetStyleCell(sheet,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberBand:AUDIT_EXPORT_STYLES.number);
-    const actioned=auditExportActionedCell(group);
-    if(band){actioned.s=AUDIT_EXPORT_STYLES.numberBand;}
-    sheetSetCell(sheet,`D${rowIndex}`,actioned);
-    sheetSetCell(sheet,`E${rowIndex}`,auditExportBarCell(`F${rowIndex}`,band?AUDIT_EXPORT_STYLES.barBand:AUDIT_EXPORT_STYLES.bar));
-    sheetSetCell(sheet,`F${rowIndex}`,auditExportPercentCell(`B${rowIndex}`,`D${rowIndex}`,band?AUDIT_EXPORT_STYLES.percentBand:AUDIT_EXPORT_STYLES.percent));
+    const rowIndex=milestoneFirst+offset,band=offset%2===1;
+    progressRow(rowIndex,band,auditExportActionedCell(group,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),{target:`#${auditExportSheetRef(group.sheetName)}!A1`,tooltip:`Open ${group.label}`});
   });
   return sheet;
 }
@@ -264,13 +340,13 @@ function auditExportMilestoneSheet(group){
   const meta=[];
   for(const line of group.lines){
     const row=line.row,indent='  '.repeat(Math.min(line.level,24));
-    const equipment=[indent+clean(row.equipmentId),clean(row.equipmentDescription),clean(row.closestParent),clean(row.discipline),clean(row.upn),clean(row.systemName)];
+    const equipment=[indent+clean(row.equipmentId),clean(row.equipmentDescription),clean(row.closestParent),clean(row.dependencies),clean(row.discipline),clean(row.upn),clean(row.systemName),clean(row.building),clean(row.itemMaster)];
     const findings=line.findings.length?line.findings:[null];
     findings.forEach((finding,offset)=>{
-      aoa.push(['',line.level,...equipment,
+      aoa.push([offset===0?AUDIT_EXPORT_UNTICKED:'',line.level,...equipment,
         finding?AUDIT_EXPORT_SEVERITY_LABELS[finding.severity]||finding.severity.toUpperCase():'',
         finding?clean(finding.rule.title):'',finding?clean(finding.why):'',finding?clean(finding.recommendation):'','','']);
-      meta.push({level:line.level,repeat:offset>0,severity:finding?finding.severity:''});
+      meta.push({level:line.level,repeat:offset>0,severity:finding?finding.severity:'',flag:finding?AUDIT_EXPORT_FIELD_COLUMNS[clean(finding.field)]||'':''});
     });
   }
   const sheet=XLSX.utils.aoa_to_sheet(aoa);
@@ -278,24 +354,30 @@ function auditExportMilestoneSheet(group){
   sheetStyleCell(sheet,'A1',AUDIT_EXPORT_STYLES.back);
   sheetLinkCell(sheet,'A1',`#${auditExportSheetRef(AUDIT_EXPORT_INDEX_SHEET)}!A1`,'Back to the milestone index');
   sheetStyleCell(sheet,'B1',AUDIT_EXPORT_STYLES.note);
-  auditExportHeaderRow(sheet,2,AUDIT_EXPORT_MILESTONE_HEADERS,['center','center','left','left','left','left','right','left','center','left','left','left','left','left']);
+  auditExportHeaderRow(sheet,2,AUDIT_EXPORT_MILESTONE_HEADERS,AUDIT_EXPORT_MILESTONE_ALIGN);
   meta.forEach((entry,offset)=>{
-    const rowIndex=offset+3,nest=AUDIT_EXPORT_NEST_STYLES[Math.min(entry.level,AUDIT_EXPORT_NEST_STYLES.length-1)];
+    const rowIndex=offset+3,nest=AUDIT_EXPORT_NEST_STYLES[entry.level%AUDIT_EXPORT_NEST_STYLES.length];
     const body=entry.repeat?AUDIT_EXPORT_STYLES.repeat:AUDIT_EXPORT_STYLES.text;
     sheetStyleCell(sheet,`A${rowIndex}`,entry.repeat?AUDIT_EXPORT_STYLES.actionedRepeat:AUDIT_EXPORT_STYLES.actioned);
-    sheetStyleCell(sheet,`B${rowIndex}`,entry.repeat?AUDIT_EXPORT_STYLES.nestRepeat:AUDIT_EXPORT_STYLES.nest);
+    sheetStyleCell(sheet,`B${rowIndex}`,nest.level);
     sheetStyleCell(sheet,`C${rowIndex}`,entry.repeat?nest.repeat:nest.own);
-    for(const column of ['D','E','F','G','H'])sheetStyleCell(sheet,`${column}${rowIndex}`,body);
-    if(entry.severity)sheetStyleCell(sheet,`I${rowIndex}`,AUDIT_EXPORT_SEVERITY_STYLES[entry.severity]||AUDIT_EXPORT_STYLES.text);
+    for(const column of AUDIT_EXPORT_ROW_COLUMNS)sheetStyleCell(sheet,`${column}${rowIndex}`,body);
+    /* The cell the finding is about turns light red -- on the finding's own line,
+       even when that is the equipment's ID cell. */
+    if(entry.flag)sheetStyleCell(sheet,`${entry.flag}${rowIndex}`,AUDIT_EXPORT_STYLES.flag);
+    if(entry.severity)sheetStyleCell(sheet,`L${rowIndex}`,AUDIT_EXPORT_SEVERITY_STYLES[entry.severity]||AUDIT_EXPORT_STYLES.text);
     const detail=entry.severity?AUDIT_EXPORT_STYLES.wrap:AUDIT_EXPORT_STYLES.wrapMuted;
-    sheetStyleCell(sheet,`J${rowIndex}`,entry.severity?AUDIT_EXPORT_STYLES.text:AUDIT_EXPORT_STYLES.muted);
-    sheetStyleCell(sheet,`K${rowIndex}`,detail);
-    sheetStyleCell(sheet,`L${rowIndex}`,detail);
-    sheetStyleCell(sheet,`M${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
-    sheetStyleCell(sheet,`N${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
+    sheetStyleCell(sheet,`M${rowIndex}`,entry.severity?AUDIT_EXPORT_STYLES.text:AUDIT_EXPORT_STYLES.muted);
+    sheetStyleCell(sheet,`N${rowIndex}`,detail);
+    sheetStyleCell(sheet,`O${rowIndex}`,detail);
+    sheetStyleCell(sheet,`P${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
+    sheetStyleCell(sheet,`Q${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
   });
+  const lastRow=Math.max(3,meta.length+2),lastColumn=auditColumnName(AUDIT_EXPORT_MILESTONE_HEADERS.length-1);
   sheetFreezeRows(sheet,2);
-  sheetAutoFilter(sheet,`A2:${auditColumnName(AUDIT_EXPORT_MILESTONE_HEADERS.length-1)}${Math.max(2,meta.length+2)}`);
+  sheetAutoFilter(sheet,`A2:${lastColumn}${Math.max(2,meta.length+2)}`);
+  /* Tick-box dropdown on every Actioned cell; a ticked line turns green. */
+  sheetXmlExtras(sheet,{dataValidations:[auditExportTickValidation(`A3:A${lastRow}`)],conditionalFormatting:[auditExportDoneFormat(`A3:${lastColumn}${lastRow}`,3)]});
   return sheet;
 }
 
@@ -361,7 +443,8 @@ export function buildAuditWorkbook(result,sessionName,options={}){
   const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET].map(name=>name.toLowerCase()));
   for(const group of groups)group.sheetName=auditExportSheetName(group.label,used);
   const generated=options.generatedAt instanceof Date?options.generatedAt:new Date();
-  addSheet(workbook,auditExportDashboardSheet(result,groups,sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
+  workbook.Dxfs=[...AUDIT_EXPORT_DXFS];
+  addSheet(workbook,auditExportDashboardSheet(result,groups,auditExportDisciplines(result),sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
   addSheet(workbook,auditExportIndexSheet(groups),AUDIT_EXPORT_INDEX_SHEET);
   for(const group of groups)addSheet(workbook,auditExportMilestoneSheet(group),group.sheetName);
   addSheet(workbook,auditExportFindingsSheet(result,groups),AUDIT_EXPORT_FINDINGS_SHEET);

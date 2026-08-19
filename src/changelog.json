@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.12.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Excel report Dashboard redesigned: a large overall progress bar at the top, the level totals, and wide progress bars with live percentages per discipline and per L2 phase (the Index keeps its compact form)\n- Actioned is now a tick box: click the cell and choose ☑; the row turns green and every progress figure updates\n- Milestone tabs: each nest level has its own colour (not shades of one), equipment IDs are always black, Dependencies sits right after Closest Parent, Building and Item Master are included, and the cell a finding is about (UPN, Closest Parent, Dependencies, System Name, …) is shaded light red"
+  },
+  {
     "version": "1.11.2",
     "date": "2026-08-18",
     "type": "fix",
