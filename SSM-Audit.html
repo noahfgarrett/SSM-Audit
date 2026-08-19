@@ -1993,7 +1993,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download: GitHub changed where release files are served from, which blocked the in-app fetch. The Download button now hands the file straight to the browser, so it lands in Downloads as SSM-Audit-v<version>.html"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen now has an Example button: a small made-up registry that shows exactly what gets flagged, with the cell shaded and the offending characters marked, alongside why it is flagged, what the audit says about it, and what right looks like\n- Each example is run through the real audit engine when opened, so the verdict shown is live, not a copy"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Excel report Dashboard redesigned: a large overall progress bar at the top, the level totals, and wide progress bars with live percentages per discipline and per L2 phase (the Index keeps its compact form)\n- Actioned is now a tick box: click the cell and choose ☑; the row turns green and every progress figure updates\n- Milestone tabs: each nest level has its own colour (not shades of one), equipment IDs are always black, Dependencies sits right after Closest Parent, Building and Item Master are included, and the cell a finding is about (UPN, Closest Parent, Dependencies, System Name, …) is shaded light red"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- The update check is no longer silent: the Changelog window now says whether you are on the latest version, whether a newer one is available, or why the check could not run, with a Check again button\n- When GitHub limits checks from a busy network (60 an hour per site address), SSM Audit falls back to a second source so the update still shows\n- The automatic check quietly retries once if the first attempt runs before the network is ready"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Tightened every transition so the app feels snappy as well as smooth: panels open in 180ms and close in 110ms, control feedback is 120ms, and screen changes settle in 160ms"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Full UI motion pass: the Guide, update window, finding drawer, Filters panel, and progress overlay now ease in and ease out (backdrop fade, panel slide or scale) instead of snapping\n- Switching screens slides the new content in; buttons, chips, tiles, tabs, tree toggles, and table rows share one consistent hover and press feel\n- Everything respects the operating system's reduced-motion setting"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu overlapping itself on narrow windows: the top bar now scrolls when its items do not fit, drops to icons under 640px, and the version badge moves into the top bar instead of floating over content"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- Replaced the row of filter dropdowns with one Filters panel covering level, discipline, L2 milestone, UPN, building, source, topic, and individual checks; only the active filters show on the page, as removable chips\n- The Dashboard now scopes to the same filters, so it can be narrowed to one building, discipline, or phase, and it gained milestone readiness per L2 phase, hierarchy health, a dependencies view, a checks overview that also shows which checks passed, and an Item Master migration gauge"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection — deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree — a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- The Excel report is now about a quarter of the size (a 20,000-row registry drops from roughly 24 MB to 6 MB): the workbook is zipped with a proper compressor and repeated finding text is stored once\n- Fixed Excel asking to repair large reports: per-discipline progress is now calculated on a hidden Calc sheet instead of one very long formula that exceeded Excel's limit on registries with many milestones\n- The export shows a progress overlay while it builds"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download: GitHub changed where release files are served from, which blocked the in-app fetch. The Download button now hands the file straight to the browser, so it lands in Downloads as SSM-Audit-v<version>.html"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen now has an Example button: a small made-up registry that shows exactly what gets flagged, with the cell shaded and the offending characters marked, alongside why it is flagged, what the audit says about it, and what right looks like\n- Each example is run through the real audit engine when opened, so the verdict shown is live, not a copy"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Excel report Dashboard redesigned: a large overall progress bar at the top, the level totals, and wide progress bars with live percentages per discipline and per L2 phase (the Index keeps its compact form)\n- Actioned is now a tick box: click the cell and choose ☑; the row turns green and every progress figure updates\n- Milestone tabs: each nest level has its own colour (not shades of one), equipment IDs are always black, Dependencies sits right after Closest Parent, Building and Item Master are included, and the cell a finding is about (UPN, Closest Parent, Dependencies, System Name, …) is shaded light red"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- The update check is no longer silent: the Changelog window now says whether you are on the latest version, whether a newer one is available, or why the check could not run, with a Check again button\n- When GitHub limits checks from a busy network (60 an hour per site address), SSM Audit falls back to a second source so the update still shows\n- The automatic check quietly retries once if the first attempt runs before the network is ready"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Tightened every transition so the app feels snappy as well as smooth: panels open in 180ms and close in 110ms, control feedback is 120ms, and screen changes settle in 160ms"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Full UI motion pass: the Guide, update window, finding drawer, Filters panel, and progress overlay now ease in and ease out (backdrop fade, panel slide or scale) instead of snapping\n- Switching screens slides the new content in; buttons, chips, tiles, tabs, tree toggles, and table rows share one consistent hover and press feel\n- Everything respects the operating system's reduced-motion setting"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu overlapping itself on narrow windows: the top bar now scrolls when its items do not fit, drops to icons under 640px, and the version badge moves into the top bar instead of floating over content"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- Replaced the row of filter dropdowns with one Filters panel covering level, discipline, L2 milestone, UPN, building, source, topic, and individual checks; only the active filters show on the page, as removable chips\n- The Dashboard now scopes to the same filters, so it can be narrowed to one building, discipline, or phase, and it gained milestone readiness per L2 phase, hierarchy health, a dependencies view, a checks overview that also shows which checks passed, and an Item Master migration gauge"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection — deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree — a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -2004,7 +2004,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.13.1';
+const APP_VERSION='1.13.2';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -3279,6 +3279,52 @@ function buildSsmHierarchy(snapshot,findings=[]){
   return Object.freeze({schemaVersion:SSM_HIERARCHY_SCHEMA_VERSION,standard:'Registry SSM hierarchy',rootKeys:Object.freeze(rootKeys),nodeByKey,summary:Object.freeze(summary),groups:Object.freeze({buildings:Object.freeze([...buildings.values()].sort(groupSort)),disciplines:Object.freeze([...disciplines.values()].sort(groupSort)),systems:Object.freeze([...systems.values()].sort(groupSort))})});
 }
 
+/* src/core/zip.js */
+/* ---- Minimal ZIP writer with real deflate ----
+   SheetJS bundles its own (weak) compressor: a large audit workbook comes out
+   roughly 3x larger than the same XML zipped by zlib. Browsers expose zlib-grade
+   deflate through CompressionStream, so the workbook's entries are re-zipped
+   here. Output is a plain ZIP (method 8, UTF-8 names, no data descriptors),
+   which is all an .xlsx is. Callers fall back to SheetJS's own bytes when
+   CompressionStream is unavailable. */
+
+const CRC_TABLE=(()=>{const table=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;table[n]=c>>>0;}return table;})();
+function crc32(bytes){let crc=0xFFFFFFFF;for(let i=0;i<bytes.length;i++)crc=CRC_TABLE[(crc^bytes[i])&0xFF]^(crc>>>8);return (crc^0xFFFFFFFF)>>>0;}
+
+function zipDeflateAvailable(){return typeof CompressionStream==='function'&&typeof Response==='function';}
+
+async function deflateRaw(bytes){
+  const stream=new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/* MS-DOS time/date fields: a fixed, valid stamp keeps output deterministic. */
+const DOS_TIME=0,DOS_DATE=(1<<5)|1|((2026-1980)<<9);
+const FLAG_UTF8=0x0800;
+
+/* entries: [{name, data:Uint8Array}] → Uint8Array of a ZIP file. */
+async function zipEntries(entries){
+  const encoder=new TextEncoder(),locals=[],centrals=[];let offset=0;
+  for(const entry of entries){
+    const name=encoder.encode(entry.name),data=entry.data,crc=crc32(data),packed=await deflateRaw(data);
+    const local=new Uint8Array(30+name.length),view=new DataView(local.buffer);
+    view.setUint32(0,0x04034b50,true);view.setUint16(4,20,true);view.setUint16(6,FLAG_UTF8,true);view.setUint16(8,8,true);
+    view.setUint16(10,DOS_TIME,true);view.setUint16(12,DOS_DATE,true);view.setUint32(14,crc,true);view.setUint32(18,packed.length,true);view.setUint32(22,data.length,true);
+    view.setUint16(26,name.length,true);view.setUint16(28,0,true);local.set(name,30);
+    const central=new Uint8Array(46+name.length),cview=new DataView(central.buffer);
+    cview.setUint32(0,0x02014b50,true);cview.setUint16(4,20,true);cview.setUint16(6,20,true);cview.setUint16(8,FLAG_UTF8,true);cview.setUint16(10,8,true);
+    cview.setUint16(12,DOS_TIME,true);cview.setUint16(14,DOS_DATE,true);cview.setUint32(16,crc,true);cview.setUint32(20,packed.length,true);cview.setUint32(24,data.length,true);
+    cview.setUint16(28,name.length,true);cview.setUint16(30,0,true);cview.setUint16(32,0,true);cview.setUint16(34,0,true);cview.setUint16(36,0,true);cview.setUint32(38,0,true);cview.setUint32(42,offset,true);central.set(name,46);
+    locals.push(local,packed);centrals.push(central);offset+=local.length+packed.length;
+  }
+  const centralSize=centrals.reduce((sum,part)=>sum+part.length,0);
+  const end=new Uint8Array(22),eview=new DataView(end.buffer);
+  eview.setUint32(0,0x06054b50,true);eview.setUint16(4,0,true);eview.setUint16(6,0,true);eview.setUint16(8,entries.length,true);eview.setUint16(10,entries.length,true);eview.setUint32(12,centralSize,true);eview.setUint32(16,offset,true);eview.setUint16(20,0,true);
+  const total=offset+centralSize+end.length,out=new Uint8Array(total);let at=0;
+  for(const part of [...locals,...centrals,end]){out.set(part,at);at+=part.length;}
+  return out;
+}
+
 /* src/core/download.js */
 function downloadBlob(filename,blob){
   const url=URL.createObjectURL(blob),anchor=document.createElement('a');
@@ -3286,6 +3332,7 @@ function downloadBlob(filename,blob){
   document.body.appendChild(anchor);anchor.click();anchor.remove();
   setTimeout(()=>URL.revokeObjectURL(url),30000);
 }
+
 
 const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 function workbookBytes(workbook,options={}){
@@ -3320,11 +3367,14 @@ function sheetExtrasXml(extras){
   const validations=extras.dataValidations||[];
   return formats+(validations.length?`<dataValidations count="${validations.length}">${validations.join('')}</dataValidations>`:'');
 }
-function workbookApplyXmlExtras(workbook,bytes,options={}){
+function workbookExtrasPending(workbook){
   const names=workbook&&workbook.SheetNames||[];
-  const touched=names.filter(name=>{const extras=workbook.Sheets[name]&&workbook.Sheets[name][XML_EXTRA_KEY];return extras&&(extras.dataValidations.length||extras.conditionalFormatting.length);});
-  const dxfs=Array.isArray(workbook.Dxfs)?workbook.Dxfs:[];
-  if(!touched.length&&!dxfs.length)return bytes;
+  const touched=names.some(name=>{const extras=workbook.Sheets[name]&&workbook.Sheets[name][XML_EXTRA_KEY];return extras&&(extras.dataValidations.length||extras.conditionalFormatting.length);});
+  return touched||(Array.isArray(workbook.Dxfs)&&workbook.Dxfs.length>0);
+}
+/* Opens the written xlsx as a zip container and splices the extras in place. */
+function workbookContainerWithExtras(workbook,bytes){
+  const names=workbook&&workbook.SheetNames||[],dxfs=Array.isArray(workbook.Dxfs)?workbook.Dxfs:[];
   const container=XLSX.CFB.read(new Uint8Array(bytes),{type:'array'}),decoder=new TextDecoder(),encoder=new TextEncoder();
   const replace=(path,transform)=>{const entry=XLSX.CFB.find(container,path);if(!entry)return;const next=transform(decoder.decode(entry.content));entry.content=encoder.encode(next);entry.size=entry.content.length;};
   names.forEach((name,index)=>{
@@ -3333,8 +3383,36 @@ function workbookApplyXmlExtras(workbook,bytes,options={}){
     replace(`/xl/worksheets/sheet${index+1}.xml`,xml=>spliceSheetXml(xml,fragment));
   });
   if(dxfs.length)replace('/xl/styles.xml',xml=>xml.replace(/<dxfs count="0"\/>|<dxfs\/>/,`<dxfs count="${dxfs.length}">${dxfs.join('')}</dxfs>`));
-  return XLSX.CFB.write(container,{fileType:'zip',type:'array',compression:options.compression!==false});
+  return container;
 }
+function workbookApplyXmlExtras(workbook,bytes,options={}){
+  if(!workbookExtrasPending(workbook))return bytes;
+  return XLSX.CFB.write(workbookContainerWithExtras(workbook,bytes),{fileType:'zip',type:'array',compression:options.compression!==false});
+}
+/* The zip entries of a written workbook (extras applied), [Content_Types].xml
+   first as Excel expects. */
+function workbookZipEntries(workbook,bytes){
+  const container=workbookContainerWithExtras(workbook,bytes),entries=[];
+  container.FullPaths.forEach((fullPath,index)=>{
+    const name=fullPath.replace(/^Root Entry\/?/,'');const file=container.FileIndex[index];
+    if(!name||name.endsWith('/')||name.startsWith('\u0001')||!file||!file.content)return;
+    entries.push({name,data:file.content instanceof Uint8Array?file.content:new Uint8Array(file.content)});
+  });
+  const rank=name=>name==='[Content_Types].xml'?0:name==='_rels/.rels'?1:2;
+  return entries.sort((left,right)=>rank(left.name)-rank(right.name));
+}
+/* Compact output: SheetJS writes the XML, a real deflate (CompressionStream)
+   zips it. SheetJS's bundled compressor leaves large workbooks ~3x bigger than
+   zlib does. Falls back to SheetJS's own bytes where CompressionStream is
+   missing. Shared strings are on: the same finding text repeats on thousands
+   of lines and is stored once. */
+async function workbookBytesCompact(workbook,options={}){
+  const writeOptions=Object.assign({bookSST:true},options);
+  if(!zipDeflateAvailable())return workbookBytes(workbook,Object.assign({compression:true},writeOptions));
+  const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'array',cellStyles:true,compression:false},writeOptions));
+  return zipEntries(workbookZipEntries(workbook,bytes));
+}
+async function workbookBlobCompact(workbook,options={}){return new Blob([await workbookBytesCompact(workbook,options)],{type:XLSX_MIME});}
 
 /* ---- worksheet decoration helpers ----
    Style objects follow the SheetJS per-cell `s` shape (font / fill / alignment /
@@ -3543,7 +3621,7 @@ const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'C
    to end: the full equipment tree of that milestone, one line per finding, and an
    `Actioned` column with a tick-box dropdown (☐ / ☑). Index and Dashboard read
    those ticks back with live COUNTIF formulas, so progress updates itself. */
-const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules';
+const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules',AUDIT_EXPORT_CALC_SHEET='Calc';
 const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDIT_EXPORT_WIDE_BAR_SEGMENTS=25,AUDIT_EXPORT_BACK_LINK='← Index';
 const AUDIT_EXPORT_TICK='☑',AUDIT_EXPORT_UNTICKED='☐';
 const AUDIT_EXPORT_ACTIONED_NOTE=`Click the Actioned cell on an equipment’s first line and choose ${AUDIT_EXPORT_TICK} when it is closed out. The row turns green, and Index and Dashboard progress update from those ticks. Cells shaded red are the ones the finding is about.`;
@@ -3722,11 +3800,29 @@ function auditExportGroups(result){
    Dashboard only read it back. Every formula carries a cached value so the file
    is readable before Excel recalculates. */
 function auditExportActionedCell(group,style){return sheetFormulaCell(`COUNTIF(${auditExportSheetRef(group.sheetName)}!A:A,"${AUDIT_EXPORT_TICK}")`,0,style||AUDIT_EXPORT_STYLES.number);}
-/* Actioned equipment in one discipline: the ticks on every milestone tab whose
-   Discipline column matches, summed across tabs. */
-function auditExportDisciplineActionedCell(groups,discipline,style){
-  const terms=groups.map(group=>`COUNTIFS(${auditExportSheetRef(group.sheetName)}!G:G,"${String(discipline).replace(/"/g,'""')}",${auditExportSheetRef(group.sheetName)}!A:A,"${AUDIT_EXPORT_TICK}")`);
-  return sheetFormulaCell(terms.length?terms.join('+'):'0',0,style);
+/* Actioned equipment in one discipline: one COUNTIFS per milestone tab lives on
+   the hidden Calc sheet (one formula per cell, always short); the Dashboard sums
+   that column. Chaining every tab into one Dashboard formula overran Excel's
+   8,192-character formula limit on registries with many milestones. */
+function auditExportDisciplineActionedCell(disciplineIndex,groupCount,style){
+  const column=auditColumnName(disciplineIndex+1),first=2,last=first+Math.max(0,groupCount-1);
+  return sheetFormulaCell(groupCount?`SUM(${auditExportSheetRef(AUDIT_EXPORT_CALC_SHEET)}!${column}${first}:${column}${last})`:'0',0,style);
+}
+/* Calc: rows = milestone tabs, columns = disciplines; each cell counts that tab's
+   ticked rows in that discipline. Hidden, but it is a normal sheet. */
+function auditExportCalcSheet(groups,disciplines){
+  const aoa=[['Milestone tab',...disciplines.map(discipline=>discipline.label)]];
+  for(const group of groups)aoa.push([group.sheetName,...disciplines.map(()=>0)]);
+  const sheet=XLSX.utils.aoa_to_sheet(aoa.length>1?aoa:[['Milestone tab','(no milestones)']]);
+  groups.forEach((group,rowOffset)=>{
+    const rowIndex=rowOffset+2,tab=auditExportSheetRef(group.sheetName);
+    disciplines.forEach((discipline,columnOffset)=>{
+      const value=String(discipline.label).replace(/"/g,'""');
+      sheetSetCell(sheet,`${auditColumnName(columnOffset+1)}${rowIndex}`,sheetFormulaCell(`COUNTIFS(${tab}!G:G,"${value}",${tab}!A:A,"${AUDIT_EXPORT_TICK}")`,0,AUDIT_EXPORT_STYLES.number));
+    });
+  });
+  sheet['!cols']=[{wch:34},...disciplines.map(()=>({wch:14}))];
+  return sheet;
 }
 function auditExportPercentCell(equipmentCell,actionedCell,style){return sheetFormulaCell(`IF(${equipmentCell}=0,0,${actionedCell}/${equipmentCell})`,0,style);}
 function auditExportBarCell(percentCell,style,segments=AUDIT_EXPORT_BAR_SEGMENTS){
@@ -3819,7 +3915,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   auditExportHeaderRow(sheet,disciplineFirst-1,columns,['left','right','right','right','right','left']);
   disciplines.forEach((discipline,offset)=>{
     const rowIndex=disciplineFirst+offset,band=offset%2===1;
-    progressRow(rowIndex,band,auditExportDisciplineActionedCell(groups,discipline.label,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),null);
+    progressRow(rowIndex,band,auditExportDisciplineActionedCell(offset,groups.length,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),null);
   });
   auditExportHeaderRow(sheet,milestoneHeader,['Milestone','Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
   groups.forEach((group,offset)=>{
@@ -3969,25 +4065,37 @@ function auditExportRulesSheet(result){
 
 function buildAuditWorkbook(result,sessionName,options={}){
   const workbook=XLSX.utils.book_new(),groups=auditExportGroups(result);
-  const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET].map(name=>name.toLowerCase()));
+  const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET,AUDIT_EXPORT_CALC_SHEET].map(name=>name.toLowerCase()));
   for(const group of groups)group.sheetName=auditExportSheetName(group.label,used);
   const generated=options.generatedAt instanceof Date?options.generatedAt:new Date();
   workbook.Dxfs=[...AUDIT_EXPORT_DXFS];
-  addSheet(workbook,auditExportDashboardSheet(result,groups,auditExportDisciplines(result),sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
+  const disciplines=auditExportDisciplines(result);
+  addSheet(workbook,auditExportDashboardSheet(result,groups,disciplines,sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
   addSheet(workbook,auditExportIndexSheet(groups),AUDIT_EXPORT_INDEX_SHEET);
   for(const group of groups)addSheet(workbook,auditExportMilestoneSheet(group),group.sheetName);
   addSheet(workbook,auditExportFindingsSheet(result,groups),AUDIT_EXPORT_FINDINGS_SHEET);
   addSheet(workbook,auditExportRulesSheet(result),AUDIT_EXPORT_RULES_SHEET);
+  addSheet(workbook,auditExportCalcSheet(groups,disciplines),AUDIT_EXPORT_CALC_SHEET);
+  workbook.Workbook=workbook.Workbook||{};workbook.Workbook.Sheets=workbook.SheetNames.map(name=>({name,Hidden:name===AUDIT_EXPORT_CALC_SHEET?1:0}));
   return workbook;
 }
 
-function exportSsmAuditXlsx(){
+async function exportSsmAuditXlsx(){
   const result=S.session&&S.session.result;if(!result){toast('Run an SSM Audit first');return;}
-  const workbook=buildAuditWorkbook(result,S.session.name);
   const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
-  /* A milestone workbook carries every equipment row and every finding, so it is
-     written compressed — uncompressed it runs several times larger. */
-  downloadBlob(`${base}-Audit.xlsx`,workbookBlob(workbook,{compression:true}));toast('SSM Audit report exported');
+  /* A milestone workbook carries every equipment row and every finding. It is
+     built then zipped with a real deflate, which takes a few seconds on a large
+     registry, so the progress overlay stays up for the whole job. */
+  try{
+    await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
+      report(.1);await checkpoint();
+      const workbook=buildAuditWorkbook(result,S.session.name);
+      report(.45);await checkpoint();
+      const blob=await workbookBlobCompact(workbook);
+      report(1);downloadBlob(`${base}-Audit.xlsx`,blob);
+    });
+    toast('SSM Audit report exported');
+  }catch(error){console.error('SSM Audit export failed',error);toast('The report could not be built');}
 }
 
 function exportSsmComparisonXlsx(){
