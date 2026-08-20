@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.16.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- UPN RR is now recognised as belonging to the CSA system: rows with System Name \"CSA\" or \"Civil Structural Architectural Systems (CSA)\" on UPN RR pass the System-Name check instead of being flagged Invalid\n- CSA on a numeric UPN, or a numeric system on RR, still flags as before"
+  },
+  {
     "version": "1.15.2",
     "date": "2026-08-19",
     "type": "fix",
