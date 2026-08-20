@@ -224,6 +224,32 @@ function auditExportBarCell(percentCell,style,segments=AUDIT_EXPORT_BAR_SEGMENTS
 }
 function auditExportTickValidation(range){return `<dataValidation type="list" allowBlank="1" showDropDown="0" showErrorMessage="1" errorTitle="Actioned" error="Pick ${AUDIT_EXPORT_TICK} or ${AUDIT_EXPORT_UNTICKED} from the list." sqref="${range}"><formula1>"${AUDIT_EXPORT_TICK},${AUDIT_EXPORT_UNTICKED}"</formula1></dataValidation>`;}
 function auditExportDoneFormat(range,firstRow){return `<conditionalFormatting sqref="${range}"><cfRule type="expression" dxfId="0" priority="1"><formula>$A${firstRow}="${AUDIT_EXPORT_TICK}"</formula></cfRule></conditionalFormatting>`;}
+/* ---- export plan ----
+   plan.levels[severity] and plan.rules[ruleId] each hold 'include' | 'pretick'
+   | 'skip'. A rule entry overrides its level; everything else defaults to
+   include. 'skip' findings are left out of the workbook entirely; 'pretick'
+   findings are exported with the Actioned box already ticked. */
+export function auditExportPlanMode(plan,finding){
+  const byRule=plan&&plan.rules&&plan.rules[finding.rule.id];
+  if(byRule==='include'||byRule==='pretick'||byRule==='skip')return byRule;
+  const byLevel=plan&&plan.levels&&plan.levels[finding.severity];
+  return byLevel==='pretick'||byLevel==='skip'?byLevel:'include';
+}
+/* The result the workbook is built from: skipped findings removed, summary
+   recounted, and the set of findings that arrive pre-ticked. */
+export function auditExportApplyPlan(result,plan){
+  const findings=[],preticked=new Set();
+  for(const finding of result&&result.findings||[]){
+    const mode=auditExportPlanMode(plan,finding);
+    if(mode==='skip')continue;
+    findings.push(finding);if(mode==='pretick')preticked.add(finding);
+  }
+  const severity={blocker:0,error:0,warning:0,info:0};
+  for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
+  const summary=Object.assign({},result&&result.summary,{findings:findings.length,severity});
+  return {result:Object.assign({},result,{findings,summary}),preticked,skipped:(result&&result.findings||[]).length-findings.length};
+}
+
 function auditExportDisciplines(result){
   const totals=new Map();
   for(const row of result&&result.rows||[]){const label=clean(row.discipline)||'No discipline';const entry=totals.get(label)||{label,equipmentCount:0,findingCount:0};entry.equipmentCount++;totals.set(label,entry);}
@@ -353,15 +379,18 @@ function auditExportIndexSheet(groups){
   return sheet;
 }
 
-function auditExportMilestoneSheet(group){
+function auditExportMilestoneSheet(group,preticked){
   const aoa=[[AUDIT_EXPORT_BACK_LINK,AUDIT_EXPORT_ACTIONED_NOTE],[...AUDIT_EXPORT_MILESTONE_HEADERS]];
   const meta=[];
   for(const line of group.lines){
     const row=line.row,indent='  '.repeat(Math.min(line.level,24));
     const equipment=[indent+clean(row.equipmentId),clean(row.equipmentDescription),clean(row.closestParent),clean(row.dependencies),clean(row.discipline),clean(row.upn),clean(row.systemName),clean(row.building),clean(row.itemMaster)];
     const findings=line.findings.length?line.findings:[null];
+    /* Ticked from the start only when the equipment has findings and every one
+       of them is in a pre-ticked group. */
+    const startTicked=line.findings.length>0&&preticked&&line.findings.every(finding=>preticked.has(finding));
     findings.forEach((finding,offset)=>{
-      aoa.push([offset===0?AUDIT_EXPORT_UNTICKED:'',line.level,...equipment,
+      aoa.push([offset===0?(startTicked?AUDIT_EXPORT_TICK:AUDIT_EXPORT_UNTICKED):'',line.level,...equipment,
         finding?AUDIT_EXPORT_SEVERITY_LABELS[finding.severity]||finding.severity.toUpperCase():'',
         finding?clean(finding.rule.title):'',finding?clean(finding.why):'',finding?clean(finding.recommendation):'','','']);
       meta.push({level:line.level,repeat:offset>0,severity:finding?finding.severity:'',flag:finding?AUDIT_EXPORT_FIELD_COLUMNS[clean(finding.field)]||'':''});
@@ -456,7 +485,8 @@ function auditExportRulesSheet(result){
   return sheet;
 }
 
-export function buildAuditWorkbook(result,sessionName,options={}){
+export function buildAuditWorkbook(sourceResult,sessionName,options={}){
+  const {result,preticked}=auditExportApplyPlan(sourceResult,options.plan);
   const workbook=XLSX.utils.book_new(),groups=auditExportGroups(result);
   const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET,AUDIT_EXPORT_CALC_SHEET].map(name=>name.toLowerCase()));
   for(const group of groups)group.sheetName=auditExportSheetName(group.label,used);
@@ -465,7 +495,7 @@ export function buildAuditWorkbook(result,sessionName,options={}){
   const disciplines=auditExportDisciplines(result);
   addSheet(workbook,auditExportDashboardSheet(result,groups,disciplines,sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
   addSheet(workbook,auditExportIndexSheet(groups),AUDIT_EXPORT_INDEX_SHEET);
-  for(const group of groups)addSheet(workbook,auditExportMilestoneSheet(group),group.sheetName);
+  for(const group of groups)addSheet(workbook,auditExportMilestoneSheet(group,preticked),group.sheetName);
   addSheet(workbook,auditExportFindingsSheet(result,groups),AUDIT_EXPORT_FINDINGS_SHEET);
   addSheet(workbook,auditExportRulesSheet(result),AUDIT_EXPORT_RULES_SHEET);
   addSheet(workbook,auditExportCalcSheet(groups,disciplines),AUDIT_EXPORT_CALC_SHEET);
@@ -473,7 +503,7 @@ export function buildAuditWorkbook(result,sessionName,options={}){
   return workbook;
 }
 
-export async function exportSsmAuditXlsx(){
+export async function exportSsmAuditXlsx(plan){
   const result=S.session&&S.session.result;if(!result){toast('Run an SSM Audit first');return;}
   const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   /* A milestone workbook carries every equipment row and every finding. It is
@@ -482,7 +512,7 @@ export async function exportSsmAuditXlsx(){
   try{
     await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
       report(.1);await checkpoint();
-      const workbook=buildAuditWorkbook(result,S.session.name);
+      const workbook=buildAuditWorkbook(result,S.session.name,{plan});
       report(.45);await checkpoint();
       const blob=await workbookBlobCompact(workbook);
       report(1);downloadBlob(`${base}-Audit.xlsx`,blob);

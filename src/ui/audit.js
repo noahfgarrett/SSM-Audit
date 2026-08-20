@@ -6,7 +6,7 @@ import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIE
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
-import { exportSsmAuditXlsx, exportSsmComparisonXlsx } from '../audit/export.js'
+import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
@@ -74,7 +74,7 @@ export function renderSideNav(navigate){
   </div>`;
   $$('[data-nav]',nav).forEach(button=>button.onclick=()=>navigateSection(button.dataset.nav,navigate));
   $('#navGuide').onclick=()=>document.dispatchEvent(new CustomEvent('ssm-audit:guide'));
-  $('#navExport').onclick=()=>{if(S.screen==='compare')exportSsmComparisonXlsx();else exportSsmAuditXlsx();};
+  $('#navExport').onclick=()=>{if(S.screen==='compare')exportSsmComparisonXlsx();else openExportOptions();};
   $('#navCollapse').onclick=()=>{S.ui.navCollapsed=!S.ui.navCollapsed;renderSideNav(navigate);$('#navCollapse')?.focus();};
 }
 function navigateSection(id,navigate){
@@ -115,6 +115,79 @@ function ruleRowHtml(rule,counts,query){
     <div><h4>${highlightHtml(rule.title,query)}</h4><p>${highlightHtml(rule.statement,query)}</p></div>
     <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
   </article>`;
+}
+
+/* ---- export options modal ----
+   One step between Export and the file: per level (and per fired check) choose
+   Include, Pre-ticked, or Leave out. The plan lives on the session, so the
+   next report starts from the same choices. */
+const EXPORT_MODE_LABELS={include:'Include',pretick:'Pre-ticked',skip:'Leave out'};
+let exportTrapCleanup=null,exportOpener=null;
+function exportPlan(){S.session.exportPlan=S.session.exportPlan||{levels:{},rules:{}};return S.session.exportPlan;}
+function exportPlanSummary(result,plan){
+  let included=0,preticked=0,skipped=0;
+  for(const finding of result.findings){const mode=auditExportPlanMode(plan,finding);if(mode==='skip')skipped++;else{included++;if(mode==='pretick')preticked++;}}
+  return {included,preticked,skipped};
+}
+function exportModeGroupHtml(name,current,compact){
+  return `<div class="export-modes${compact?' sm':''}" role="radiogroup">${['include','pretick','skip'].map(mode=>`<label class="export-mode ${mode} ${current===mode?'on':''}"><input type="radio" name="${esc(name)}" value="${mode}" ${current===mode?'checked':''}>${EXPORT_MODE_LABELS[mode]}</label>`).join('')}</div>`;
+}
+export function closeExportOptions(){
+  const modal=$('#exportModal');if(!modal||!modal.classList.contains('show'))return;
+  exportTrapCleanup?.();exportTrapCleanup=null;modal.setAttribute('aria-hidden','true');animateClose(modal);
+  const opener=exportOpener;exportOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
+}
+function renderExportOptions(){
+  const result=S.session.result,plan=exportPlan();
+  const bySeverity=new Map();
+  for(const finding of result.findings){const list=bySeverity.get(finding.severity)||new Map();list.set(finding.rule.id,{rule:finding.rule,count:(list.get(finding.rule.id)?.count||0)+1});bySeverity.set(finding.severity,list);}
+  const summary=exportPlanSummary(result,plan);
+  const levelSections=SSM_AUDIT_SEVERITIES.filter(severity=>bySeverity.has(severity)).map(severity=>{
+    const checks=[...bySeverity.get(severity).values()].sort((left,right)=>right.count-left.count);
+    const total=checks.reduce((sum,entry)=>sum+entry.count,0);
+    const levelMode=plan.levels[severity]==='pretick'||plan.levels[severity]==='skip'?plan.levels[severity]:'include';
+    const overrides=checks.filter(entry=>plan.rules[entry.rule.id]&&plan.rules[entry.rule.id]!==levelMode).length;
+    return `<section class="export-level ${esc(severity)}">
+      <header><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${total.toLocaleString()} finding${total===1?'':'s'} &middot; ${checks.length} check${checks.length===1?'':'s'}</b>${exportModeGroupHtml('level-'+severity,levelMode,false)}</header>
+      <details ${overrides?'open':''}><summary>Fine-tune the ${checks.length} check${checks.length===1?'':'s'}${overrides?` &middot; ${overrides} overridden`:''}</summary>
+        <div class="export-checks">${checks.map(entry=>{
+          const ruleMode=plan.rules[entry.rule.id]&&plan.rules[entry.rule.id]!==levelMode?plan.rules[entry.rule.id]:levelMode;
+          return `<div class="export-check"><div><b>${esc(entry.rule.title)}</b><span>${entry.count.toLocaleString()} finding${entry.count===1?'':'s'}</span></div>${exportModeGroupHtml('rule-'+entry.rule.id,ruleMode,true)}</div>`;
+        }).join('')}</div>
+      </details>
+    </section>`;
+  }).join('');
+  $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>
+    <p class="export-intro">Every equipment row is always exported. Findings follow the choice for their level — or for the individual check. <b>Pre-ticked</b> findings arrive with the Actioned box already ${esc('☑')} (the row is green and counts as done); <b>Leave out</b> findings are not written at all.</p>
+    ${levelSections||'<p class="export-intro">This registry has no findings — the report will contain the equipment tree only.</p>'}
+    <footer class="export-foot">
+      <span id="exportSummary">${summary.included.toLocaleString()} exported &middot; ${summary.preticked.toLocaleString()} pre-ticked &middot; ${summary.skipped.toLocaleString()} left out</span>
+      <div><button class="btn ghost" type="button" id="exportReset">Reset</button><button class="btn primary" type="button" id="exportGo">${ic('file-down')}Export report</button></div>
+    </footer>`;
+  const refreshSummary=()=>{const next=exportPlanSummary(result,exportPlan());$('#exportSummary').textContent=`${next.included.toLocaleString()} exported · ${next.preticked.toLocaleString()} pre-ticked · ${next.skipped.toLocaleString()} left out`;};
+  $$('#exportModalBody input[type=radio]').forEach(input=>input.onchange=()=>{
+    const name=input.name,mode=input.value,current=exportPlan();
+    if(name.startsWith('level-')){
+      const severity=name.slice(6);current.levels[severity]=mode;
+      /* A level change clears its checks' overrides — the level now speaks for them. */
+      for(const map of [bySeverity.get(severity)||new Map()])for(const id of map.keys())delete current.rules[id];
+      renderExportOptions();
+    }else{
+      const ruleId=name.slice(5);current.rules[ruleId]=mode;
+      $$(`#exportModalBody label`).forEach(()=>{});input.closest('.export-modes').querySelectorAll('.export-mode').forEach(label=>label.classList.toggle('on',label.querySelector('input').checked));
+      refreshSummary();
+    }
+  });
+  $('#exportReset').onclick=()=>{S.session.exportPlan={levels:{},rules:{}};renderExportOptions();};
+  $('#exportGo').onclick=async()=>{const plan=JSON.parse(JSON.stringify(exportPlan()));closeExportOptions();await exportSsmAuditXlsx(plan);};
+}
+export function openExportOptions(){
+  if(!(S.session&&S.session.result)){toast('Run an SSM Audit first');return;}
+  renderExportOptions();
+  const modal=$('#exportModal');exportOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+  exportTrapCleanup?.();exportTrapCleanup=activateFocusTrap(modal,closeExportOptions);
+  $('#exportModalClose').onclick=closeExportOptions;modal.onclick=event=>{if(event.target===modal)closeExportOptions();};
+  $('#exportGo').focus();
 }
 
 /* ---- worked example modal ----
@@ -812,7 +885,7 @@ function teardownAuditFilters(){
 function wireAuditResult(navigate){
   teardownAuditFilters();
   filterRerender=()=>{renderSeverityStrip();renderFilterChipRow(false);updateFilterBadge();rerenderRows(true);};
-  $('#auditBack').onclick=()=>{S.homeMode='audit';navigate('upload');};$('#exportAudit').onclick=exportSsmAuditXlsx;
+  $('#auditBack').onclick=()=>{S.homeMode='audit';navigate('upload');};$('#exportAudit').onclick=()=>openExportOptions();
   $('#auditDashboard').onclick=()=>navigate('dashboard');
   $('#auditFullscreen').onclick=()=>{S.session.fullscreen=!S.session.fullscreen;renderAuditResult(navigate);};
   $('#auditSearch').oninput=event=>{S.session.search=event.target.value;S.session.cursor=-1;debounceSearch(()=>rerenderRows(true));};
@@ -1198,7 +1271,7 @@ function dashOpenFindings(navigate,apply){
 export { dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, scopedResult };
 function wireDashboard(navigate){
   $('#dashOpenFindings')?.addEventListener('click',()=>dashOpenFindings(navigate));
-  $('#dashExport')?.addEventListener('click',exportSsmAuditXlsx);
+  $('#dashExport')?.addEventListener('click',()=>openExportOptions());
   $('#dashSeeRules')?.addEventListener('click',()=>{S.homeMode='rules';navigate('rules');});
   $$('[data-dash-severity]').forEach(tile=>tile.onclick=()=>{const level=tile.dataset.dashSeverity;dashOpenFindings(navigate,()=>{S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);});});
   $$('[data-dash-rank]').forEach(row=>row.onclick=()=>dashOpenFindings(navigate,()=>{dimFilterMap()[row.dataset.dashRank]=[auditNormId(row.dataset.dashValue)];}));

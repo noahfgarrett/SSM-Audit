@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.14.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Export now opens a chooser first: for each finding level — or any individual check — pick Include, Pre-ticked, or Leave out\n- Pre-ticked findings arrive with the Actioned box already ☑ (green row, counted as done); Leave out findings are not written into the report at all, and every count and progress bar reflects it\n- An equipment row only starts ticked when every one of its findings is pre-ticked; the equipment tree itself is always complete\n- Your choices are remembered for the next export of the same session"
+  },
+  {
     "version": "1.13.2",
     "date": "2026-08-19",
     "type": "fix",
