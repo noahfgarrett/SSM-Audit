@@ -1401,12 +1401,21 @@ function focusHierarchyOnEquipment(equipmentId){
   setHierarchyExpanded(expanded);S.session.hierarchyFocusKey=node.key;
   document.dispatchEvent(new CustomEvent('ssm-audit:navigate',{detail:{screen:'hierarchy'}}));
 }
+let hierarchyFocusTimer=0;
 function applyHierarchyFocus(){
   const key=S.session.hierarchyFocusKey;if(!key)return;
   const rows=hierarchyRows(),index=rows.findIndex(item=>item.node.key===key),wrap=$('#hierarchyTreeWrap');
-  if(index>=0&&wrap){wrap.scrollTop=Math.max(0,index*HIERARCHY_ROW_HEIGHT-wrap.clientHeight/2+HIERARCHY_ROW_HEIGHT);S.session.hierarchyScrollTop=wrap.scrollTop;}
-  renderHierarchyRows();$(`[data-hierarchy-node="${key}"]`)?.focus({preventScroll:true});
-  setTimeout(()=>{S.session.hierarchyFocusKey='';$('.hierarchy-row.focused')?.classList.remove('focused');},3200);
+  /* Render BEFORE scrolling: on a freshly built screen the scroll container is
+     still empty, so a scrollTop set first is clamped to 0 and the target lands
+     off screen. The first render sizes the spacers; the scroll then sticks, and
+     the second render draws the window around the target. */
+  renderHierarchyRows();
+  if(index>=0&&wrap){wrap.scrollTop=Math.max(0,index*HIERARCHY_ROW_HEIGHT-wrap.clientHeight/2+HIERARCHY_ROW_HEIGHT);S.session.hierarchyScrollTop=wrap.scrollTop;renderHierarchyRows();}
+  $(`[data-hierarchy-node="${key}"]`)?.focus({preventScroll:true});
+  /* A fresh jump gets its full three seconds even when an earlier timer is
+     still pending. */
+  clearTimeout(hierarchyFocusTimer);
+  hierarchyFocusTimer=setTimeout(()=>{S.session.hierarchyFocusKey='';$('.hierarchy-row.focused')?.classList.remove('focused');},3200);
 }
 function hierarchyOptions(items,selected,label){return `<option value="all">${esc(label)}</option>`+items.map(item=>`<option value="${esc(item.value)}" ${selected===item.value?'selected':''}>${esc(item.label)}</option>`).join('');}
 function uniqueHierarchyOptions(items,valueFor,labelFor){const options=new Map();for(const item of items){const value=valueFor(item);if(value&&!options.has(value))options.set(value,{value,label:labelFor(item)});}return [...options.values()].sort((left,right)=>left.label.localeCompare(right.label,undefined,{numeric:true}));}

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.17.1",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Fixed Show in hierarchy not visibly highlighting the target: the jump scrolled the tree before its rows existed, so the scroll was clamped to the top and the highlight happened off screen unless the equipment sat in the first viewport. The tree now renders, then scrolls, then draws the window around the target — the row lands centred and pulses\n- Jumping again within a few seconds no longer cuts the new highlight short"
+  },
+  {
     "version": "1.17.0",
     "date": "2026-08-19",
     "type": "feature",
