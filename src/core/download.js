@@ -81,10 +81,10 @@ function workbookZipEntries(workbook,bytes){
    missing. Shared strings are on: the same finding text repeats on thousands
    of lines and is stored once. */
 export async function workbookBytesCompact(workbook,options={}){
-  const writeOptions=Object.assign({bookSST:true},options);
+  const {onProgress,...rest}=options,writeOptions=Object.assign({bookSST:true},rest);
   if(!zipDeflateAvailable())return workbookBytes(workbook,Object.assign({compression:true},writeOptions));
   const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'array',cellStyles:true,compression:false},writeOptions));
-  return zipEntries(workbookZipEntries(workbook,bytes));
+  return zipEntries(workbookZipEntries(workbook,bytes),onProgress);
 }
 export async function workbookBlobCompact(workbook,options={}){return new Blob([await workbookBytesCompact(workbook,options)],{type:XLSX_MIME});}
 

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.17.3",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- The loading circle is now a true gauge: the arc starts at the top, stays put, and its length always matches the number — 45% shows 45% of the circle\n- Progress is reported step by step: importing shows opening, scanning, parsing, and checking as separate stages, and exporting names each part of the workbook as it is compressed, so the percentage moves smoothly instead of jumping\n- On a large registry the one unavoidable pause (writing the workbook itself) is labelled before it starts, and the loader keeps breathing through it"
+  },
+  {
     "version": "1.17.2",
     "date": "2026-08-19",
     "type": "fix",
