@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.15.1",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Fixed the findings list sometimes going blank below halfway: grouped section headers were shorter than the list's fixed row height, so the rendered slice fell short of the screen\n- Fixed level counts clipping on the Dashboard's milestone readiness table when numbers pass three digits: the By level column is wider and wraps instead of cutting off\n- The Dashboard's deep-dive sections (Milestone readiness, Hierarchy health, Dependencies, Checks overview, Structure) now share one tab strip, so the page is one screen tall instead of a long scroll"
+  },
+  {
     "version": "1.15.0",
     "date": "2026-08-19",
     "type": "feature",
