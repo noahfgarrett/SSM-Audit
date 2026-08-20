@@ -346,9 +346,10 @@ export async function addAuditTarget(file,navigate){
   try{
     await runWithProgress('Running SSM Audit',file.name,async(checkpoint,report)=>{
       const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();
-      const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.08,'Registry opened');await checkpoint();
-      const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.08+fraction*.42,label));
-      report(.55,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
+      const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
+      const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.6,label));
+      report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
+      report(.8,'Running every check');await checkpoint();
       const result=runSsmAudit(snapshot);report(1,`${result.findings.length.toLocaleString()} findings`);
       S.session={...S.session,snapshot,result,error:'',auditedAt:Date.now()};
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;

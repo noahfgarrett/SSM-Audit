@@ -276,11 +276,15 @@ mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padd
 .loader{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow-lg);padding:30px 38px 26px;display:flex;flex-direction:column;align-items:center;gap:7px;min-width:268px;text-align:center;animation:mpop .18s cubic-bezier(.22,1,.36,1)}
 .ring{position:relative;width:96px;height:96px;margin-bottom:8px}
 .ring::before{content:"";position:absolute;inset:8px;border-radius:50%;background:radial-gradient(closest-side,rgba(234,88,12,.12),transparent 75%);animation:lpulse 2s ease-in-out infinite}
-.ring-spin{width:96px;height:96px;transform-origin:center;animation:ringspin 2.4s linear infinite;position:relative;will-change:transform}
+/* The arc is a gauge, not a spinner: it stays put, starts at 12 o'clock, and
+   its length IS the percentage. The soft glow pulse below runs on the
+   compositor, so the loader still visibly breathes while a long synchronous
+   stretch (writing a big workbook) blocks scripting. */
+.ring-spin{width:96px;height:96px;position:relative}
+.ring svg{transform:rotate(-90deg)}
 .ring svg{width:96px;height:96px;display:block}
 .ring-track{fill:none;stroke:var(--tint-2);stroke-width:7}
 .ring-prog{fill:none;stroke:url(#lgrad);stroke-width:7;stroke-linecap:round;stroke-dasharray:238.76;stroke-dashoffset:238.76;transition:stroke-dashoffset .3s cubic-bezier(.22,1,.36,1);filter:drop-shadow(0 0 4px rgba(234,88,12,.5))}
-@keyframes ringspin{to{transform:rotate(360deg)}}
 .ring-num{position:absolute;inset:0;display:grid;place-items:center}
 .ring-pct{display:flex;align-items:baseline;font-family:var(--mono);font-weight:760;color:var(--ink);line-height:1}
 .ring-pct b{font-size:28px;letter-spacing:-1.2px;font-variant-numeric:tabular-nums}
@@ -1132,7 +1136,7 @@ body.visual-trainer-fullscreen{overflow:hidden}
 @media (max-width:760px){.ex-notes{grid-template-columns:1fr}.example-card{padding:20px 16px 16px}}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation-duration:.001ms!important}
-  #overlay.show .ring-spin,#overlay.show .ring::before,#overlay.show .ring-dots i{animation:none!important}
+  #overlay.show .ring::before,#overlay.show .ring-dots i{animation:none!important}
   #overlay.show .ring-prog{transition:none!important}
   /* No lift, no tilt -- the card still tracks the cursor and the drop indicator
      still paints, both of which are information rather than motion. */

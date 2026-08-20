@@ -21,8 +21,9 @@ const DOS_TIME=0,DOS_DATE=(1<<5)|1|((2026-1980)<<9);
 const FLAG_UTF8=0x0800;
 
 /* entries: [{name, data:Uint8Array}] → Uint8Array of a ZIP file. */
-export async function zipEntries(entries){
+export async function zipEntries(entries,onProgress){
   const encoder=new TextEncoder(),locals=[],centrals=[];let offset=0;
+  const totalBytes=entries.reduce((sum,entry)=>sum+entry.data.length,0)||1;let doneBytes=0;
   for(const entry of entries){
     const name=encoder.encode(entry.name),data=entry.data,crc=crc32(data),packed=await deflateRaw(data);
     const local=new Uint8Array(30+name.length),view=new DataView(local.buffer);
@@ -34,6 +35,7 @@ export async function zipEntries(entries){
     cview.setUint16(12,DOS_TIME,true);cview.setUint16(14,DOS_DATE,true);cview.setUint32(16,crc,true);cview.setUint32(20,packed.length,true);cview.setUint32(24,data.length,true);
     cview.setUint16(28,name.length,true);cview.setUint16(30,0,true);cview.setUint16(32,0,true);cview.setUint16(34,0,true);cview.setUint16(36,0,true);cview.setUint32(38,0,true);cview.setUint32(42,offset,true);central.set(name,46);
     locals.push(local,packed);centrals.push(central);offset+=local.length+packed.length;
+    doneBytes+=entry.data.length;if(onProgress)await onProgress(doneBytes/totalBytes,entry.name);
   }
   const centralSize=centrals.reduce((sum,part)=>sum+part.length,0);
   const end=new Uint8Array(22),eview=new DataView(end.buffer);

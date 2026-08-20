@@ -565,11 +565,14 @@ export async function exportSsmAuditXlsx(plan){
      registry, so the progress overlay stays up for the whole job. */
   try{
     await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
-      report(.1);await checkpoint();
+      report(.04,'Collecting rows and findings');await checkpoint();
       const workbook=buildAuditWorkbook(result,S.session.name,{plan,layout:plan&&plan.layout});
-      report(.45);await checkpoint();
-      const blob=await workbookBlobCompact(workbook);
-      report(1);downloadBlob(`${base}-Audit.xlsx`,blob);
+      /* The next stretch is SheetJS serializing the workbook XML in one
+         synchronous run -- the label paints first so the loader is honest
+         about the wait on a large registry. */
+      report(.3,'Writing the workbook');await checkpoint();
+      const blob=await workbookBlobCompact(workbook,{onProgress:async(fraction,name)=>{report(.55+fraction*.42,`Compressing ${name.replace(/^xl\//,'').replace(/\.xml$/,'')}`);await checkpoint();}});
+      report(1,'Report ready');downloadBlob(`${base}-Audit.xlsx`,blob);
     });
     toast('SSM Audit report exported');
   }catch(error){console.error('SSM Audit export failed',error);toast('The report could not be built');}

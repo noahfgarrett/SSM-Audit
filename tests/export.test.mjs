@@ -512,3 +512,14 @@ test('the level layout builds one tab per finding level with flagged equipment o
   const appearances = tabs.filter(name => carriedTags(book.Sheets[name]).includes(multi[0])).length
   assert.equal(appearances, multi[1].size)
 })
+
+test('the compact writer reports monotonic per-entry progress ending at 1', async () => {
+  const { workbookBytesCompact } = await import('../src/core/download.js')
+  const book = workbook()
+  const calls = []
+  await workbookBytesCompact(book, { onProgress: (fraction, name) => { calls.push([fraction, name]) } })
+  assert.ok(calls.length >= 5, 'one call per zip entry')
+  for (let at = 1; at < calls.length; at++) assert.ok(calls[at][0] >= calls[at - 1][0], 'progress never goes backwards')
+  assert.ok(Math.abs(calls[calls.length - 1][0] - 1) < 1e-9, 'ends at exactly 1')
+  assert.ok(calls.some(([, name]) => name.includes('sheet')), 'entry names are reported')
+})
