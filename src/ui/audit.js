@@ -1008,7 +1008,7 @@ function dashMilestoneTableHtml(scoped){
         <td class="dash-table-name"><b>${esc(bucket.label)}</b></td>
         <td class="dash-table-num">${bucket.rows.toLocaleString()}</td>
         <td class="dash-table-num">${bucket.findings.toLocaleString()}</td>
-        <td class="dash-levels">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityNumeral(level,bucket[level])).join('')}</td>
+        <td class="dash-levels"><span class="dash-levels-flex">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityNumeral(level,bucket[level])).join('')}</span></td>
         <td class="dash-clean"><span class="dash-clean-bar"><i style="width:${percent}%"></i></span><small>${percent}%</small></td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
@@ -1207,6 +1207,30 @@ function dashStatHtml(stat){
   if(!stat.action)return `<div class="dash-stat">${body}</div>`;
   return `<button class="dash-stat is-action" type="button" data-dash-stat="${esc(stat.action)}" title="${esc(stat.title||'')}">${body}<span class="dash-stat-go">${ic('arrow-right')}</span></button>`;
 }
+/* The deep-dive sections share one tab strip so the dashboard stays one
+   screen tall. The chosen tab survives filter changes and re-renders. */
+const DASH_TABS=Object.freeze([
+  {id:'milestones',label:'Milestone readiness',explainer:'One row per L2 phase: how much equipment is in it, what is flagged, and how much of it is already clean.'},
+  {id:'hierarchy',label:'Hierarchy health',explainer:'How the registry is shaped, and how much of it sits on a branch with nothing flagged above it.'},
+  {id:'dependencies',label:'Dependencies',explainer:'Every dependency named in scope, resolved against the rows in scope.'},
+  {id:'checks',label:'Checks overview',explainer:''},
+  {id:'structure',label:'Structure',explainer:'What this registry is made of, before any rule is applied.'},
+]);
+function dashTabBodyHtml(tab,scoped,overview){
+  if(tab==='milestones')return `<div class="dash-card">${dashMilestoneTableHtml(scoped)}</div>`;
+  if(tab==='hierarchy')return `<div class="dash-stats dash-stats-6">${dashHierarchyTiles(dashHierarchyHealth(scoped)).map(dashStatHtml).join('')}</div>`;
+  if(tab==='dependencies')return `<div class="dash-stats dash-stats-4">${dashDependencyTiles(dashDependencyStats(scoped)).map(dashStatHtml).join('')}</div>`;
+  if(tab==='checks')return `<div class="dash-check-grid">${dashCheckOverviewHtml(overview)}</div>`;
+  return `<div class="dash-stats dash-stats-6">${dashStatTiles(dashStructureStats(scoped)).map(dashStatHtml).join('')}</div>`;
+}
+function dashTabsHtml(scoped,overview){
+  const active=DASH_TABS.some(tab=>tab.id===S.session.dashTab)?S.session.dashTab:DASH_TABS[0].id;
+  const current=DASH_TABS.find(tab=>tab.id===active);
+  const explainer=active==='checks'?`${overview.firing.toLocaleString()} of ${overview.total.toLocaleString()} checks found something. The rest ran and came back clean.`:current.explainer;
+  const extra=active==='checks'?`<button class="btn-link" type="button" id="dashSeeRules">See all in Rules${ic('arrow-right')}</button>`:'';
+  return `<div class="dash-tabbar" role="tablist" aria-label="Dashboard sections">${DASH_TABS.map(tab=>`<button class="tabbtn ${tab.id===active?'on':''}" type="button" role="tab" aria-selected="${tab.id===active?'true':'false'}" data-dash-tab="${tab.id}">${esc(tab.label)}</button>`).join('')}</div>
+    <div class="dash-tab-body">${dashBlockHtml(current.label,explainer,dashTabBodyHtml(active,scoped,overview),extra)}</div>`;
+}
 function dashBlockHtml(title,explainer,body,extra){
   return `<section class="dash-block"><div class="dash-block-head"><div><h3>${esc(title)}</h3><p>${esc(explainer)}</p></div>${extra||''}</div>${body}</section>`;
 }
@@ -1240,17 +1264,7 @@ function dashShellHtml(){
     <div class="dash-tiles">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityTileHtml(level,severityCounts[level]||0)).join('')}</div>
     ${dashBlockHtml('Where the problems are','The same findings counted three ways. Pick a row to open the list narrowed to it.',
       `<div class="dash-rank-grid">${dashRankCardHtml('discipline','By discipline','Findings per discipline',scoped.findings)}${dashRankCardHtml('upn','By UPN and system','Findings per system',scoped.findings)}${dashRankCardHtml('milestone','By L2 milestone','Findings per L2 phase',scoped.findings)}</div>`)}
-    ${dashBlockHtml('Milestone readiness','One row per L2 phase: how much equipment is in it, what is flagged, and how much of it is already clean.',
-      `<div class="dash-card">${dashMilestoneTableHtml(scoped)}</div>`)}
-    ${dashBlockHtml('Hierarchy health','How the registry is shaped, and how much of it sits on a branch with nothing flagged above it.',
-      `<div class="dash-stats dash-stats-6">${dashHierarchyTiles(dashHierarchyHealth(scoped)).map(dashStatHtml).join('')}</div>`)}
-    ${dashBlockHtml('Dependencies','Every dependency named in scope, resolved against the rows in scope.',
-      `<div class="dash-stats dash-stats-4">${dashDependencyTiles(dashDependencyStats(scoped)).map(dashStatHtml).join('')}</div>`)}
-    ${dashBlockHtml('Checks overview',`${overview.firing.toLocaleString()} of ${overview.total.toLocaleString()} checks found something. The rest ran and came back clean.`,
-      `<div class="dash-check-grid">${dashCheckOverviewHtml(overview)}</div>`,
-      `<button class="btn-link" type="button" id="dashSeeRules">See all in Rules${ic('arrow-right')}</button>`)}
-    ${dashBlockHtml('Structure at a glance','What this registry is made of, before any rule is applied.',
-      `<div class="dash-stats dash-stats-6">${dashStatTiles(dashStructureStats(scoped)).map(dashStatHtml).join('')}</div>`)}
+    ${dashTabsHtml(scoped,overview)}
     <p class="dash-foot">${ic('lock')}Findings never leave this browser.</p>
   </section>`;
 }
@@ -1289,6 +1303,7 @@ function wireDashboard(navigate){
     const open=()=>showOnlyRule(row.dataset.dashRule,navigate,true);
     row.onclick=open;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
   });
+  $$('[data-dash-tab]').forEach(button=>button.onclick=()=>{S.session.dashTab=button.dataset.dashTab;const host=$('#dashHost');if(host){host.innerHTML=dashShellHtml();wireDashboard(navigate);}});
   $$('[data-dash-stat]').forEach(tile=>tile.onclick=()=>{
     const action=tile.dataset.dashStat;
     if(action==='hierarchy'){if(S.session.snapshot)navigate('hierarchy');return;}

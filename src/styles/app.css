@@ -1350,7 +1350,7 @@ body.audit-fullscreen{overflow:hidden}
 .audit-table td:nth-child(6){color:var(--ink-3);text-align:center}
 .audit-table td:nth-child(6) .ic{width:15px;height:15px}
 .audit-spacer,.audit-spacer td{border:0!important;padding:0!important;background:transparent!important}
-.audit-severity{display:inline-flex;align-items:center;justify-content:center;min-width:104px;height:23px;padding:0 8px;border:1px solid var(--border);border-radius:5px;font:700 10px var(--mono);letter-spacing:.1px;white-space:nowrap}
+.audit-severity{display:inline-flex;align-items:center;justify-content:center;min-width:104px;max-width:100%;height:23px;padding:0 8px;border:1px solid var(--border);border-radius:5px;font:700 10px var(--mono);letter-spacing:.1px;white-space:nowrap}
 .audit-severity.blocker{border-color:#efc5c1;background:#fdecea;color:var(--danger)}
 .audit-severity.error{border-color:#e5c6c2;background:#fbefed;color:#a24942}
 .audit-severity.warning{border-color:#ecd0a7;background:var(--warn-bg);color:var(--warn)}
@@ -1619,8 +1619,11 @@ body.audit-fullscreen{overflow:hidden}
 .audit-evidence-cell{font:11.5px var(--mono);color:var(--ink-3)}
 .audit-table tbody tr[data-audit-finding].cursor td{background:var(--tint)}
 .audit-table tbody tr:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-.audit-group-row td{height:48px;padding:0;background:var(--surface-2);border-bottom:1px solid var(--border-strong)}
-.audit-group-toggle{display:flex;align-items:center;gap:9px;width:100%;height:48px;padding:0 12px;border:0;background:transparent;
+/* Every virtualized row MUST be exactly AUDIT_ROW_HEIGHT (64px) tall -- the
+   scroller's spacer math assumes it. A shorter group row makes the rendered
+   slice fall short of the viewport and the bottom of the list goes white. */
+.audit-group-row td{height:64px;padding:0;background:var(--surface-2);border-bottom:1px solid var(--border-strong)}
+.audit-group-toggle{display:flex;align-items:center;gap:9px;width:100%;height:64px;padding:0 12px;border:0;background:transparent;
   color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .audit-group-toggle:hover{background:var(--surface-3)}
 .audit-group-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
@@ -1864,8 +1867,14 @@ body.audit-fullscreen{overflow:hidden}
 
 .dash-milestone-table th:nth-child(2),.dash-milestone-table th:nth-child(3){width:78px;text-align:right}
 .dash-milestone-table th:nth-child(4){width:190px}.dash-milestone-table th:nth-child(5){width:132px}
-.dash-levels{white-space:nowrap}
-.dash-numeral{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:22px;margin-right:5px;padding:0 6px;border:1px solid var(--border);border-radius:5px;font:700 11px var(--mono)}
+
+.dash-tabbar{display:flex;gap:4px;flex-wrap:wrap;margin:18px 0 0;border-bottom:1px solid var(--border)}
+.dash-tabbar .tabbtn{font-size:13px}
+.dash-tab-body{margin-top:14px}
+.dash-levels{white-space:normal}
+.dash-levels-head{width:250px}
+.dash-levels-flex{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.dash-numeral{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:22px;padding:0 6px;border:1px solid var(--border);border-radius:5px;font:700 11px var(--mono);white-space:nowrap}
 .dash-numeral.blocker{border-color:#efc5c1;background:#fdecea;color:var(--danger)}
 .dash-numeral.error{border-color:#e5c6c2;background:#fbefed;color:#a24942}
 .dash-numeral.warning{border-color:#ecd0a7;background:var(--warn-bg);color:var(--warn)}
