@@ -35,7 +35,7 @@ The full rulebook is in the app under **Rules**, with live counts once a registr
 
 - **Dashboard** — one large overall progress bar, the level totals, and a wide progress bar with a live percentage per discipline and per L2 phase.
 - **Index** — one row per phase, hyperlinked to its tab; every tab links back.
-- **One tab per L2 phase** — every piece of equipment in that phase as an indented tree, each nest level in its own colour with the ID always in black, Closest Parent and Dependencies side by side, one line per finding with the reason and what to do, and the cell the finding is about shaded light red. Tick the **Actioned** box (☐ → ☑) on an equipment's first line: the row turns green and the Index and Dashboard update.
+- **One tab per L2 phase** (or, by choice, **one tab per finding level**) — equipment as an indented tree, each nest level in its own colour with the ID always in black, Closest Parent and Dependencies side by side. An equipment with several findings is one merged block: the equipment appears once, findings stack beside it, and the cell each finding is about is shaded light red. Tick the block's **Actioned** box (☐ → ☑): the whole block turns green and the Index and Dashboard update.
 - **All Findings** and **Rules**.
 
 ## Privacy

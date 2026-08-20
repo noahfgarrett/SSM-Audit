@@ -71,8 +71,18 @@ function linkTarget(cell) {
   return match ? match[1].replace(/''/g, "'") : ''
 }
 
+/* Equipment cells are merged blocks: only the block's first line carries the
+   tag. carriedTags fills the blanks downward so lookups keep working. */
+function carriedTags(sheet) {
+  let current = ''
+  return grid(sheet).slice(2).map(line => {
+    const tag = String(line[2] || '').trim()
+    if (tag) current = tag
+    return current
+  })
+}
 function equipmentColumn(sheet) {
-  return grid(sheet).slice(2).map(line => String(line[2] || '').trim())
+  return grid(sheet).slice(2).map(line => String(line[2] || '').trim()).filter(Boolean)
 }
 
 function tabHolding(book, tag) {
@@ -238,7 +248,7 @@ test('milestone equipment and finding counts agree with the audit result', () =>
     const indexRow = 5 + offset, lines = grid(book.Sheets[name]).slice(2)
     const equipmentCount = book.Sheets.Index[`B${indexRow}`].v, findingCount = book.Sheets.Index[`C${indexRow}`].v
     assert.ok(lines.length >= equipmentCount, name)
-    assert.equal(new Set(lines.map(line => String(line[2]).trim())).size, equipmentCount, name)
+    assert.equal(lines.filter(line => String(line[2] || '').trim()).length, equipmentCount, name)
     equipmentTotal += equipmentCount
     findingTotal += findingCount
   })
@@ -246,21 +256,32 @@ test('milestone equipment and finding counts agree with the audit result', () =>
   assert.equal(findingTotal, result.summary.findings)
 })
 
-test('rows with several findings repeat the equipment once per finding', () => {
+test('an equipment with several findings is one merged block: tag once, one Actioned box, one line per finding', () => {
   const result = auditResult()
   const book = buildAuditWorkbook(result, 'synthetic-registry.xlsx')
+  let checkedMerge = false
   for (const name of milestoneSheetNames(book)) {
-    const lines = grid(book.Sheets[name]).slice(2)
+    const sheet = book.Sheets[name], lines = grid(sheet).slice(2), tags = carriedTags(sheet)
     const counted = new Map()
-    for (const line of lines) {
-      const tag = String(line[2]).trim()
-      counted.set(tag, (counted.get(tag) || 0) + 1)
-    }
+    tags.forEach(tag => counted.set(tag, (counted.get(tag) || 0) + 1))
     for (const [tag, lineCount] of counted) {
       const findings = result.findings.filter(finding => finding.equipmentId === tag).length
       assert.equal(lineCount, Math.max(1, findings), `${name} / ${tag}`)
+      if (lineCount > 1) {
+        checkedMerge = true
+        const first = tags.indexOf(tag)
+        /* the tag appears once; continuation lines are blank in every equipment column */
+        for (let at = first + 1; at < first + lineCount; at++)
+          for (let column = 0; column <= 10; column++)
+            assert.equal(String(lines[at][column] ?? ''), '', `${name} ${tag} line ${at} column ${column}`)
+        /* and a vertical merge covers the block for the tag column */
+        assert.ok((sheet['!merges'] || []).some(range => range.s.c === 2 && range.s.r === first + 2 && range.e.r === first + 1 + lineCount), `${name} ${tag} merge`)
+        /* one Actioned box: the dropdown validation range still covers the block, but only the anchor holds a value */
+        assert.equal(lines[first][0], '☐')
+      }
     }
   }
+  assert.ok(checkedMerge, 'the fixture has at least one multi-finding equipment')
 })
 
 test('severity cells carry a fill so the tab reads at a glance', () => {
@@ -287,7 +308,7 @@ test('nest level tints the equipment cell with a distinct hue per level and keep
   const sheet = tabHolding(book, 'B14-AHU-2201')
   const lines = grid(sheet).slice(2)
   const cells = ['B14-AHU-2201', 'B14-AHU-2201-VFD', 'B14-AHU-2201-VFD-IO']
-    .map(tag => sheet[`C${lines.findIndex(line => String(line[2]).trim() === tag) + 3}`])
+    .map(tag => sheet[`C${lines.findIndex(line => String(line[2] || '').trim() === tag) + 3}`])
   const fills = cells.map(cell => cell.s.fill.fgColor.rgb)
   assert.deepEqual(fills, [...new Set(fills)])
   /* Different hues, not shades of one: the dominant RGB channel differs between neighbours. */
@@ -295,6 +316,7 @@ test('nest level tints the equipment cell with a distinct hue per level and keep
   assert.notEqual(dominant(fills[0]), dominant(fills[1]))
   for (const cell of cells) assert.equal(cell.s.font.color.rgb, '000000')
   for (const line of lines) {
+    if (!String(line[2] || '').trim()) continue
     const rowIndex = lines.indexOf(line) + 3
     assert.equal(sheet[`C${rowIndex}`].s.font.color.rgb, '000000', `row ${rowIndex} equipment ID is black`)
   }
@@ -306,10 +328,11 @@ test('the cell a finding is about is shaded red on that finding\'s line', () => 
   let checked = 0
   for (const finding of result.findings) {
     const column = columns[finding.field]; if (!column) continue
-    const sheet = tabHolding(book, finding.equipmentId), lines = grid(sheet).slice(2)
-    const rowIndex = lines.findIndex(line => String(line[2]).trim() === finding.equipmentId && line[12] === finding.rule.title) + 3
-    assert.ok(rowIndex >= 3, `${finding.equipmentId} / ${finding.rule.title}`)
-    assert.equal(sheet[`${column}${rowIndex}`].s.fill.fgColor.rgb, 'FBE3E1', `${finding.equipmentId} ${finding.field}`)
+    const sheet = tabHolding(book, finding.equipmentId), tags = carriedTags(sheet), lines = grid(sheet).slice(2)
+    const lineIndex = tags.findIndex((tag, at) => tag === finding.equipmentId && lines[at][12] === finding.rule.title)
+    assert.ok(lineIndex >= 0, `${finding.equipmentId} / ${finding.rule.title}`)
+    const anchorRow = tags.indexOf(finding.equipmentId) + 3
+    assert.equal(sheet[`${column}${anchorRow}`].s.fill.fgColor.rgb, 'FBE3E1', `${finding.equipmentId} ${finding.field}`)
     checked++
   }
   assert.ok(checked > 0, 'the fixture raises findings on flaggable fields')
@@ -320,11 +343,9 @@ test('the Actioned column starts unticked on each equipment line and the written
   const book = workbook()
   for (const name of milestoneSheetNames(book)) {
     const lines = grid(book.Sheets[name]).slice(2)
-    const seen = new Set()
     for (const line of lines) {
-      const tag = String(line[2]).trim()
-      assert.equal(line[0], seen.has(tag) ? '' : '☐', `${name} ${tag}`)
-      seen.add(tag)
+      const anchor = Boolean(String(line[2] || '').trim())
+      assert.equal(line[0], anchor ? '☐' : '', name)
     }
   }
   const bytes = workbookBytes(book, { compression: true })
@@ -339,6 +360,7 @@ test('the Actioned column starts unticked on each equipment line and the written
     assert.equal(xml.includes('<conditionalFormatting'), isMilestone, name)
     if (isMilestone) {
       assert.ok(xml.includes(`<formula1>"${AUDIT_EXPORT_TICK},☐"</formula1>`), name)
+      assert.match(xml, /<formula>\$R3="☑"<\/formula>/, 'the green format reads the hidden Done helper column')
       const validationAt = xml.indexOf('<dataValidations'), hyperlinksAt = xml.indexOf('<hyperlinks'), sheetDataEnd = xml.indexOf('</sheetData>')
       assert.ok(validationAt > sheetDataEnd, 'extras follow sheetData')
       if (hyperlinksAt !== -1) assert.ok(validationAt < hyperlinksAt, 'extras precede hyperlinks (schema order)')
@@ -355,7 +377,8 @@ test('milestone tabs filter and freeze on the header row', () => {
     const sheet = book.Sheets[name]
     assert.match(sheet['!autofilter'].ref, /^A2:Q\d+$/)
     assert.equal(sheet['!freeze'], 'A3')
-    assert.equal(sheet['!cols'].length, 17)
+    assert.equal(sheet['!cols'].length, 18)
+    assert.equal(sheet['!cols'][17].hidden, true, 'the Done helper column is hidden')
     assert.deepEqual(grid(sheet)[1].slice(2, 6), ['Equipment ID', 'Description', 'Closest Parent', 'Dependencies'], 'Dependencies follows Closest Parent')
   }
   assert.match(book.Sheets['All Findings']['!autofilter'].ref, /^A2:L\d+$/)
@@ -450,13 +473,42 @@ test('a skipped level vanishes from the workbook and pre-ticked equipment starts
   assert.equal(findingsRows.length, expected)
   /* Every remaining finding is pre-ticked, so every equipment line with findings starts ☑. */
   for (const name of milestoneSheetNames(book)) {
-    const lines = grid(book.Sheets[name]).slice(2)
-    for (const line of lines) {
-      if (line[0] === '') continue
-      const hasFinding = Boolean(line[11])
-      assert.equal(line[0], hasFinding ? '☑' : '☐', `${name}: ${line[2]}`)
-    }
+    const sheet = book.Sheets[name], lines = grid(sheet).slice(2), tags = carriedTags(sheet)
+    lines.forEach((line, at) => {
+      if (line[0] === '') return
+      const tag = tags[at]
+      const hasFinding = result.findings.some(finding => finding.severity !== 'info' && finding.equipmentId === tag)
+      assert.equal(line[0], hasFinding ? '☑' : '☐', `${name}: ${tag}`)
+    })
   }
   /* Dashboard severity strip reflects the filtered counts. */
   assert.equal(book.Sheets.Dashboard.F9.v, 0, 'Notes KPI is zero when info is left out')
+})
+
+test('the level layout builds one tab per finding level with flagged equipment only and an L2 Milestone column', () => {
+  const result = auditResult()
+  const book = buildAuditWorkbook(result, 'synthetic-registry.xlsx', { layout: 'level' })
+  const tabs = milestoneSheetNames(book)
+  const present = [...new Set(result.findings.map(finding => finding.severity))]
+  const expected = ['blocker', 'error', 'warning', 'info'].filter(severity => present.includes(severity))
+    .map(severity => ({ blocker: 'INVALID', error: 'RULE BROKEN', warning: 'CHECK THIS', info: 'NOTE' })[severity])
+  assert.deepEqual(tabs, expected)
+  for (const name of tabs) {
+    const sheet = book.Sheets[name], header = grid(sheet)[1]
+    assert.equal(header[11], 'L2 Milestone')
+    assert.equal(header[12], 'Severity')
+    const tags = carriedTags(sheet), lines = grid(sheet).slice(2)
+    /* flagged equipment only: every block has at least one finding line */
+    lines.forEach((line, at) => { if (String(line[2] || '').trim()) assert.ok(lines[at][13], `${name} ${tags[at]} has a finding`) })
+  }
+  /* Index labels and links follow the level tabs */
+  assert.equal(grid(book.Sheets.Index)[3][0], 'Finding level')
+  tabs.forEach((name, offset) => assert.equal(linkTarget(book.Sheets.Index[`A${5 + offset}`]), name))
+  /* an equipment with findings on two levels appears on both tabs */
+  const byLevel = new Map()
+  for (const finding of result.findings) { const set = byLevel.get(finding.equipmentId) || new Set(); set.add(finding.severity); byLevel.set(finding.equipmentId, set) }
+  const multi = [...byLevel.entries()].find(([, levels]) => levels.size > 1)
+  assert.ok(multi, 'fixture has an equipment flagged on two levels')
+  const appearances = tabs.filter(name => carriedTags(book.Sheets[name]).includes(multi[0])).length
+  assert.equal(appearances, multi[1].size)
 })
