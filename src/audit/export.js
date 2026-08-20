@@ -27,12 +27,23 @@ const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'INVALID',error:'RULE 
 const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'8C1D18',color:'FFFFFF'},error:{fill:'D9531E',color:'FFFFFF'},warning:{fill:'F2B441',color:'40320A'},info:{fill:'6E8598',color:'FFFFFF'}});
 /* Milestone tab columns. Closest Parent and Dependencies sit side by side so a
    hierarchy question can be checked without scrolling. */
-const AUDIT_EXPORT_MILESTONE_HEADERS=Object.freeze(['Actioned','Nest','Equipment ID','Description','Closest Parent','Dependencies','Discipline','UPN','System Name','Building','Item Master','Severity','Finding','Why','What to do','Actioned By','Note']);
-const AUDIT_EXPORT_MILESTONE_WIDTHS=Object.freeze([10,6,36,38,28,34,22,8,30,10,26,12,32,54,54,16,30]);
-const AUDIT_EXPORT_MILESTONE_ALIGN=Object.freeze(['center','center','left','left','left','left','left','right','left','left','left','center','left','left','left','left','left']);
+/* Finding-tab columns, computed per layout: the level layout adds an
+   L2 Milestone column after Item Master. The last column, Done, is a hidden
+   helper that carries each equipment block's tick down to its finding lines so
+   the whole block can turn green (the tick lives in one merged cell, and a
+   conditional format on another row cannot read a merged neighbour). */
+export function auditExportTabColumns(layout){
+  const headers=['Actioned','Nest','Equipment ID','Description','Closest Parent','Dependencies','Discipline','UPN','System Name','Building','Item Master'];
+  const widths=[10,6,36,38,28,34,22,8,30,10,26],align=['center','center','left','left','left','left','left','right','left','left','left'];
+  if(layout==='level'){headers.push('L2 Milestone');widths.push(30);align.push('left');}
+  headers.push('Severity','Finding','Why','What to do','Actioned By','Note','Done');
+  widths.push(12,32,54,54,16,30,6);align.push('center','left','left','left','left','left','center');
+  const index=Object.fromEntries(headers.map((header,at)=>[header,at]));
+  const letterOf=header=>auditColumnName(index[header]);
+  return {headers,widths,align,index,letterOf,equipmentEnd:index['Item Master']+(layout==='level'?1:0),doneIndex:index['Done'],lastVisibleIndex:index['Note']};
+}
 /* Which column a finding's `field` points at, so that cell can be shaded. */
-const AUDIT_EXPORT_FIELD_COLUMNS=Object.freeze({'Equipment ID':'C','Closest Parent':'E','Dependencies':'F','Dependency Project':'F','Discipline':'G','UPN':'H','System Name':'I','Building':'J','Item Master Unique Identifier':'K'});
-const AUDIT_EXPORT_ROW_COLUMNS=Object.freeze(['D','E','F','G','H','I','J','K']);
+const AUDIT_EXPORT_FIELD_HEADERS=Object.freeze({'Equipment ID':'Equipment ID','Closest Parent':'Closest Parent','Dependencies':'Dependencies','Dependency Project':'Dependencies','Discipline':'Discipline','UPN':'UPN','System Name':'System Name','Building':'Building','Item Master Unique Identifier':'Item Master'});
 const AUDIT_EXPORT_FINDING_HEADERS=Object.freeze(['Severity','Milestone','Equipment ID','Description','Rule','Why','What to do','Field','Found','Expected','Sheet','Row']);
 const AUDIT_EXPORT_FINDING_WIDTHS=Object.freeze([12,34,30,40,34,54,54,26,44,44,22,8]);
 const AUDIT_EXPORT_RULE_HEADERS=Object.freeze(['Rule','What must be true','Source','Confidence','Findings count']);
@@ -189,6 +200,23 @@ export function auditExportGroups(result){
   return ordered;
 }
 
+/* One group per finding level: only flagged equipment, ordered by milestone
+   then tag, each entry carrying just that level's findings. */
+export function auditExportLevelGroups(result){
+  const rows=result&&result.rows||[],findings=result&&result.findings||[],levelFor=auditExportNestLevels(rows);
+  const rowByKey=new Map();for(const row of rows)rowByKey.set(auditExportRowKey(row),row);
+  const groups=[];
+  for(const severity of ['blocker','error','warning','info']){
+    const severityFindings=findings.filter(finding=>finding.severity===severity);if(!severityFindings.length)continue;
+    const byEquipment=new Map();
+    for(const finding of severityFindings){const key=auditExportFindingKey(finding),entry=byEquipment.get(key)||{row:rowByKey.get(key)||null,findings:[]};entry.findings.push(finding);byEquipment.set(key,entry);}
+    const lines=[...byEquipment.values()].filter(entry=>entry.row).map(entry=>({row:entry.row,level:levelFor(entry.row),findings:entry.findings}))
+      .sort((left,right)=>natCmp(clean(left.row.milestone),clean(right.row.milestone))||natCmp(clean(left.row.equipmentId),clean(right.row.equipmentId)));
+    groups.push({label:AUDIT_EXPORT_SEVERITY_LABELS[severity],severity,sheetName:'',rows:lines.map(line=>line.row),lines,equipmentCount:lines.length,findingCount:severityFindings.length});
+  }
+  return groups;
+}
+
 /* Live progress: the milestone tab owns the truth (column A, typed Y), Index and
    Dashboard only read it back. Every formula carries a cached value so the file
    is readable before Excel recalculates. */
@@ -223,7 +251,6 @@ function auditExportBarCell(percentCell,style,segments=AUDIT_EXPORT_BAR_SEGMENTS
   return sheetFormulaCell(`REPT("█",${filled})&REPT("░",${segments}-${filled})`,auditExportEmptyBar(segments),style);
 }
 function auditExportTickValidation(range){return `<dataValidation type="list" allowBlank="1" showDropDown="0" showErrorMessage="1" errorTitle="Actioned" error="Pick ${AUDIT_EXPORT_TICK} or ${AUDIT_EXPORT_UNTICKED} from the list." sqref="${range}"><formula1>"${AUDIT_EXPORT_TICK},${AUDIT_EXPORT_UNTICKED}"</formula1></dataValidation>`;}
-function auditExportDoneFormat(range,firstRow){return `<conditionalFormatting sqref="${range}"><cfRule type="expression" dxfId="0" priority="1"><formula>$A${firstRow}="${AUDIT_EXPORT_TICK}"</formula></cfRule></conditionalFormatting>`;}
 /* ---- export plan ----
    plan.levels[severity] and plan.rules[ruleId] each hold 'include' | 'pretick'
    | 'skip'. A rule entry overrides its level; everything else defaults to
@@ -278,7 +305,7 @@ function auditExportBackLink(sheet){
      11   "By discipline" header, rows follow        (bars 25 segments, tall rows)
      then "By milestone" header, rows follow          (same bars; links to tabs)
    Every progress number is a formula over the ticks on the milestone tabs. */
-function auditExportDashboardSheet(result,groups,disciplines,sessionName,generated){
+function auditExportDashboardSheet(result,groups,disciplines,sessionName,generated,groupLabel){
   const summary=result&&result.summary||{},severity=summary.severity||{};
   const columns=['Discipline','Equipment','Findings','Actioned','%','Progress'];
   const aoa=[
@@ -286,7 +313,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     [`Generated ${auditExportDate(generated)}`,'','','','',''],
     [`Standard: ${clean(result&&result.standard)}`,'','','','',''],
     ['','','','','',''],
-    ['OVERALL PROGRESS — equipment actioned across every milestone','','','','',''],
+    [`OVERALL PROGRESS — equipment actioned across every ${groupLabel==='Finding level'?'finding level':'milestone'}`,'','','','',''],
     [auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS),'','','','',0],
     ['','','','','',''],
     ['Rows audited','Findings','Invalid','Rule broken','Check this','Notes'],
@@ -299,7 +326,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   if(!disciplines.length)aoa.push(['No equipment rows in this registry','','','','','']);
   const disciplineLast=disciplineFirst+Math.max(0,disciplines.length-1);
   aoa.push(['','','','','','']);
-  aoa.push(['Milestone','Equipment','Findings','Actioned','%','Progress']);
+  aoa.push([groupLabel,'Equipment','Findings','Actioned','%','Progress']);
   const milestoneHeader=aoa.length,milestoneFirst=aoa.length+1;
   for(const group of groups)aoa.push([group.label,group.equipmentCount,group.findingCount,0,0,auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS)]);
   if(!groups.length)aoa.push(['No equipment rows in this registry','','','','','']);
@@ -336,7 +363,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     const rowIndex=disciplineFirst+offset,band=offset%2===1;
     progressRow(rowIndex,band,auditExportDisciplineActionedCell(offset,groups.length,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),null);
   });
-  auditExportHeaderRow(sheet,milestoneHeader,['Milestone','Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
+  auditExportHeaderRow(sheet,milestoneHeader,[groupLabel,'Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
   groups.forEach((group,offset)=>{
     const rowIndex=milestoneFirst+offset,band=offset%2===1;
     progressRow(rowIndex,band,auditExportActionedCell(group,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),{target:`#${auditExportSheetRef(group.sheetName)}!A1`,tooltip:`Open ${group.label}`});
@@ -344,13 +371,13 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   return sheet;
 }
 
-function auditExportIndexSheet(groups){
+function auditExportIndexSheet(groups,groupLabel){
   const firstRow=5;
   const aoa=[
     ['SSM Audit — Index','','','','',''],
     [AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET,'','',''],
     ['','','','','',''],
-    ['Milestone','Equipment','Findings','Actioned','%','Progress'],
+    [groupLabel,'Equipment','Findings','Actioned','%','Progress'],
   ];
   for(const group of groups)aoa.push([group.label,group.equipmentCount,group.findingCount,0,0,auditExportEmptyBar()]);
   if(!groups.length)aoa.push(['No equipment rows in this registry','','','','','']);
@@ -362,7 +389,7 @@ function auditExportIndexSheet(groups){
     sheetStyleCell(sheet,address,AUDIT_EXPORT_STYLES.back);
     sheetLinkCell(sheet,address,`#${auditExportSheetRef(name)}!A1`,`Open ${name}`);
   });
-  auditExportHeaderRow(sheet,4,['Milestone','Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
+  auditExportHeaderRow(sheet,4,[groupLabel,'Equipment','Findings','Actioned','%','Progress'],['left','right','right','right','right','left']);
   groups.forEach((group,offset)=>{
     const rowIndex=firstRow+offset,band=offset%2===1;
     sheetStyleCell(sheet,`A${rowIndex}`,band?AUDIT_EXPORT_STYLES.linkBand:AUDIT_EXPORT_STYLES.linkText);
@@ -379,52 +406,78 @@ function auditExportIndexSheet(groups){
   return sheet;
 }
 
-function auditExportMilestoneSheet(group,preticked){
-  const aoa=[[AUDIT_EXPORT_BACK_LINK,AUDIT_EXPORT_ACTIONED_NOTE],[...AUDIT_EXPORT_MILESTONE_HEADERS]];
-  const meta=[];
+function auditExportFindingTab(group,preticked,layout){
+  const columns=auditExportTabColumns(layout),blank=()=>new Array(columns.headers.length).fill('');
+  const aoa=[[AUDIT_EXPORT_BACK_LINK,AUDIT_EXPORT_ACTIONED_NOTE],[...columns.headers]];
+  const meta=[],blocks=[];
   for(const line of group.lines){
     const row=line.row,indent='  '.repeat(Math.min(line.level,24));
-    const equipment=[indent+clean(row.equipmentId),clean(row.equipmentDescription),clean(row.closestParent),clean(row.dependencies),clean(row.discipline),clean(row.upn),clean(row.systemName),clean(row.building),clean(row.itemMaster)];
     const findings=line.findings.length?line.findings:[null];
     /* Ticked from the start only when the equipment has findings and every one
        of them is in a pre-ticked group. */
     const startTicked=line.findings.length>0&&preticked&&line.findings.every(finding=>preticked.has(finding));
+    const first=aoa.length+1;
     findings.forEach((finding,offset)=>{
-      aoa.push([offset===0?(startTicked?AUDIT_EXPORT_TICK:AUDIT_EXPORT_UNTICKED):'',line.level,...equipment,
-        finding?AUDIT_EXPORT_SEVERITY_LABELS[finding.severity]||finding.severity.toUpperCase():'',
-        finding?clean(finding.rule.title):'',finding?clean(finding.why):'',finding?clean(finding.recommendation):'','','']);
-      meta.push({level:line.level,repeat:offset>0,severity:finding?finding.severity:'',flag:finding?AUDIT_EXPORT_FIELD_COLUMNS[clean(finding.field)]||'':''});
+      const cells=blank();
+      if(offset===0){
+        cells[0]=startTicked?AUDIT_EXPORT_TICK:AUDIT_EXPORT_UNTICKED;cells[1]=line.level;
+        cells[2]=indent+clean(row.equipmentId);cells[3]=clean(row.equipmentDescription);cells[4]=clean(row.closestParent);cells[5]=clean(row.dependencies);
+        cells[6]=clean(row.discipline);cells[7]=clean(row.upn);cells[8]=clean(row.systemName);cells[9]=clean(row.building);cells[10]=clean(row.itemMaster);
+        if(layout==='level')cells[columns.index['L2 Milestone']]=clean(row.milestone)||AUDIT_EXPORT_NO_MILESTONE;
+      }
+      if(finding){
+        cells[columns.index['Severity']]=AUDIT_EXPORT_SEVERITY_LABELS[finding.severity]||finding.severity.toUpperCase();
+        cells[columns.index['Finding']]=clean(finding.rule.title);cells[columns.index['Why']]=clean(finding.why);cells[columns.index['What to do']]=clean(finding.recommendation);
+      }
+      aoa.push(cells);
+      meta.push({level:line.level,anchor:offset===0,severity:finding?finding.severity:'',flagHeader:finding?AUDIT_EXPORT_FIELD_HEADERS[clean(finding.field)]||'':'',blockFirst:first});
     });
+    blocks.push({first,count:findings.length});
   }
   const sheet=XLSX.utils.aoa_to_sheet(aoa);
-  sheet['!cols']=AUDIT_EXPORT_MILESTONE_WIDTHS.map(width=>({wch:width}));
+  sheet['!cols']=columns.widths.map((width,at)=>at===columns.doneIndex?{wch:width,hidden:true}:{wch:width});
   sheetStyleCell(sheet,'A1',AUDIT_EXPORT_STYLES.back);
-  sheetLinkCell(sheet,'A1',`#${auditExportSheetRef(AUDIT_EXPORT_INDEX_SHEET)}!A1`,'Back to the milestone index');
+  sheetLinkCell(sheet,'A1',`#${auditExportSheetRef(AUDIT_EXPORT_INDEX_SHEET)}!A1`,'Back to the index');
   sheetStyleCell(sheet,'B1',AUDIT_EXPORT_STYLES.note);
-  auditExportHeaderRow(sheet,2,AUDIT_EXPORT_MILESTONE_HEADERS,AUDIT_EXPORT_MILESTONE_ALIGN);
+  auditExportHeaderRow(sheet,2,columns.headers,columns.align);
+  /* An equipment with several findings is ONE merged block: the equipment cells
+     span its finding lines and one Actioned box covers them all. */
+  sheet['!merges']=sheet['!merges']||[];
+  for(const block of blocks){
+    if(block.count<2)continue;
+    for(let columnIndex=0;columnIndex<=columns.equipmentEnd;columnIndex++)
+      sheet['!merges'].push({s:{r:block.first-1,c:columnIndex},e:{r:block.first-2+block.count,c:columnIndex}});
+  }
+  const severityLetter=columns.letterOf('Severity'),findingLetter=columns.letterOf('Finding'),whyLetter=columns.letterOf('Why'),toDoLetter=columns.letterOf('What to do'),byLetter=columns.letterOf('Actioned By'),noteLetter=columns.letterOf('Note'),doneLetter=auditColumnName(columns.doneIndex);
   meta.forEach((entry,offset)=>{
     const rowIndex=offset+3,nest=AUDIT_EXPORT_NEST_STYLES[entry.level%AUDIT_EXPORT_NEST_STYLES.length];
-    const body=entry.repeat?AUDIT_EXPORT_STYLES.repeat:AUDIT_EXPORT_STYLES.text;
-    sheetStyleCell(sheet,`A${rowIndex}`,entry.repeat?AUDIT_EXPORT_STYLES.actionedRepeat:AUDIT_EXPORT_STYLES.actioned);
-    sheetStyleCell(sheet,`B${rowIndex}`,nest.level);
-    sheetStyleCell(sheet,`C${rowIndex}`,entry.repeat?nest.repeat:nest.own);
-    for(const column of AUDIT_EXPORT_ROW_COLUMNS)sheetStyleCell(sheet,`${column}${rowIndex}`,body);
-    /* The cell the finding is about turns light red -- on the finding's own line,
-       even when that is the equipment's ID cell. */
-    if(entry.flag)sheetStyleCell(sheet,`${entry.flag}${rowIndex}`,AUDIT_EXPORT_STYLES.flag);
-    if(entry.severity)sheetStyleCell(sheet,`L${rowIndex}`,AUDIT_EXPORT_SEVERITY_STYLES[entry.severity]||AUDIT_EXPORT_STYLES.text);
+    if(entry.anchor){
+      sheetStyleCell(sheet,`A${rowIndex}`,AUDIT_EXPORT_STYLES.actioned);
+      sheetStyleCell(sheet,`B${rowIndex}`,nest.level);
+      sheetStyleCell(sheet,`C${rowIndex}`,nest.own);
+      for(let columnIndex=3;columnIndex<=columns.equipmentEnd;columnIndex++)sheetStyleCell(sheet,`${auditColumnName(columnIndex)}${rowIndex}`,AUDIT_EXPORT_STYLES.text);
+    }
+    /* The cell the finding is about turns light red. The equipment cells are one
+       merged block, so the shade lands on the block's (anchor) cell. */
+    if(entry.flagHeader)sheetStyleCell(sheet,`${columns.letterOf(entry.flagHeader)}${entry.blockFirst}`,AUDIT_EXPORT_STYLES.flag);
+    if(entry.severity)sheetStyleCell(sheet,`${severityLetter}${rowIndex}`,AUDIT_EXPORT_SEVERITY_STYLES[entry.severity]||AUDIT_EXPORT_STYLES.text);
     const detail=entry.severity?AUDIT_EXPORT_STYLES.wrap:AUDIT_EXPORT_STYLES.wrapMuted;
-    sheetStyleCell(sheet,`M${rowIndex}`,entry.severity?AUDIT_EXPORT_STYLES.text:AUDIT_EXPORT_STYLES.muted);
-    sheetStyleCell(sheet,`N${rowIndex}`,detail);
-    sheetStyleCell(sheet,`O${rowIndex}`,detail);
-    sheetStyleCell(sheet,`P${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
-    sheetStyleCell(sheet,`Q${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
+    sheetStyleCell(sheet,`${findingLetter}${rowIndex}`,entry.severity?AUDIT_EXPORT_STYLES.text:AUDIT_EXPORT_STYLES.muted);
+    sheetStyleCell(sheet,`${whyLetter}${rowIndex}`,detail);
+    sheetStyleCell(sheet,`${toDoLetter}${rowIndex}`,detail);
+    sheetStyleCell(sheet,`${byLetter}${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
+    sheetStyleCell(sheet,`${noteLetter}${rowIndex}`,AUDIT_EXPORT_STYLES.entry);
+    /* Done carries the block's tick down its lines for the green format. */
+    const formula=rowIndex===3?`IF(A3<>"",A3,"")`:`IF(A${rowIndex}<>"",A${rowIndex},${doneLetter}${rowIndex-1})`;
+    sheetSetCell(sheet,`${doneLetter}${rowIndex}`,sheetFormulaCell(formula,entry.anchor?AUDIT_EXPORT_UNTICKED:'',null));
   });
-  const lastRow=Math.max(3,meta.length+2),lastColumn=auditColumnName(AUDIT_EXPORT_MILESTONE_HEADERS.length-1);
+  const lastRow=Math.max(3,meta.length+2),lastVisible=auditColumnName(columns.lastVisibleIndex);
   sheetFreezeRows(sheet,2);
-  sheetAutoFilter(sheet,`A2:${lastColumn}${Math.max(2,meta.length+2)}`);
-  /* Tick-box dropdown on every Actioned cell; a ticked line turns green. */
-  sheetXmlExtras(sheet,{dataValidations:[auditExportTickValidation(`A3:A${lastRow}`)],conditionalFormatting:[auditExportDoneFormat(`A3:${lastColumn}${lastRow}`,3)]});
+  sheetAutoFilter(sheet,`A2:${lastVisible}${Math.max(2,meta.length+2)}`);
+  /* Tick-box dropdown on every Actioned cell; the block turns green when its
+     Done helper column carries the tick. */
+  sheetXmlExtras(sheet,{dataValidations:[auditExportTickValidation(`A3:A${lastRow}`)],
+    conditionalFormatting:[`<conditionalFormatting sqref="A3:${lastVisible}${lastRow}"><cfRule type="expression" dxfId="0" priority="1"><formula>$${doneLetter}3="${AUDIT_EXPORT_TICK}"</formula></cfRule></conditionalFormatting>`]});
   return sheet;
 }
 
@@ -487,15 +540,16 @@ function auditExportRulesSheet(result){
 
 export function buildAuditWorkbook(sourceResult,sessionName,options={}){
   const {result,preticked}=auditExportApplyPlan(sourceResult,options.plan);
-  const workbook=XLSX.utils.book_new(),groups=auditExportGroups(result);
+  const layout=options.layout==='level'?'level':'milestone',groupLabel=layout==='level'?'Finding level':'Milestone';
+  const workbook=XLSX.utils.book_new(),groups=layout==='level'?auditExportLevelGroups(result):auditExportGroups(result);
   const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET,AUDIT_EXPORT_CALC_SHEET].map(name=>name.toLowerCase()));
   for(const group of groups)group.sheetName=auditExportSheetName(group.label,used);
   const generated=options.generatedAt instanceof Date?options.generatedAt:new Date();
   workbook.Dxfs=[...AUDIT_EXPORT_DXFS];
   const disciplines=auditExportDisciplines(result);
-  addSheet(workbook,auditExportDashboardSheet(result,groups,disciplines,sessionName,generated),AUDIT_EXPORT_DASHBOARD_SHEET);
-  addSheet(workbook,auditExportIndexSheet(groups),AUDIT_EXPORT_INDEX_SHEET);
-  for(const group of groups)addSheet(workbook,auditExportMilestoneSheet(group,preticked),group.sheetName);
+  addSheet(workbook,auditExportDashboardSheet(result,groups,disciplines,sessionName,generated,groupLabel),AUDIT_EXPORT_DASHBOARD_SHEET);
+  addSheet(workbook,auditExportIndexSheet(groups,groupLabel),AUDIT_EXPORT_INDEX_SHEET);
+  for(const group of groups)addSheet(workbook,auditExportFindingTab(group,preticked,layout),group.sheetName);
   addSheet(workbook,auditExportFindingsSheet(result,groups),AUDIT_EXPORT_FINDINGS_SHEET);
   addSheet(workbook,auditExportRulesSheet(result),AUDIT_EXPORT_RULES_SHEET);
   addSheet(workbook,auditExportCalcSheet(groups,disciplines),AUDIT_EXPORT_CALC_SHEET);
@@ -512,7 +566,7 @@ export async function exportSsmAuditXlsx(plan){
   try{
     await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
       report(.1);await checkpoint();
-      const workbook=buildAuditWorkbook(result,S.session.name,{plan});
+      const workbook=buildAuditWorkbook(result,S.session.name,{plan,layout:plan&&plan.layout});
       report(.45);await checkpoint();
       const blob=await workbookBlobCompact(workbook);
       report(1);downloadBlob(`${base}-Audit.xlsx`,blob);

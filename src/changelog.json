@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.15.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Equipment with several findings is now one merged block in the report: the equipment appears once, its findings stack beside it, and a single Actioned box covers the whole block (ticking it turns the entire block green)\n- New report layout option in the export chooser: one tab per finding level (Invalid / Rule broken / Check this / Note) instead of one per milestone — flagged equipment only, ordered by milestone, with an L2 Milestone column; the Dashboard and Index follow whichever layout is chosen"
+  },
+  {
     "version": "1.14.0",
     "date": "2026-08-19",
     "type": "feature",

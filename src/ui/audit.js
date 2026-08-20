@@ -157,8 +157,13 @@ function renderExportOptions(){
       </details>
     </section>`;
   }).join('');
+  const layout=plan.layout==='level'?'level':'milestone';
   $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>
-    <p class="export-intro">Every equipment row is always exported. Findings follow the choice for their level — or for the individual check. <b>Pre-ticked</b> findings arrive with the Actioned box already ${esc('☑')} (the row is green and counts as done); <b>Leave out</b> findings are not written at all.</p>
+    <div class="export-layout"><b>Report layout</b>
+      <label class="export-layout-choice ${layout==='milestone'?'on':''}"><input type="radio" name="export-layout" value="milestone" ${layout==='milestone'?'checked':''}><span><b>One tab per L2 milestone</b><small>The full equipment tree of each phase, findings beside it — work phase by phase.</small></span></label>
+      <label class="export-layout-choice ${layout==='level'?'on':''}"><input type="radio" name="export-layout" value="level" ${layout==='level'?'checked':''}><span><b>One tab per finding level</b><small>Invalid, Rule broken, Check this, Note — flagged equipment only, ordered by milestone.</small></span></label>
+    </div>
+    <p class="export-intro">${layout==='level'?'Level tabs list only flagged equipment; the milestone layout carries the full tree.':'Every equipment row is always exported.'} Findings follow the choice for their level — or for the individual check. <b>Pre-ticked</b> findings arrive with the Actioned box already ${esc('☑')} (the block is green and counts as done); <b>Leave out</b> findings are not written at all.</p>
     ${levelSections||'<p class="export-intro">This registry has no findings — the report will contain the equipment tree only.</p>'}
     <footer class="export-foot">
       <span id="exportSummary">${summary.included.toLocaleString()} exported &middot; ${summary.preticked.toLocaleString()} pre-ticked &middot; ${summary.skipped.toLocaleString()} left out</span>
@@ -167,7 +172,8 @@ function renderExportOptions(){
   const refreshSummary=()=>{const next=exportPlanSummary(result,exportPlan());$('#exportSummary').textContent=`${next.included.toLocaleString()} exported · ${next.preticked.toLocaleString()} pre-ticked · ${next.skipped.toLocaleString()} left out`;};
   $$('#exportModalBody input[type=radio]').forEach(input=>input.onchange=()=>{
     const name=input.name,mode=input.value,current=exportPlan();
-    if(name.startsWith('level-')){
+    if(name==='export-layout'){current.layout=mode;renderExportOptions();}
+    else if(name.startsWith('level-')){
       const severity=name.slice(6);current.levels[severity]=mode;
       /* A level change clears its checks' overrides — the level now speaks for them. */
       for(const map of [bySeverity.get(severity)||new Map()])for(const id of map.keys())delete current.rules[id];
