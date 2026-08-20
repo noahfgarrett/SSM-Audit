@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.15.2",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Show in hierarchy now lands with a clear temporary highlight: the equipment row pulses orange for about three seconds after the jump, then settles back\n- Menu and page titles read Audit Findings, SSM Hierarchy, and Compare Projects"
+  },
+  {
     "version": "1.15.1",
     "date": "2026-08-19",
     "type": "fix",

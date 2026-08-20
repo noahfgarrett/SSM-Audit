@@ -1,2 +1,2 @@
-export const APP_VERSION='1.15.1';
+export const APP_VERSION='1.15.2';
 export const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';

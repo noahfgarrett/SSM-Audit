@@ -1707,7 +1707,11 @@ body.audit-fullscreen{overflow:hidden}
 .hierarchy-node-copy>.copy-tag{font:650 12px var(--mono)}
 .hierarchy-node-copy small{font-size:11px}
 .hierarchy-row.is-header .hierarchy-node-copy>.copy-tag{color:var(--warn)}
-.hierarchy-row.focused{background:var(--tint);box-shadow:inset 3px 0 0 var(--accent)}
+/* Show-in-hierarchy target: an unmissable pulse that settles into the tint,
+   then the class is removed (~3s). Reduced motion gets the steady tint only. */
+.hierarchy-row.focused{background:var(--tint);box-shadow:inset 3px 0 0 var(--accent);animation:hierarchyFlash 2.4s ease-out}
+.hierarchy-row.focused .hierarchy-node-copy>b,.hierarchy-row.focused .hierarchy-node-copy .copy-tag{color:var(--accent-700)}
+@keyframes hierarchyFlash{0%{background:var(--accent-200);box-shadow:inset 3px 0 0 var(--accent),0 0 0 2px var(--accent-400)}35%{background:var(--accent-100)}100%{background:var(--tint);box-shadow:inset 3px 0 0 var(--accent)}}
 .hierarchy-type{font-size:11px}
 .hierarchy-upn{font:650 11.5px var(--mono)}
 .hierarchy-relationships{font-size:11px}
