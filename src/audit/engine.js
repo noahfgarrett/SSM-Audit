@@ -39,6 +39,7 @@ export const SSM_AUDIT_RULES=Object.freeze({
   sameUpnBottomUp:auditRule('dependency.same-upn-bottom-up','sop','dependencies','Same-system dependency is deliberate','In bottom-up disciplines (mechanical, process, waste, and similar) equipment inside one UPN is sequenced by the hierarchy itself. A same-UPN dependency there is normal for instruments and devices; on other equipment it is worth a second look.',{confidence:'strong'}),
   /* metadata */
   upnNotApproved:auditRule('metadata.upn-not-approved','registry','metadata','UPN is on the approved list','The UPN must be one of the values in the Rev21 upload template. Three-digit numbers are the norm; RR, SEC, and MISC are the approved letter codes.'),
+  miscUpnReview:auditRule('metadata.misc-upn-review','registry','metadata','MISC gets a second look','UPN MISC is a catch-all for equipment that has no proper system. Every row on MISC deserves a double-check — often an approved UPN fits after all.',{confidence:'strong'}),
   systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name belongs to the UPN','System Name must be one of the approved Rev21 System Names for the row’s UPN. Numeric UPNs normally lead the name (602 Medium Voltage); letter codes such as RR map to their own approved names.'),
   icDiscipline:auditRule('metadata.ic-discipline','registry','metadata','I&C uses the approved discipline','Instrumentation and controls rows use the approved controls discipline, and their UPN comes from the tag.'),
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','One UPN, one system','Every row on a UPN should carry the same System Name and Discipline.'),
@@ -250,7 +251,11 @@ export function runSsmAudit(snapshot,options={}){
     /* --- approved lists --- */
     if(upn){checks++;if(!extoRev21IsUpn(upn))add(SSM_AUDIT_RULES.upnNotApproved,'blocker',row,{field:'UPN',why:'This UPN is not on the Rev21 approved list.',actual:row.upn,expected:'A UPN from the Rev21 upload template',recommendation:'Correct the UPN to the approved value for this system.'});}
     if(extoRev21EffectiveDiscipline(row.discipline)==='FACILITIES MONITORING SYSTEM'&&extoRev21Norm(row.discipline)!=='FACILITIES MONITORING SYSTEM'){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'This I&C row is not using the approved controls discipline.',actual:`${row.discipline}; UPN in tag: ${candidates.join(', ')||'none found'}`,expected:'FACILITIES MONITORING SYSTEM with the UPN taken from the tag',recommendation:candidates.length===1?`Set the discipline to the approved value and use UPN ${candidates[0]}.`:'Set the approved discipline and confirm the UPN from the tag before assigning the System Name.'});}
-    if(row.systemName&&upn&&extoRev21IsUpn(upn)){checks++;
+    if(upn&&extoRev21Norm(upn)==='MISC'&&SSM_AUDIT_RULES.miscUpnReview.enabled){checks++;
+      add(SSM_AUDIT_RULES.miscUpnReview,'info',row,{field:'UPN',why:'This row sits on UPN MISC — the catch-all for equipment without a proper system.',
+        actual:`UPN MISC; System ${row.systemName||'blank'}`,expected:'An approved UPN whenever one fits',
+        recommendation:'Double-check the assignment. If an approved UPN covers this equipment, move the row to it; keep MISC only when nothing fits.'});}
+    if(row.systemName&&upn&&extoRev21IsUpn(upn)&&extoRev21Norm(upn)!=='MISC'){checks++;
       const approved=extoRev21SystemsForUpn(upn),normalizedApproved=new Set(approved.map(extoRev21Norm)),sys=extoRev21Norm(row.systemName);
       if(!normalizedApproved.has(sys)){
         const inVocabulary=extoRev21IsSystemName(row.systemName);
