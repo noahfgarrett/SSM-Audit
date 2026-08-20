@@ -31,7 +31,7 @@ The full rulebook is in the app under **Rules**, with live counts once a registr
 
 ## The Excel report
 
-**Export** builds a workbook made for actioning:
+**Export** first opens a chooser — per finding level or per individual check, pick **Include**, **Pre-ticked** (Actioned box arrives ☑, row green, counted as done), or **Leave out** (not written at all) — then builds a workbook made for actioning:
 
 - **Dashboard** — one large overall progress bar, the level totals, and a wide progress bar with a live percentage per discipline and per L2 phase.
 - **Index** — one row per phase, hyperlinked to its tab; every tab links back.

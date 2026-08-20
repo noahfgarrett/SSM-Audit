@@ -419,3 +419,44 @@ test('the compact writer produces a smaller, valid xlsx with the extras and all 
   /* [Content_Types].xml leads the archive, as Excel expects. */
   assert.equal(new TextDecoder().decode(compact.slice(30, 30 + 19)), '[Content_Types].xml')
 })
+
+test('the export plan can pre-tick or leave out whole levels and single checks', async () => {
+  const { auditExportApplyPlan, auditExportPlanMode } = await import('../src/audit/export.js')
+  const result = auditResult()
+  const severities = new Set(result.findings.map(finding => finding.severity))
+  assert.ok(severities.size >= 2, 'fixture spans several levels')
+  /* Leave out every info finding; pre-tick every warning. */
+  const plan = { levels: { info: 'skip', warning: 'pretick' }, rules: {} }
+  const applied = auditExportApplyPlan(result, plan)
+  assert.equal(applied.result.findings.filter(finding => finding.severity === 'info').length, 0)
+  assert.equal(applied.skipped, result.findings.filter(finding => finding.severity === 'info').length)
+  for (const finding of applied.result.findings.filter(entry => entry.severity === 'warning')) assert.ok(applied.preticked.has(finding))
+  assert.equal(applied.result.summary.findings, applied.result.findings.length)
+  assert.equal(applied.result.summary.severity.info, 0)
+  /* A rule override beats its level. */
+  const someInfo = result.findings.find(finding => finding.severity === 'info')
+  const override = auditExportApplyPlan(result, { levels: { info: 'skip' }, rules: { [someInfo.rule.id]: 'include' } })
+  assert.ok(override.result.findings.some(finding => finding.rule.id === someInfo.rule.id))
+  assert.equal(auditExportPlanMode({ levels: {}, rules: {} }, someInfo), 'include', 'default is include')
+})
+
+test('a skipped level vanishes from the workbook and pre-ticked equipment starts checked', async () => {
+  const result = auditResult()
+  const plan = { levels: { info: 'skip', warning: 'pretick', error: 'pretick', blocker: 'pretick' }, rules: {} }
+  const book = buildAuditWorkbook(result, 'synthetic-registry.xlsx', { plan })
+  const findingsRows = grid(book.Sheets['All Findings']).slice(2)
+  assert.ok(findingsRows.every(line => line[0] !== 'NOTE'), 'no NOTE lines exported')
+  const expected = result.findings.filter(finding => finding.severity !== 'info').length
+  assert.equal(findingsRows.length, expected)
+  /* Every remaining finding is pre-ticked, so every equipment line with findings starts ☑. */
+  for (const name of milestoneSheetNames(book)) {
+    const lines = grid(book.Sheets[name]).slice(2)
+    for (const line of lines) {
+      if (line[0] === '') continue
+      const hasFinding = Boolean(line[11])
+      assert.equal(line[0], hasFinding ? '☑' : '☐', `${name}: ${line[2]}`)
+    }
+  }
+  /* Dashboard severity strip reflects the filtered counts. */
+  assert.equal(book.Sheets.Dashboard.F9.v, 0, 'Notes KPI is zero when info is left out')
+})
