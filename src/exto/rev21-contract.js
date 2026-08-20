@@ -10,6 +10,12 @@ const EXTO_REV21_CANONICAL=Object.fromEntries(Object.entries(EXTO_REV21_VOCABULA
 const EXTO_REV21_UPN_SET=new Set((EXTO_REV21_VOCABULARY.UPN||[]).map(extoRev21Norm));
 const EXTO_REV21_SYSTEMS_BY_UPN=new Map();
 for(const name of EXTO_REV21_VOCABULARY['System Name']||[]){const match=extoRev21Norm(name).match(/^([^ ]+)/);if(!match)continue;const list=EXTO_REV21_SYSTEMS_BY_UPN.get(match[1])||[];list.push(name);EXTO_REV21_SYSTEMS_BY_UPN.set(match[1],list);}
+/* Letter-code UPNs have no System Name that begins with the code, so their
+   pairings are linked explicitly. Confirmed so far: UPN RR belongs to the CSA
+   system, written either as the bare code or in full — "Civil Structural
+   Architectural Systems (CSA)". */
+const EXTO_REV21_UPN_SYSTEM_LINKS=[['RR','Civil Structural Architectural Systems (CSA)'],['RR','CSA']];
+for(const [code,name] of EXTO_REV21_UPN_SYSTEM_LINKS){const key=extoRev21Norm(code),list=EXTO_REV21_SYSTEMS_BY_UPN.get(key)||[];if(!list.includes(name))list.push(name);EXTO_REV21_SYSTEMS_BY_UPN.set(key,list);}
 /* Small read-only lookups the audit engine needs: is this a Rev21 UPN, and
    which approved System Names belong to it. Letter-code UPNs (RR / SEC / MISC)
    have no System Name beginning with the code, so callers must use the by-UPN

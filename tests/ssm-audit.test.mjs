@@ -138,6 +138,23 @@ test('letter-code UPNs use their own approved System Names, not a numeric prefix
   assert.ok(!systemFindings.includes('BAD-UPN'), 'an unapproved UPN is reported once, as the UPN problem, not as a system mismatch too')
 })
 
+test('UPN RR belongs to the CSA system, in either spelling', () => {
+  assert.deepEqual(extoRev21SystemsForUpn('RR'), ['Civil Structural Architectural Systems (CSA)', 'CSA'])
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'RR-LONG', closestParent: 'X', closestParentStatus: 'NEW', upn: 'RR', discipline: 'ROOM/AREA/BAY-READY', systemName: 'Civil Structural Architectural Systems (CSA)' }),
+    row({ equipmentId: 'RR-SHORT', closestParent: 'X', closestParentStatus: 'NEW', upn: 'RR', discipline: 'ROOM/AREA/BAY-READY', systemName: 'CSA' }),
+    row({ equipmentId: 'RR-BAD', closestParent: 'X', closestParentStatus: 'NEW', upn: 'RR', discipline: 'ROOM/AREA/BAY-READY', systemName: '602  Medium Voltage' }),
+    /* CSA on a numeric UPN is still that UPN's problem, not a free pass */
+    row({ equipmentId: 'NUM-CSA', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: 'CSA' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const findings = equipmentIdsForRule(runSsmAudit(snapshot), 'systemUpn')
+  assert.ok(!findings.includes('RR-LONG'), 'the full CSA name passes on RR')
+  assert.ok(!findings.includes('RR-SHORT'), 'the bare CSA code passes on RR')
+  assert.ok(findings.includes('RR-BAD'), 'a numeric system on RR still flags')
+  assert.ok(findings.includes('NUM-CSA'), 'CSA on a numeric UPN still flags')
+})
+
 test('SSM Audit recognizes common Instrumentation and Controls discipline wording', () => {
   const snapshot = auditSnapshotFromAoa([
     headers,
