@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.17.2",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Visual pass across every screen at desktop, tablet, and narrow widths:\n- Fixed the finding boxes clipping in the SSM Hierarchy equipment drawer (the level chip was squeezed into a column narrower than the chip)\n- Sidebar counts now show compactly from four digits up (7.1k, 23k — exact number in the tooltip), so the Audit Findings label never gets cut to \"…\"\n- Fixed level chips being trimmed in the Checks overview table on narrow windows\n- The worked-example table in Rules keeps a visible scrollbar so it is obvious there is more to the right"
+  },
+  {
     "version": "1.17.1",
     "date": "2026-08-19",
     "type": "fix",

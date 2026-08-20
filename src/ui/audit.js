@@ -43,14 +43,25 @@ function navActiveId(){
   if(S.screen==='rules')return 'rules';
   return S.homeMode==='compare'?'compare':S.homeMode==='rules'?'rules':'audit';
 }
+/* Badges never crowd the label out of the sidebar: four digits and up show
+   compactly (7.1k, 23k) with the exact number in the tooltip. */
+function navCount(value){
+  const count=Number(value)||0;
+  const text=count>=10000?`${Math.round(count/1000)}k`:count>=1000?`${(count/1000).toFixed(1).replace(/\.0$/,'')}k`:String(count);
+  return {text,title:count.toLocaleString()};
+}
+function navCountHtml(value,extraClass,titleSuffix){
+  const {text,title}=navCount(value);
+  return `<b class="nav-count${extraClass?` ${extraClass}`:''}" title="${esc(title)}${titleSuffix?` ${titleSuffix}`:''}">${esc(text)}</b>`;
+}
 function navBadges(id){
   const result=S.session&&S.session.result,comparison=S.comparison&&S.comparison.result;
   if(id==='audit'&&result){
     const blockers=result.summary.severity.blocker;
-    return `<b class="nav-count">${result.summary.findings.toLocaleString()}</b>${blockers?`<b class="nav-count blocker" title="${blockers.toLocaleString()} ${SEVERITY_LABELS.blocker.toLowerCase()}">${blockers.toLocaleString()}</b>`:''}`;
+    return `${navCountHtml(result.summary.findings,'','findings')}${blockers?navCountHtml(blockers,'blocker',SEVERITY_LABELS.blocker.toLowerCase()):''}`;
   }
-  if(id==='hierarchy'&&S.session&&S.session.snapshot)return `<b class="nav-count">${S.session.snapshot.rows.length.toLocaleString()}</b>`;
-  if(id==='compare'&&comparison)return `<b class="nav-count">${(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems).toLocaleString()}</b>`;
+  if(id==='hierarchy'&&S.session&&S.session.snapshot)return navCountHtml(S.session.snapshot.rows.length,'','rows');
+  if(id==='compare'&&comparison)return navCountHtml(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems,'','systems with differences');
   return '';
 }
 function navDisabled(id){
