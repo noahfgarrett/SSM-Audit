@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.17.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- UPN SEC is now recognised as belonging to Security: rows with System Name \"Security\" or \"Security Systems\" on UPN SEC pass the System-Name check\n- UPN MISC is treated as the catch-all it is: MISC rows no longer get the impossible System-Name error — instead every MISC row carries a Note reminding you to double-check whether an approved UPN fits, and the new check has its own worked example on the Rules screen"
+  },
+  {
     "version": "1.16.0",
     "date": "2026-08-19",
     "type": "feature",

@@ -138,6 +138,28 @@ test('letter-code UPNs use their own approved System Names, not a numeric prefix
   assert.ok(!systemFindings.includes('BAD-UPN'), 'an unapproved UPN is reported once, as the UPN problem, not as a system mismatch too')
 })
 
+test('UPN SEC belongs to Security, in either spelling, and MISC rows always get a second-look note', () => {
+  assert.deepEqual(extoRev21SystemsForUpn('SEC'), ['Security Systems', 'Security'])
+  assert.deepEqual(extoRev21SystemsForUpn('MISC'), [], 'MISC is deliberately unlinked — it is a catch-all')
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'SEC-FULL', closestParent: 'X', closestParentStatus: 'NEW', upn: 'SEC', discipline: 'SECURITY', systemName: 'Security Systems' }),
+    row({ equipmentId: 'SEC-BARE', closestParent: 'X', closestParentStatus: 'NEW', upn: 'SEC', discipline: 'SECURITY', systemName: 'Security' }),
+    row({ equipmentId: 'SEC-BAD', closestParent: 'X', closestParentStatus: 'NEW', upn: 'SEC', discipline: 'SECURITY', systemName: '602  Medium Voltage' }),
+    row({ equipmentId: 'MISC-1', closestParent: 'X', closestParentStatus: 'NEW', upn: 'MISC', discipline: 'MECHANICAL MISC', systemName: 'MISC' }),
+    row({ equipmentId: 'MISC-2', closestParent: 'X', closestParentStatus: 'NEW', upn: 'MISC', discipline: 'MECHANICAL MISC', systemName: 'Anything At All' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  const systemFindings = equipmentIdsForRule(result, 'systemUpn')
+  assert.ok(!systemFindings.includes('SEC-FULL') && !systemFindings.includes('SEC-BARE'), 'both Security spellings pass on SEC')
+  assert.ok(systemFindings.includes('SEC-BAD'), 'a numeric system on SEC still flags')
+  assert.ok(!systemFindings.includes('MISC-1') && !systemFindings.includes('MISC-2'), 'MISC rows never get the unwinnable system-name blocker')
+  assert.deepEqual(equipmentIdsForRule(result, 'miscUpnReview'), ['MISC-1', 'MISC-2'], 'every MISC row gets the second-look note')
+  const note = result.findings.find(f => f.rule.id === 'metadata.misc-upn-review')
+  assert.equal(note.severity, 'info')
+  assert.match(note.why, /catch-all/)
+})
+
 test('UPN RR belongs to the CSA system, in either spelling', () => {
   assert.deepEqual(extoRev21SystemsForUpn('RR'), ['Civil Structural Architectural Systems (CSA)', 'CSA'])
   const snapshot = auditSnapshotFromAoa([

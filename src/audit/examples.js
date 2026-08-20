@@ -93,6 +93,10 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     focus:[{row:0,field:'upn'}],
     marks:[{row:0,field:'upn',parts:[['104',false],['0',true]]}],
     caption:'1040 is not a UPN in the Rev21 upload template — UPNs are three digits (or RR / SEC / MISC).',fix:'Use the approved UPN: 104.'}),
+  ex('metadata.misc-upn-review',{
+    rows:[r({id:'B1-HOIST-0001',desc:'Maintenance hoist',parent:'MISC',sys:'MISC',upn:'MISC',disc:'MECHANICAL MISC',im:'VF_PROC_EQ'})],
+    focus:[{row:0,field:'upn'}],
+    caption:'The hoist sits on UPN MISC — the catch-all for equipment without a proper system. MISC rows are never wrong by definition, which is exactly why each one deserves a second look.',fix:'Double-check the assignment; if an approved UPN covers this equipment, move the row to it. Keep MISC only when nothing fits.'}),
   ex('metadata.system-upn-mismatch',{
     rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('111'),upn:'104',sys:sys('111'),disc:MECH,im:'VF_MD_GAH/GMAH'})],
     focus:[{row:0,field:'systemName'},{row:0,field:'upn'}],
