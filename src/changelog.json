@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.17.4",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- The loading circle spins again — and the arc now keeps up with the number: previously the arc eased so slowly that it could still show around 20% while the label already read 45%. The section you see always matches the percentage"
+  },
+  {
     "version": "1.17.3",
     "date": "2026-08-19",
     "type": "fix",
