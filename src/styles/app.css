@@ -1,5 +1,6 @@
 
 :root{
+  --sidenav-width:248px;
   --motion-fast:.12s; --motion-base:.18s; --motion-exit:.11s; --ease-out:cubic-bezier(.2,.8,.2,1);
   --bg:#eceef0; --bg-grid:#e3e6e9;
   --surface:#ffffff; --surface-2:#f6f7f9; --surface-3:#f0f2f4;
@@ -1362,6 +1363,8 @@ body.audit-fullscreen{overflow:hidden}
 .audit-filter-button.active{border-color:var(--accent-400);color:var(--accent-700)}.audit-filter-button.active b{display:block}
 .audit-filter-option{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:32px;padding:3px 6px;border-radius:5px;cursor:pointer}.audit-filter-option:hover{background:var(--surface-2)}
 .audit-filter-option input{width:15px;height:15px;margin:0;accent-color:var(--accent)}.audit-filter-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2);font-size:11.5px}.audit-filter-option b{color:var(--ink-3);font:10px var(--mono)}
+/* Only the table gives way; head, pills, and toolbar keep their natural height. */
+.audit-shell>*:not(.audit-table-wrap){flex:0 0 auto}
 .audit-table-wrap{position:relative;flex:1 1 auto;min-height:200px;overflow:auto;overscroll-behavior:contain;background:var(--surface)}
 .audit-table{width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed}
 .audit-table th{position:sticky;top:0;z-index:2;height:35px;padding:0 10px;border-bottom:1px solid var(--border);background:var(--surface-2);color:var(--ink-3);font:700 10px var(--mono);text-align:left;text-transform:uppercase}
@@ -1988,3 +1991,13 @@ body.audit-fullscreen{overflow:hidden}
   .dash-head-actions .btn{flex:1}
 }
 @media (pointer:coarse){.dash-rank-row{min-height:52px}.dash-tile{min-height:150px}}
+
+/* ---- title alignment ----
+   The app mark + "SSM Audit" title line up with the workspace content below
+   (sidebar width + the work screens' 12px padding), not with the logo. The logo keeps
+   a slot the width of the sidebar; the mark starts where the cards start. The
+   narrow layout stacks the nav on top, so the brand falls back to natural flow. */
+body.nav-collapsed{--sidenav-width:60px}
+.brand{display:grid;grid-template-columns:calc(var(--sidenav-width) + 12px - 20px - 10px) auto minmax(0,1fr);align-items:center;gap:10px;transition:grid-template-columns var(--motion-base) var(--ease-out)}
+.brand .lotus-logo{justify-self:start}
+@media (max-width:900px){.brand{display:flex}}

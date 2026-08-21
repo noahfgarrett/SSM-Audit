@@ -76,7 +76,7 @@ function navItemHtml(section,active,collapsed){
 export function renderSideNav(navigate){
   const nav=$('#sideNav');if(!nav)return;
   const active=navActiveId(),collapsed=!!S.ui.navCollapsed,canExport=S.screen==='compare'?!!(S.comparison&&S.comparison.result):!!(S.session&&S.session.result);
-  nav.classList.toggle('collapsed',collapsed);
+  nav.classList.toggle('collapsed',collapsed);document.body.classList.toggle('nav-collapsed',collapsed);
   nav.innerHTML=`<div class="sidenav-items">${NAV_SECTIONS.map(section=>navItemHtml(section,active,collapsed)).join('')}</div>
   <div class="sidenav-foot">
     <button class="sidenav-item" type="button" id="navGuide" title="Guide">${ic('book-open')}<span>Guide</span></button>
