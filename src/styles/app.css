@@ -2001,3 +2001,15 @@ body.nav-collapsed{--sidenav-width:60px}
 .brand{display:grid;grid-template-columns:calc(var(--sidenav-width) + 12px - 20px - 10px) auto minmax(0,1fr);align-items:center;gap:10px;transition:grid-template-columns var(--motion-base) var(--ease-out)}
 .brand .lotus-logo{justify-self:start}
 @media (max-width:900px){.brand{display:flex}}
+
+/* ---- Rules screen: controls in fixed columns ----
+   Example | confidence | switch | found always occupy the same four columns so
+   every row lines up; the description column wraps beside them. */
+.rule-reference-row{grid-template-columns:32px minmax(0,1fr) auto;align-items:center}
+.rule-reference-tags{display:grid;grid-template-columns:96px 132px 86px 118px;gap:8px;align-items:center;max-width:none;width:auto}
+.rule-reference-tags>*{justify-self:stretch;justify-content:center;text-align:center;margin:0}
+.rule-reference-tags .rule-finding-count{justify-content:center}
+.rule-reference-tags .rule-switch{justify-content:flex-start}
+.rule-slot-empty{display:block;min-height:23px}
+@media (max-width:1100px){.rule-reference-row{grid-template-columns:32px minmax(0,1fr)}.rule-reference-tags{grid-column:2;width:fit-content;justify-self:start}}
+@media (max-width:640px){.rule-reference-tags{grid-template-columns:repeat(2,minmax(0,1fr))}}

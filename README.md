@@ -1,12 +1,12 @@
 # SSM Audit
 
-SSM Audit is a standalone, offline-first review tool for completed Exto Cx Registry workbooks. Load a registry and it checks every equipment row against the SSM SOP, the approved Rev21 upload lists, and commissioning logic — then explains each finding in plain language, shows the registry as a tree, and exports an Excel report built for working the list down.
+SSM Audit is a standalone, offline-first review tool for completed Exto Cx Registry workbooks. Load a registry and it checks every equipment row against the SSM SOP, the approved VF Exto Upload Template lists, and commissioning logic — then explains each finding in plain language, shows the registry as a tree, and exports an Excel report built for working the list down.
 
 ## What it checks
 
 Every check has a plain-language statement and belongs to one of three sources:
 
-- **Registry Integrity** — the registry agrees with itself and with the approved Rev21 lists: one row per tag, tags that are codes rather than typed descriptions, parents that can be found, UPNs and System Names from the approved values (letter-code UPNs such as RR/SEC/MISC included), I&C rows on the approved controls discipline, Dependency Project only when a dependency really is external, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed.
+- **Registry Integrity** — the registry agrees with itself and with the approved VF Exto Upload Template lists: one row per tag, tags that are codes rather than typed descriptions, parents that can be found, UPNs and System Names from the approved values (letter-code UPNs such as RR/SEC/MISC included), I&C rows on the approved controls discipline, Dependency Project only when a dependency really is external, and a note on classifications not in the VF Exto Upload Template dropdown so site-specific codes can be reviewed.
 - **SSM SOP** — how equipment nests and depends: a child stays in its parent's UPN, discipline, and building; anything crossing them is a dependency, not a parent; instruments nest under equipment in the UPN their tag carries; a VFD sits under what it drives with its panel and PLC as dependencies; FMS hardwired I/O sits under its VFD; LCPs sit with their skid; control valves and room sensors sit under the equipment they serve; organizational headers carry a Blank Item Master, no dependencies, and are never themselves a dependency; every system has a row at its top; a parent duplicated as a dependency is noted (routine in electrical, worth a look elsewhere); L2 milestones name their UPN; Item Masters use the VF standard (site-prefixed names are flagged with the VF equivalent proposed).
 - **Commissioning Logic** — expected relationships: driven and control equipment trace back to power, RIOs name their controller, heat trace follows its transformer, VESDA depends on its fire alarm panel, drives sit under the equipment they run.
 
@@ -14,7 +14,7 @@ Findings carry one of four levels. They describe what *kind* of problem it is �
 
 | Level | Meaning |
 |---|---|
-| **Invalid** | The row contradicts the registry or the approved lists — a duplicate tag, a blank or self-referencing parent, a parent that does not exist, a loop, or a UPN / System Name / discipline that is not in the Rev21 upload template. On a fresh upload these are the rows Exto would reject; on an uploaded registry they are the rows that cannot be right. |
+| **Invalid** | The row contradicts the registry or the approved lists — a duplicate tag, a blank or self-referencing parent, a parent that does not exist, a loop, or a UPN / System Name / discipline that is not in the VF Exto Upload Template. On a fresh upload these are the rows Exto would reject; on an uploaded registry they are the rows that cannot be right. |
 | **Rule broken** | Valid data that breaks an SSM SOP rule — a parent in another UPN, a dependency that cannot be found, an instrument or LCP nested off its UPN, a VESDA without its fire alarm panel. |
 | **Check this** | A strong pattern says something is off; an engineer should look. |
 | **Note** | Worth knowing, not necessarily wrong — a same-system dependency in a mechanical discipline, a milestone not yet assigned, an Item Master still on a site prefix. |

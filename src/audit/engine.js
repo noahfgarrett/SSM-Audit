@@ -14,7 +14,7 @@ export const SSM_AUDIT_STANDARD='Registry Integrity + SSM Rules';
 export const SSM_AUDIT_SEVERITIES=['blocker','error','warning','info'];
 export const SSM_AUDIT_CATEGORIES=['structure','dependencies','metadata','milestones','item-masters','headers'];
 export const SSM_AUDIT_SOURCES=Object.freeze([
-  Object.freeze({id:'registry',label:'Registry Integrity',description:'The registry has to agree with itself and with the approved Rev21 lists — the same lists Exto validates against.'}),
+  Object.freeze({id:'registry',label:'Registry Integrity',description:'The registry has to agree with itself and with the approved VF Exto Upload Template lists — the same lists Exto validates against.'}),
   Object.freeze({id:'sop',label:'SSM SOP',description:'How the SSM SOP says equipment nests, depends, sequences, and rolls up to milestones.'}),
   Object.freeze({id:'logic',label:'Commissioning Logic',description:'Relationships that commissioning practice expects — a drive under the equipment it runs, a VESDA tied to its fire alarm panel.'}),
 ]);
@@ -38,9 +38,9 @@ export const SSM_AUDIT_RULES=Object.freeze({
   precedenceCycle:auditRule('dependency.precedence-cycle','sop','dependencies','Startup order has no loops','Parents and dependencies together define what starts before what. That order cannot go in a circle.'),
   sameUpnBottomUp:auditRule('dependency.same-upn-bottom-up','sop','dependencies','Same-system dependency is deliberate','In bottom-up disciplines (mechanical, process, waste, and similar) equipment inside one UPN is sequenced by the hierarchy itself. A same-UPN dependency there is normal for instruments and devices; on other equipment it is worth a second look.',{confidence:'strong'}),
   /* metadata */
-  upnNotApproved:auditRule('metadata.upn-not-approved','registry','metadata','UPN is on the approved list','The UPN must be one of the values in the Rev21 upload template. Three-digit numbers are the norm; RR, SEC, and MISC are the approved letter codes.'),
+  upnNotApproved:auditRule('metadata.upn-not-approved','registry','metadata','UPN is on the approved list','The UPN must be one of the values in the VF Exto Upload Template. Three-digit numbers are the norm; RR, SEC, and MISC are the approved letter codes.'),
   miscUpnReview:auditRule('metadata.misc-upn-review','registry','metadata','MISC gets a second look','UPN MISC is a catch-all for equipment that has no proper system. Every row on MISC deserves a double-check — often an approved UPN fits after all.',{confidence:'strong'}),
-  systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name belongs to the UPN','System Name must be one of the approved Rev21 System Names for the row’s UPN. Numeric UPNs normally lead the name (602 Medium Voltage); letter codes such as RR map to their own approved names.'),
+  systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name belongs to the UPN','System Name must be one of the approved VF Exto Upload Template System Names for the row’s UPN. Numeric UPNs normally lead the name (602 Medium Voltage); letter codes such as RR map to their own approved names.'),
   icDiscipline:auditRule('metadata.ic-discipline','registry','metadata','I&C uses the approved discipline','Instrumentation and controls rows use the approved controls discipline, and their UPN comes from the tag.'),
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','One UPN, one system','Every row on a UPN should carry the same System Name and Discipline.'),
   /* milestones — enabled as review-grade checks; engineers decide */
@@ -64,7 +64,7 @@ export const SSM_AUDIT_RULES=Object.freeze({
   staleDependencyProject:auditRule('dependency.project-not-needed','registry','dependencies','Dependency Project only for external tags','Dependency Project names another project when a dependency lives there. When every dependency is a tag in this registry, the field is stale.',{confidence:'strong'}),
   systemNoRoot:auditRule('structure.system-without-root','sop','structure','Every system has a top','Each System Name in use should have at least one row that sits at the top of it (its Closest Parent is the System Name). A system whose rows all nest elsewhere is not really a system block.',{confidence:'strong'}),
   tagLooksLikeText:auditRule('identity.tag-looks-like-description','registry','metadata','Equipment ID is a tag, not a description','An Equipment ID with lowercase words reads like a description or header name typed into the tag column. Tags are codes; headers get their own row with a Blank Item Master.'),
-  siteClassification:auditRule('metadata.classification-not-in-list','registry','metadata','Site-specific classification?','The Equipment Classification is not in the Rev21 dropdown. It may be a legitimate site-specific code — the count tells you whether it belongs on the approved list.',{confidence:'strong'}),
+  siteClassification:auditRule('metadata.classification-not-in-list','registry','metadata','Site-specific classification?','The Equipment Classification is not in the VF Exto Upload Template dropdown. It may be a legitimate site-specific code — the count tells you whether it belongs on the approved list.',{confidence:'strong'}),
   /* commissioning logic */
   controlLink:auditRule('logic.control-link-missing','logic','dependencies','Control device names its source','A control device should point to what controls it — an RIO, PLC, VFD, or control panel — as its parent or a dependency.',{confidence:'description-rated'}),
   drivenElectricalPath:auditRule('logic.driven-electrical-path-missing','logic','dependencies','Driven equipment traces to power','Pumps, fans, air handlers, chillers, and similar equipment should trace back to the electrical gear that powers them.',{confidence:'strong'}),
@@ -247,9 +247,9 @@ export function runSsmAudit(snapshot,options={}){
     if(id&&SSM_AUDIT_RULES.tagLooksLikeText.enabled&&/[a-z]/.test(clean(row.equipmentId))&&/[a-z]{3,}/.test(clean(row.equipmentId))){checks++;
       add(SSM_AUDIT_RULES.tagLooksLikeText,'blocker',row,{field:'Equipment ID',why:'This Equipment ID contains lowercase words — it reads like a description or header name, not a tag.',actual:row.equipmentId,expected:'An equipment tag code (or a header row with a Blank Item Master)',recommendation:'Replace with the real tag. If this is a grouping, keep it as a header row with a Blank Item Master and a code-style ID.'});}
     if(clean(row.equipmentClassification)&&SSM_AUDIT_RULES.siteClassification.enabled&&!extoRev21Canonical('equipmentClassification',row.equipmentClassification)){checks++;
-      add(SSM_AUDIT_RULES.siteClassification,'info',row,{field:'Equipment Classification',why:`"${row.equipmentClassification}" is not in the Rev21 classification dropdown. It may be a site-specific code.`,actual:row.equipmentClassification,expected:'A Rev21 classification, or a site code that should be added to the list',recommendation:'Decide whether this code belongs on the approved list; if so, request it be added.'});}
+      add(SSM_AUDIT_RULES.siteClassification,'info',row,{field:'Equipment Classification',why:`"${row.equipmentClassification}" is not in the VF Exto Upload Template classification dropdown. It may be a site-specific code.`,actual:row.equipmentClassification,expected:'A VF Exto Upload Template classification, or a site code that should be added to the list',recommendation:'Decide whether this code belongs on the approved list; if so, request it be added.'});}
     /* --- approved lists --- */
-    if(upn){checks++;if(!extoRev21IsUpn(upn))add(SSM_AUDIT_RULES.upnNotApproved,'blocker',row,{field:'UPN',why:'This UPN is not on the Rev21 approved list.',actual:row.upn,expected:'A UPN from the Rev21 upload template',recommendation:'Correct the UPN to the approved value for this system.'});}
+    if(upn){checks++;if(!extoRev21IsUpn(upn))add(SSM_AUDIT_RULES.upnNotApproved,'blocker',row,{field:'UPN',why:'This UPN is not on the VF Exto Upload Template approved list.',actual:row.upn,expected:'A UPN from the VF Exto Upload Template',recommendation:'Correct the UPN to the approved value for this system.'});}
     if(extoRev21EffectiveDiscipline(row.discipline)==='FACILITIES MONITORING SYSTEM'&&extoRev21Norm(row.discipline)!=='FACILITIES MONITORING SYSTEM'){checks++;const candidates=extoRev21UpnCandidates(row.equipmentId);add(SSM_AUDIT_RULES.icDiscipline,'blocker',row,{field:'Discipline',why:'This I&C row is not using the approved controls discipline.',actual:`${row.discipline}; UPN in tag: ${candidates.join(', ')||'none found'}`,expected:'FACILITIES MONITORING SYSTEM with the UPN taken from the tag',recommendation:candidates.length===1?`Set the discipline to the approved value and use UPN ${candidates[0]}.`:'Set the approved discipline and confirm the UPN from the tag before assigning the System Name.'});}
     if(upn&&extoRev21Norm(upn)==='MISC'&&SSM_AUDIT_RULES.miscUpnReview.enabled){checks++;
       add(SSM_AUDIT_RULES.miscUpnReview,'info',row,{field:'UPN',why:'This row sits on UPN MISC — the catch-all for equipment without a proper system.',
@@ -260,10 +260,10 @@ export function runSsmAudit(snapshot,options={}){
       if(!normalizedApproved.has(sys)){
         const inVocabulary=extoRev21IsSystemName(row.systemName);
         add(SSM_AUDIT_RULES.systemUpn,'blocker',row,{field:'System Name',
-          why:inVocabulary?'This System Name belongs to a different UPN than the row is assigned to.':'This System Name is not an approved Rev21 name for this UPN.',
+          why:inVocabulary?'This System Name belongs to a different UPN than the row is assigned to.':'This System Name is not an approved VF Exto Upload Template name for this UPN.',
           actual:`UPN ${row.upn}; System ${row.systemName}`,
-          expected:approved.length?`One of: ${approved.join(' | ')}`:`An approved Rev21 System Name for UPN ${row.upn}`,
-          recommendation:inVocabulary?'Either the UPN or the System Name is wrong — correct whichever does not match this equipment.':'Pick the approved System Name for this UPN from the Rev21 list.'});
+          expected:approved.length?`One of: ${approved.join(' | ')}`:`An approved VF Exto Upload Template System Name for UPN ${row.upn}`,
+          recommendation:inVocabulary?'Either the UPN or the System Name is wrong — correct whichever does not match this equipment.':'Pick the approved System Name for this UPN from the VF Exto Upload Template list.'});
       }
     }
     /* --- milestones --- */
