@@ -1109,6 +1109,23 @@ body.visual-trainer-fullscreen{overflow:hidden}
 .export-foot>div{display:flex;gap:8px}
 @media (max-width:640px){.export-level>header{flex-wrap:wrap}.export-foot{flex-direction:column;align-items:stretch}.export-foot>div{justify-content:stretch}.export-foot .btn{flex:1;justify-content:center}}
 
+
+/* ---- rule switch (Rules screen) ---- */
+.rule-switch{display:inline-flex;align-items:center;gap:7px;min-height:23px;padding:2px 8px 2px 3px;border:1px solid var(--border-strong);border-radius:99px;background:var(--surface);color:var(--ink-3);font:700 9.5px var(--mono);text-transform:uppercase;cursor:pointer;transition:background-color var(--motion-fast),border-color var(--motion-fast),color var(--motion-fast)}
+.rule-switch i{display:block;width:26px;height:15px;border-radius:99px;background:var(--border-strong);position:relative;transition:background-color var(--motion-fast)}
+.rule-switch i::after{content:"";position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform var(--motion-fast) var(--ease-out)}
+.rule-switch.on{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}
+.rule-switch.on i{background:var(--ok)}
+.rule-switch.on i::after{transform:translateX(11px)}
+.rule-switch:hover{border-color:var(--ink-3)}
+.rule-switch:focus-visible{outline:none;box-shadow:var(--ring)}
+.rule-reference-row.is-off h4,.rule-reference-row.is-off p{color:var(--ink-3)}
+.rule-reference-row.is-off .rule-reference-icon{opacity:.55}
+.rule-finding-count.muted{border-color:var(--border);background:var(--surface-2);color:var(--ink-3)}
+.rule-off-banner{display:flex;align-items:center;gap:10px;margin-top:12px}
+.rule-off-banner span{flex:1}
+.rule-off-banner .btn-link{white-space:nowrap}
+
 /* ---- worked example modal (Rules screen) ---- */
 .example-card{position:relative;width:min(960px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);overflow:auto;padding:24px 26px 22px}
 .example-card .example-x{position:absolute;top:12px;right:12px;z-index:2}
@@ -2070,7 +2087,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now respect that nesting carries the link: a control device under equipment whose dependency is the RIO, PLC, or VFD, an RIO inside a panel under the PLC, or a VESDA nested under its fire alarm panel no longer needs to repeat that equipment as a dependency. Only rows with nothing above them or beside them pointing at the controlling equipment are flagged\n- The fire alarm panel check also recognises \"fire alarm control panel\" and FACP"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- The fiber distribution unit check now follows how FDUs are really placed: an FDU nested under the PLC, RIO, or patch panel it belongs to (same UPN) needs no dependency, and one that names that equipment as a dependency is fine too. Only an FDU hanging off a header alone, with nothing listed, is flagged\n- The rule text and its worked example no longer suggest an FDU should list the equipment it serves — a dependency is what a row relies on, and the equipment an FDU serves is either above it in the tree or lists the FDU itself"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- The loading circle spins again — and the arc now keeps up with the number: previously the arc eased so slowly that it could still show around 20% while the label already read 45%. The section you see always matches the percentage"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- The loading circle is now a true gauge: the arc starts at the top, stays put, and its length always matches the number — 45% shows 45% of the circle\n- Progress is reported step by step: importing shows opening, scanning, parsing, and checking as separate stages, and exporting names each part of the workbook as it is compressed, so the percentage moves smoothly instead of jumping\n- On a large registry the one unavoidable pause (writing the workbook itself) is labelled before it starts, and the loader keeps breathing through it"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual pass across every screen at desktop, tablet, and narrow widths:\n- Fixed the finding boxes clipping in the SSM Hierarchy equipment drawer (the level chip was squeezed into a column narrower than the chip)\n- Sidebar counts now show compactly from four digits up (7.1k, 23k — exact number in the tooltip), so the Audit Findings label never gets cut to \"…\"\n- Fixed level chips being trimmed in the Checks overview table on narrow windows\n- The worked-example table in Rules keeps a visible scrollbar so it is obvious there is more to the right"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Fixed Show in hierarchy not visibly highlighting the target: the jump scrolled the tree before its rows existed, so the scroll was clamped to the top and the highlight happened off screen unless the equipment sat in the first viewport. The tree now renders, then scrolls, then draws the window around the target — the row lands centred and pulses\n- Jumping again within a few seconds no longer cuts the new highlight short"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC is now recognised as belonging to Security: rows with System Name \"Security\" or \"Security Systems\" on UPN SEC pass the System-Name check\n- UPN MISC is treated as the catch-all it is: MISC rows no longer get the impossible System-Name error — instead every MISC row carries a Note reminding you to double-check whether an approved UPN fits, and the new check has its own worked example on the Rules screen"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR is now recognised as belonging to the CSA system: rows with System Name \"CSA\" or \"Civil Structural Architectural Systems (CSA)\" on UPN RR pass the System-Name check instead of being flagged Invalid\n- CSA on a numeric UPN, or a numeric system on RR, still flags as before"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands with a clear temporary highlight: the equipment row pulses orange for about three seconds after the jump, then settles back\n- Menu and page titles read Audit Findings, SSM Hierarchy, and Compare Projects"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed the findings list sometimes going blank below halfway: grouped section headers were shorter than the list's fixed row height, so the rendered slice fell short of the screen\n- Fixed level counts clipping on the Dashboard's milestone readiness table when numbers pass three digits: the By level column is wider and wraps instead of cutting off\n- The Dashboard's deep-dive sections (Milestone readiness, Hierarchy health, Dependencies, Checks overview, Structure) now share one tab strip, so the page is one screen tall instead of a long scroll"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Equipment with several findings is now one merged block in the report: the equipment appears once, its findings stack beside it, and a single Actioned box covers the whole block (ticking it turns the entire block green)\n- New report layout option in the export chooser: one tab per finding level (Invalid / Rule broken / Check this / Note) instead of one per milestone — flagged equipment only, ordered by milestone, with an L2 Milestone column; the Dashboard and Index follow whichever layout is chosen"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export now opens a chooser first: for each finding level — or any individual check — pick Include, Pre-ticked, or Leave out\n- Pre-ticked findings arrive with the Actioned box already ☑ (green row, counted as done); Leave out findings are not written into the report at all, and every count and progress bar reflects it\n- An equipment row only starts ticked when every one of its findings is pre-ticked; the equipment tree itself is always complete\n- Your choices are remembered for the next export of the same session"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- The Excel report is now about a quarter of the size (a 20,000-row registry drops from roughly 24 MB to 6 MB): the workbook is zipped with a proper compressor and repeated finding text is stored once\n- Fixed Excel asking to repair large reports: per-discipline progress is now calculated on a hidden Calc sheet instead of one very long formula that exceeded Excel's limit on registries with many milestones\n- The export shows a progress overlay while it builds"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download: GitHub changed where release files are served from, which blocked the in-app fetch. The Download button now hands the file straight to the browser, so it lands in Downloads as SSM-Audit-v<version>.html"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen now has an Example button: a small made-up registry that shows exactly what gets flagged, with the cell shaded and the offending characters marked, alongside why it is flagged, what the audit says about it, and what right looks like\n- Each example is run through the real audit engine when opened, so the verdict shown is live, not a copy"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Excel report Dashboard redesigned: a large overall progress bar at the top, the level totals, and wide progress bars with live percentages per discipline and per L2 phase (the Index keeps its compact form)\n- Actioned is now a tick box: click the cell and choose ☑; the row turns green and every progress figure updates\n- Milestone tabs: each nest level has its own colour (not shades of one), equipment IDs are always black, Dependencies sits right after Closest Parent, Building and Item Master are included, and the cell a finding is about (UPN, Closest Parent, Dependencies, System Name, …) is shaded light red"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- The update check is no longer silent: the Changelog window now says whether you are on the latest version, whether a newer one is available, or why the check could not run, with a Check again button\n- When GitHub limits checks from a busy network (60 an hour per site address), SSM Audit falls back to a second source so the update still shows\n- The automatic check quietly retries once if the first attempt runs before the network is ready"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Tightened every transition so the app feels snappy as well as smooth: panels open in 180ms and close in 110ms, control feedback is 120ms, and screen changes settle in 160ms"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Full UI motion pass: the Guide, update window, finding drawer, Filters panel, and progress overlay now ease in and ease out (backdrop fade, panel slide or scale) instead of snapping\n- Switching screens slides the new content in; buttons, chips, tiles, tabs, tree toggles, and table rows share one consistent hover and press feel\n- Everything respects the operating system's reduced-motion setting"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu overlapping itself on narrow windows: the top bar now scrolls when its items do not fit, drops to icons under 640px, and the version badge moves into the top bar instead of floating over content"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- Replaced the row of filter dropdowns with one Filters panel covering level, discipline, L2 milestone, UPN, building, source, topic, and individual checks; only the active filters show on the page, as removable chips\n- The Dashboard now scopes to the same filters, so it can be narrowed to one building, discipline, or phase, and it gained milestone readiness per L2 phase, hierarchy health, a dependencies view, a checks overview that also shows which checks passed, and an Item Master migration gauge"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- Added filters by discipline, L2 milestone, UPN, and building on Audit findings, with a chip per active selection — deselect a discipline to set it aside, for example hide Electrical to see which other disciplines list a parent as a dependency\n- Added checks found by auditing real registries: a parent in another building, a dependency pointing at an organizational header, a parent duplicated as a dependency (noted, since electrical does this routinely), a system with no row at its top, an Equipment ID that reads like a typed description, Dependency Project filled although every dependency is local, and a note on classifications not in the Rev21 dropdown so site-specific codes can be reviewed\n- Driven and control equipment now count as powered when their parent carries the electrical feed, removing false alarms on fan filter units and similar equipment\n- An instrument whose tag names a different UPN than its row is now a note when the row and its parent agree — a tag question rather than a nesting error\n- Dashboard gained tiles for site-specific classifications and parent-as-dependency counts"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- Added a Dashboard, the first item in the menu and the screen an audit opens on: totals by level, where the problems are by discipline, system, and L2 phase, the checks firing most, and the shape of the registry — every number opens the findings narrowed to it, with a clearable filter chip\n- Renamed the four finding levels again to fit already-uploaded registries: Invalid, Rule broken, Check this, and Note\n- Updated the guide, report headings, and README to match"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Added a relationship diagram to each parent, dependency, and loop finding that labels which tag is this equipment, which is its parent or dependency, and the order of a loop\n- Renamed the four finding levels to say what they mean: Won't upload, Breaks a rule, Check this, and Note\n- Rewrote the in-app guide and README to match the current workspace, checks, and report"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks now recognize any site-prefixed name (not only CA_) and propose the VF equivalent; a registry that is wholesale on a site scheme is reported as a migration note per row rather than thousands of warnings\n- Fixed wording in header findings"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- Added a professional Excel report: a dashboard with progress bars, a hyperlinked index, one tab per L2 phase with nesting levels and an Actioned column that updates the totals as you work, plus every finding and every check\n- Rewrote every check and every finding in plain language so anyone can read why a row was flagged and what to do\n- Aligned checks with the approved Rev21 upload lists and the SSM SOP: UPNs and System Names are checked against the approved values, headers are recognized by their Blank Item Master, and new SOP checks cover instruments, VFDs, local control panels, control valves, and room sensors\n- Redesigned the workspace: a left sidebar to move between findings, hierarchy, comparison, and rules; a wider table with the reason as the headline; a richer detail panel with Show in hierarchy; grouping by check or phase; and a Findings-only view in the hierarchy\n- Improved the hierarchy explorer with finding counts on every branch and header rows shown distinctly"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Fixed registry imports with the updated spreadsheet reader\n- Fixed project comparisons so changed parent placement and hierarchy cycles cannot appear aligned\n- Fixed hierarchy grouping, external relationship handling, and duplicate-sheet imports\n- Improved large-registry performance, iPad comparison layouts, accessibility, and audit exports"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Added full-height Hierarchy, System Differences, and Equipment Mapping tabs inside Project Comparison\n- Improved electrical and FMS alignment across site naming differences using equipment meaning, neutral tag identity, and hierarchy context\n- Improved comparison navigation so searches, branch expansion, and scroll state remain available while switching views\n- Added every system observation to the in-app differences view and refined responsive layouts for desktop and iPad"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- Added an interactive SSM Hierarchy tab for exploring one registry from Building through Discipline, System Name, and Equipment\n- Added fast hierarchy search, cascading filters, expand and collapse controls, fullscreen review, and persistent tree state\n- Added equipment details showing metadata, closest parent, dependencies, source row, and related audit findings\n- Optimized large hierarchy rendering and responsive layouts for desktop, iPad, and narrow screens"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Added a synchronized side-by-side project comparison for reviewing system hierarchy, headers, dependencies, and I&C placement by UPN\n- Added a searchable, plain-language Rules workspace showing every check currently used by the audit\n- Improved registry and commissioning findings with clearer evidence, filtering, sorting, and report exports\n- Improved large-registry performance and responsive layouts for desktop and iPad"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Refocused completed-registry audits on internal integrity, SSM SOP conformance, and commissioning logic instead of pre-upload completeness or broad dropdown vocabulary\n- Added confidence-rated checks for RIO controller paths, VFD and starter placement, heat-trace chains, fiber distribution dependencies, and VESDA fire-alarm dependencies\n- Improved header detection, three- and four-digit UPN validation, rule confidence visibility, and audit report coverage"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Fixed commissioning-path checks so organizational VF_Blank headers are not audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Added multi-select filters for rule source, severity, category, and individual rules, plus Excel-style sorting\n- Added commissioning checks for missing electrical enabling paths, control power paths, and control-system links\n- Improved audit language so findings cite concise Cx Upload Validation, SSM SOP, or Commissioning Logic rules without naming source workbooks\n- Added the complete rule catalog to the Guide and exported audit reports"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- Added a standalone SSM Audit for checking completed Cx Registries against the SSM SOP and approved Exto Rev21 values\n- Added evidence, expected results, recommended corrections, and accurate physical Excel row references for every finding\n- Added cached filtering, fullscreen review, deep-hierarchy protection, and downloadable Excel audit reports\n- Kept audit workbooks local, temporary, and completely separate from hierarchy learning"}]);
+const CHANGELOG=Object.freeze([{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with Rev21"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -2081,7 +2098,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.19.0';
+const APP_VERSION='1.20.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -2089,7 +2106,7 @@ const S={
   screen:'upload',
   homeMode:'audit',
   ui:{navCollapsed:false},
-  rules:{search:'',source:'all',category:'all'},
+  rules:{search:'',source:'all',category:'all',disabled:[]},
   session:null,
   comparison:null,
   updateInfo:null,
@@ -3730,7 +3747,7 @@ const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'C
    `Actioned` column with a tick-box dropdown (☐ / ☑). Index and Dashboard read
    those ticks back with live COUNTIF formulas, so progress updates itself. */
 const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules',AUDIT_EXPORT_CALC_SHEET='Calc';
-const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BAR_SEGMENTS=10,AUDIT_EXPORT_WIDE_BAR_SEGMENTS=25,AUDIT_EXPORT_BACK_LINK='← Index';
+const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BACK_LINK='← Index';
 const AUDIT_EXPORT_TICK='☑',AUDIT_EXPORT_UNTICKED='☐';
 const AUDIT_EXPORT_ACTIONED_NOTE=`Click the Actioned cell on an equipment’s first line and choose ${AUDIT_EXPORT_TICK} when it is closed out. The row turns green, and Index and Dashboard progress update from those ticks. Cells shaded red are the ones the finding is about.`;
 const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',black:'000000',muted:'8A96A3',repeat:'5B6773',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA',flag:'FBE3E1',done:'E3F5E8',barTrack:'FDEFE6'});
@@ -3774,7 +3791,7 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   kpiValue:sheetCellStyle({bold:true,size:16,color:AUDIT_EXPORT_PALETTE.ink,align:'center'}),
   kpiPercent:sheetCellStyle({bold:true,size:16,color:AUDIT_EXPORT_PALETTE.accent,align:'center',numFmt:'0%'}),
   overallLabel:sheetCellStyle({bold:true,size:10,color:AUDIT_EXPORT_PALETTE.muted}),
-  overallBar:sheetCellStyle({size:20,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center'}),
+  overallBar:sheetCellStyle({bold:true,size:20,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center',numFmt:'0%'}),
   overallPercent:sheetCellStyle({bold:true,size:26,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'center',vertical:'center',numFmt:'0%'}),
   overallCaption:sheetCellStyle({bold:true,size:11,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center'}),
   header:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.headerText,fill:AUDIT_EXPORT_PALETTE.ink,align:'left',vertical:'center',wrap:true}),
@@ -3798,10 +3815,10 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   percentBand:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'right',numFmt:'0%'}),
   percentBig:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,align:'right',vertical:'center',numFmt:'0%'}),
   percentBigBand:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'right',vertical:'center',numFmt:'0%'}),
-  bar:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.accent,align:'left'}),
-  barBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.band,align:'left'}),
-  barWide:sheetCellStyle({size:14,color:AUDIT_EXPORT_PALETTE.accent,align:'left',vertical:'center'}),
-  barWideBand:sheetCellStyle({size:14,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.band,align:'left',vertical:'center'}),
+  bar:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,align:'left',numFmt:'0%'}),
+  barBand:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'left',numFmt:'0%'}),
+  barWide:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,align:'left',vertical:'center',numFmt:'0%'}),
+  barWideBand:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'left',vertical:'center',numFmt:'0%'}),
   nest:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,align:'center'}),
   actioned:sheetCellStyle({align:'center',size:14,color:AUDIT_EXPORT_PALETTE.ink,border:AUDIT_EXPORT_PALETTE.line}),
   actionedRepeat:sheetCellStyle({align:'center',fill:AUDIT_EXPORT_PALETTE.band,border:AUDIT_EXPORT_PALETTE.line}),
@@ -3819,7 +3836,7 @@ const AUDIT_EXPORT_SEVERITY_STYLES=Object.freeze(Object.fromEntries(Object.entri
    conditional format each milestone tab carries. */
 const AUDIT_EXPORT_DXFS=Object.freeze([`<dxf><fill><patternFill><bgColor rgb="FF${AUDIT_EXPORT_PALETTE.done}"/></patternFill></fill></dxf>`]);
 
-function auditExportEmptyBar(segments=AUDIT_EXPORT_BAR_SEGMENTS){return '░'.repeat(segments);}
+function auditExportEmptyBar(){return 0;}
 function auditExportDate(value){
   try{return value.toLocaleString(undefined,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
   catch(_){return value.toISOString();}
@@ -3961,10 +3978,10 @@ function auditExportCalcSheet(groups,disciplines){
   return sheet;
 }
 function auditExportPercentCell(equipmentCell,actionedCell,style){return sheetFormulaCell(`IF(${equipmentCell}=0,0,${actionedCell}/${equipmentCell})`,0,style);}
-function auditExportBarCell(percentCell,style,segments=AUDIT_EXPORT_BAR_SEGMENTS){
-  const filled=`MIN(${segments},ROUND(${percentCell}*${segments},0))`;
-  return sheetFormulaCell(`REPT("█",${filled})&REPT("░",${segments}-${filled})`,auditExportEmptyBar(segments),style);
-}
+/* Progress bars are native Excel data bars on a percent cell: the bar fills the
+   whole cell in proportion to the value and the percentage prints over it. */
+function auditExportBarCell(percentCell,style){return sheetFormulaCell(percentCell,0,style);}
+function auditExportDataBar(range,priority){return `<conditionalFormatting sqref="${range}"><cfRule type="dataBar" priority="${priority}"><dataBar minLength="0" maxLength="100"><cfvo type="num" val="0"/><cfvo type="num" val="1"/><color rgb="FF${AUDIT_EXPORT_PALETTE.accent}"/></dataBar></cfRule></conditionalFormatting>`;}
 function auditExportTickValidation(range){return `<dataValidation type="list" allowBlank="1" showDropDown="0" showErrorMessage="1" errorTitle="Actioned" error="Pick ${AUDIT_EXPORT_TICK} or ${AUDIT_EXPORT_UNTICKED} from the list." sqref="${range}"><formula1>"${AUDIT_EXPORT_TICK},${AUDIT_EXPORT_UNTICKED}"</formula1></dataValidation>`;}
 /* ---- export plan ----
    plan.levels[severity] and plan.rules[ruleId] each hold 'include' | 'pretick'
@@ -4029,7 +4046,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     [`Standard: ${clean(result&&result.standard)}`,'','','','',''],
     ['','','','','',''],
     [`OVERALL PROGRESS — equipment actioned across every ${groupLabel==='Finding level'?'finding level':'milestone'}`,'','','','',''],
-    [auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS),'','','','',0],
+    [auditExportEmptyBar(),'','','','',0],
     ['','','','','',''],
     ['Rows audited','Findings','Invalid','Rule broken','Check this','Notes'],
     [summary.rows||0,summary.findings||0,severity.blocker||0,severity.error||0,severity.warning||0,severity.info||0],
@@ -4037,13 +4054,13 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     columns,
   ];
   const disciplineFirst=aoa.length+1;
-  for(const discipline of disciplines)aoa.push([discipline.label,discipline.equipmentCount,discipline.findingCount,0,0,auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS)]);
+  for(const discipline of disciplines)aoa.push([discipline.label,discipline.equipmentCount,discipline.findingCount,0,0,auditExportEmptyBar()]);
   if(!disciplines.length)aoa.push(['No equipment rows in this registry','','','','','']);
   const disciplineLast=disciplineFirst+Math.max(0,disciplines.length-1);
   aoa.push(['','','','','','']);
   aoa.push([groupLabel,'Equipment','Findings','Actioned','%','Progress']);
   const milestoneHeader=aoa.length,milestoneFirst=aoa.length+1;
-  for(const group of groups)aoa.push([group.label,group.equipmentCount,group.findingCount,0,0,auditExportEmptyBar(AUDIT_EXPORT_WIDE_BAR_SEGMENTS)]);
+  for(const group of groups)aoa.push([group.label,group.equipmentCount,group.findingCount,0,0,auditExportEmptyBar()]);
   if(!groups.length)aoa.push(['No equipment rows in this registry','','','','','']);
   const milestoneLast=milestoneFirst+Math.max(0,groups.length-1);
   const sheet=XLSX.utils.aoa_to_sheet(aoa);
@@ -4057,7 +4074,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   /* Overall: ticks over equipment, summed from the milestone rows below. */
   const overallPercent=groups.length?`IF(SUM(B${milestoneFirst}:B${milestoneLast})=0,0,SUM(D${milestoneFirst}:D${milestoneLast})/SUM(B${milestoneFirst}:B${milestoneLast}))`:'';
   if(overallPercent)sheetSetCell(sheet,'F6',sheetFormulaCell(overallPercent,0,AUDIT_EXPORT_STYLES.overallPercent));else sheetStyleCell(sheet,'F6',AUDIT_EXPORT_STYLES.overallPercent);
-  if(overallPercent)sheetSetCell(sheet,'A6',auditExportBarCell('F6',AUDIT_EXPORT_STYLES.overallBar,AUDIT_EXPORT_WIDE_BAR_SEGMENTS));else sheetStyleCell(sheet,'A6',AUDIT_EXPORT_STYLES.overallBar);
+  if(overallPercent)sheetSetCell(sheet,'A6',auditExportBarCell('F6',AUDIT_EXPORT_STYLES.overallBar));else sheetStyleCell(sheet,'A6',AUDIT_EXPORT_STYLES.overallBar);
   for(const column of ['B','C','D','E'])sheetStyleCell(sheet,`${column}6`,AUDIT_EXPORT_STYLES.overallBar);
   for(let column=0;column<6;column++){
     sheetStyleCell(sheet,`${auditColumnName(column)}8`,AUDIT_EXPORT_STYLES.kpiLabel);
@@ -4071,7 +4088,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     sheetStyleCell(sheet,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
     sheetSetCell(sheet,`D${rowIndex}`,actionedCell);
     sheetSetCell(sheet,`E${rowIndex}`,auditExportPercentCell(`B${rowIndex}`,`D${rowIndex}`,band?AUDIT_EXPORT_STYLES.percentBigBand:AUDIT_EXPORT_STYLES.percentBig));
-    sheetSetCell(sheet,`F${rowIndex}`,auditExportBarCell(`E${rowIndex}`,band?AUDIT_EXPORT_STYLES.barWideBand:AUDIT_EXPORT_STYLES.barWide,AUDIT_EXPORT_WIDE_BAR_SEGMENTS));
+    sheetSetCell(sheet,`F${rowIndex}`,auditExportBarCell(`E${rowIndex}`,band?AUDIT_EXPORT_STYLES.barWideBand:AUDIT_EXPORT_STYLES.barWide));
   };
   auditExportHeaderRow(sheet,disciplineFirst-1,columns,['left','right','right','right','right','left']);
   disciplines.forEach((discipline,offset)=>{
@@ -4083,6 +4100,10 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     const rowIndex=milestoneFirst+offset,band=offset%2===1;
     progressRow(rowIndex,band,auditExportActionedCell(group,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid),{target:`#${auditExportSheetRef(group.sheetName)}!A1`,tooltip:`Open ${group.label}`});
   });
+  const bars=[auditExportDataBar('A6:A6',1)];
+  if(disciplines.length)bars.push(auditExportDataBar(`F${disciplineFirst}:F${disciplineLast}`,2));
+  if(groups.length)bars.push(auditExportDataBar(`F${milestoneFirst}:F${milestoneLast}`,3));
+  sheetXmlExtras(sheet,{conditionalFormatting:bars});
   return sheet;
 }
 
@@ -4117,6 +4138,7 @@ function auditExportIndexSheet(groups,groupLabel){
     sheetSetCell(sheet,`E${rowIndex}`,auditExportPercentCell(`B${rowIndex}`,`D${rowIndex}`,band?AUDIT_EXPORT_STYLES.percentBand:AUDIT_EXPORT_STYLES.percent));
     sheetSetCell(sheet,`F${rowIndex}`,auditExportBarCell(`E${rowIndex}`,band?AUDIT_EXPORT_STYLES.barBand:AUDIT_EXPORT_STYLES.bar));
   });
+  if(groups.length)sheetXmlExtras(sheet,{conditionalFormatting:[auditExportDataBar(`F${firstRow}:F${firstRow+groups.length-1}`,1)]});
   sheetFreezeRows(sheet,4);
   return sheet;
 }
@@ -4226,10 +4248,11 @@ function auditExportFindingsSheet(result,groups){
   return sheet;
 }
 
-function auditExportRulesSheet(result){
-  const counts=new Map(),catalog=new Map();
-  for(const rule of Object.values(SSM_AUDIT_RULES))if(rule.enabled)catalog.set(rule.id,rule);
+function auditExportRulesSheet(result,disabledRules){
+  const counts=new Map(),catalog=new Map(),off=new Set(disabledRules||[]);
+  for(const rule of Object.values(SSM_AUDIT_RULES))if(rule.enabled&&!off.has(rule.id))catalog.set(rule.id,rule);
   for(const finding of result&&result.findings||[]){
+    if(off.has(finding.rule.id))continue;
     counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);
     if(!catalog.has(finding.rule.id))catalog.set(finding.rule.id,finding.rule);
   }
@@ -4266,7 +4289,7 @@ function buildAuditWorkbook(sourceResult,sessionName,options={}){
   addSheet(workbook,auditExportIndexSheet(groups,groupLabel),AUDIT_EXPORT_INDEX_SHEET);
   for(const group of groups)addSheet(workbook,auditExportFindingTab(group,preticked,layout),group.sheetName);
   addSheet(workbook,auditExportFindingsSheet(result,groups),AUDIT_EXPORT_FINDINGS_SHEET);
-  addSheet(workbook,auditExportRulesSheet(result),AUDIT_EXPORT_RULES_SHEET);
+  addSheet(workbook,auditExportRulesSheet(result,options.disabledRules),AUDIT_EXPORT_RULES_SHEET);
   addSheet(workbook,auditExportCalcSheet(groups,disciplines),AUDIT_EXPORT_CALC_SHEET);
   workbook.Workbook=workbook.Workbook||{};workbook.Workbook.Sheets=workbook.SheetNames.map(name=>({name,Hidden:name===AUDIT_EXPORT_CALC_SHEET?1:0}));
   return workbook;
@@ -4281,7 +4304,7 @@ async function exportSsmAuditXlsx(plan){
   try{
     await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
       report(.04,'Collecting rows and findings');await checkpoint();
-      const workbook=buildAuditWorkbook(result,S.session.name,{plan,layout:plan&&plan.layout});
+      const workbook=buildAuditWorkbook(result,S.session.name,{plan,layout:plan&&plan.layout,disabledRules:S.rules.disabled});
       /* The next stretch is SheetJS serializing the workbook XML in one
          synchronous run -- the label paints first so the loader is honest
          about the wait on a large registry. */
@@ -4565,6 +4588,39 @@ function severityRank(severity){return {blocker:4,error:3,warning:2,info:1}[seve
 /* ------------------------------------------------------------- rules screen */
 
 function ruleCatalog(){return Object.values(SSM_AUDIT_RULES);}
+/* ---- rule preferences ----
+   The engine runs every check; the user decides which ones count. Switched-off
+   checks are dropped from the result the rest of the app sees (findings,
+   dashboard, hierarchy badges, export), and the choice is remembered on this
+   device. Nothing about the registry is stored -- only rule ids. */
+const RULE_PREFERENCES_KEY='ssm-audit.disabled-rules';
+function loadRulePreferences(){
+  try{const raw=localStorage.getItem(RULE_PREFERENCES_KEY);const list=raw?JSON.parse(raw):[];S.rules.disabled=Array.isArray(list)?list.filter(id=>typeof id==='string'):[];}catch(_){S.rules.disabled=[];}
+}
+function saveRulePreferences(){try{localStorage.setItem(RULE_PREFERENCES_KEY,JSON.stringify(S.rules.disabled));}catch(_){/* private mode: the choice lasts for this session */}}
+function isRuleActive(rule){return !!rule&&rule.enabled&&!(S.rules.disabled||[]).includes(rule.id);}
+function activeRules(){return ruleCatalog().filter(isRuleActive);}
+/* The result the app works from: the engine's output minus switched-off checks,
+   with the summary recounted. `rawResult` keeps the engine output so toggling
+   never needs the workbook again. */
+function applyRulePreferences(raw,disabled){
+  if(!raw)return raw;const off=new Set(disabled||[]);
+  if(!off.size)return raw;
+  const findings=raw.findings.filter(finding=>!off.has(finding.rule.id));
+  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
+  const status=severity.blocker?'blocked':raw.summary.status==='blocked'?'ready':raw.summary.status;
+  return Object.assign({},raw,{findings,summary:Object.assign({},raw.summary,{findings:findings.length,severity,status})});
+}
+function refreshSessionResult(){
+  if(!S.session||!S.session.rawResult)return;
+  S.session.result=applyRulePreferences(S.session.rawResult,S.rules.disabled);
+  S.session.hierarchy=null;S.session.hierarchyCacheKey='';S.session.hierarchyCacheRows=null;S.session.headerIdSet=null;S.session.rowIndex=null;S.session.exportPlan=null;
+  invalidateFindingCaches();
+}
+function setRuleDisabled(ruleId,off){
+  const set=new Set(S.rules.disabled||[]);if(off)set.add(ruleId);else set.delete(ruleId);
+  S.rules.disabled=[...set];saveRulePreferences();refreshSessionResult();
+}
 function ruleFindingCounts(){
   const result=S.session&&S.session.result;if(!result)return null;
   const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);return counts;
@@ -4574,12 +4630,12 @@ function ruleCatalogRows(){
   return ruleCatalog().filter(rule=>(source==='all'||rule.source===source)&&(category==='all'||rule.category===category)&&(!query||[rule.title,rule.statement,SOURCE_LABELS[rule.source],RULE_CATEGORY_LABELS[rule.category]].join(' ').toUpperCase().includes(query)));
 }
 function ruleRowHtml(rule,counts,query){
-  const confidence=RULE_CONFIDENCE_LABELS[rule.confidence]||'Guidance',found=counts?counts.get(rule.id)||0:null;
+  const confidence=RULE_CONFIDENCE_LABELS[rule.confidence]||'Guidance',found=counts?counts.get(rule.id)||0:null,active=isRuleActive(rule);
   const findings=found===null?'':found?`<button class="rule-finding-count" type="button" data-rule-findings="${esc(rule.id)}" title="Show only these findings">${found.toLocaleString()} found${ic('arrow-right')}</button>`:`<span class="rule-finding-count clear">${ic('check')}None found</span>`;
-  return `<article class="rule-reference-row ${rule.enabled?'':'is-off'}">
+  return `<article class="rule-reference-row ${active?'':'is-off'}">
     <span class="rule-reference-icon">${ic(rule.category==='dependencies'?'git-branch':rule.category==='metadata'?'database':rule.category==='headers'?'folder-tree':rule.category==='milestones'?'clipboard-list':rule.category==='item-masters'?'tag':'list-tree')}</span>
     <div><h4>${highlightHtml(rule.title,query)}</h4><p>${highlightHtml(rule.statement,query)}</p></div>
-    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
+    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span>${rule.enabled?`<button class="rule-switch ${active?'on':''}" type="button" role="switch" aria-checked="${active?'true':'false'}" data-rule-toggle="${esc(rule.id)}" title="${active?'Checked — click to switch this check off':'Switched off — click to check it again'}"><i></i><span>${active?'On':'Off'}</span></button>`:`<span class="rule-state off">Off</span>`}${active?findings:'<span class="rule-finding-count muted">Not checked</span>'}</div>
   </article>`;
 }
 
@@ -4715,6 +4771,10 @@ function renderRuleCatalog(navigate){
   }).join('');
   $$('[data-rule-findings]',container).forEach(button=>button.onclick=()=>showOnlyRule(button.dataset.ruleFindings,navigate));
   $$('[data-rule-example]',container).forEach(button=>button.onclick=()=>openRuleExample(button.dataset.ruleExample));
+  $$('[data-rule-toggle]',container).forEach(button=>button.onclick=()=>{setRuleDisabled(button.dataset.ruleToggle,button.getAttribute('aria-checked')==='true');renderRules(navigate);});
+  const offCount=(S.rules.disabled||[]).filter(id=>ruleCatalog().some(rule=>rule.id===id&&rule.enabled)).length,banner=$('#ruleOffBanner');
+  if(banner){banner.hidden=!offCount;banner.querySelector('b').textContent=`${offCount} check${offCount===1?' is':'s are'} switched off`;}
+  const allOn=$('#ruleAllOn');if(allOn)allOn.onclick=()=>{S.rules.disabled=[];saveRulePreferences();refreshSessionResult();renderRules(navigate);};
 }
 /* `keepScope` leaves the four registry dimensions alone. The dashboard passes it
    so clicking a number inside a scoped dashboard stays inside that scope; the
@@ -4730,9 +4790,10 @@ function renderRules(navigate){
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='rules';S.homeMode='rules';
   const rules=ruleCatalog(),sources=new Set(rules.map(rule=>rule.source)),topics=new Set(rules.map(rule=>rule.category)),hasResult=!!(S.session&&S.session.result);
   $('#view').innerHTML=`<section class="rules-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Plain-language reference</span><h2>What SSM Audit checks</h2><p>Every check the audit runs, grouped by where it comes from. ${hasResult?'Counts show how many times each check fired on the registry you loaded.':'Load a registry to see how many times each check fires.'}</p></div></div>
+    <div class="screen-heading"><div><span class="eyebrow">Plain-language reference</span><h2>What SSM Audit checks</h2><p>Every check the audit runs, grouped by where it comes from. Switch any check off to leave it out of the findings, the Dashboard, and the Excel report. ${hasResult?'Counts show how many times each check fired on the registry you loaded.':'Load a registry to see how many times each check fires.'}</p></div></div>
     <div class="rules-overview"><div><span>Checks in use</span><b>${rules.length}</b><p>Applied to every equipment row.</p></div><div><span>Sources</span><b>${sources.size}</b><p>Registry integrity, the SSM SOP, and commissioning logic.</p></div><div><span>Topics</span><b>${topics.size}</b><p>Hierarchy, dependencies, consistency, milestones, and headers.</p></div></div>
     <div class="rules-toolbar"><div class="searchbox">${ic('search')}<input id="ruleSearch" aria-label="Search audit rules" placeholder="Search checks and explanations" value="${esc(S.rules.search)}"></div><select id="ruleSource" aria-label="Filter by rule source"><option value="all">All sources</option>${SSM_AUDIT_SOURCES.map(source=>`<option value="${esc(source.id)}" ${S.rules.source===source.id?'selected':''}>${esc(source.label)}</option>`).join('')}</select><select id="ruleCategory" aria-label="Filter by topic"><option value="all">All topics</option>${Object.entries(RULE_CATEGORY_LABELS).filter(([key])=>rules.some(rule=>rule.category===key)).map(([key,label])=>`<option value="${esc(key)}" ${S.rules.category===key?'selected':''}>${esc(label)}</option>`).join('')}</select><span id="ruleResultCount"></span></div>
+    <div class="rules-note rule-off-banner" id="ruleOffBanner" hidden>${ic('info')}<span><b></b> — switched-off checks are not counted in findings, the Dashboard, or the Excel report. The choice is remembered on this device.</span><button class="btn-link" type="button" id="ruleAllOn">Turn all on</button></div>
     <div class="rule-catalog" id="ruleCatalog"></div>
   </section>`;
   renderSideNav(navigate);
@@ -4805,8 +4866,8 @@ async function addAuditTarget(file,navigate){
       const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.6,label));
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
-      const result=runSsmAudit(snapshot);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,result,error:'',auditedAt:Date.now()};
+      const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
+      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -4867,7 +4928,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,result:auditResult,error:'',auditedAt:Date.now()};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -5581,7 +5642,7 @@ function dashDependencyTiles(stats){
 function dashCheckOverview(scoped){
   const counts=dashRuleCounts(scoped),worst=new Map();
   for(const finding of scoped.findings)if(severityRank(finding.severity)>severityRank(worst.get(finding.rule.id)||''))worst.set(finding.rule.id,finding.severity);
-  const enabled=Object.values(SSM_AUDIT_RULES).filter(rule=>rule.enabled);
+  const enabled=activeRules();
   let max=0;for(const rule of enabled)max=Math.max(max,counts.get(rule.id)||0);
   const groups=SSM_AUDIT_SOURCES.map(source=>{
     const entries=enabled.filter(rule=>rule.source===source.id)
@@ -6024,7 +6085,7 @@ function wireComparisonResult(navigate){
 }
 
 /* src/boot.js */
-const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Every check has an <b>Example</b> button — a small made-up registry showing exactly what gets flagged, with the cell shaded and the offending characters marked. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
+const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Every check has a switch — turn one off and it leaves the findings, the Dashboard, and the Excel report (remembered on this device) — and an <b>Example</b> button: a small made-up registry showing exactly what gets flagged, with the cell shaded and the offending characters marked. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
 const GUIDE_SECTIONS=[
   {id:'start',label:'Getting started',icon:'upload',title:'Run an audit in three steps',body:'<p>Choose a completed Cx Registry workbook. SSM Audit finds the registry tab on its own, reads it in this browser only, and checks every equipment row.</p><ol><li>Drop an .xlsx or .xls workbook on the upload area, or click <b>Choose workbook</b>.</li><li>Wait a moment — 20,000 rows take about a second.</li><li>Start with <b>Invalid</b>, then <b>Rule broken</b>, then <b>Check this</b>. <b>Notes</b> are for review at your pace.</li></ol><div class="guide-note">'+ic('lock')+'The workbook is never uploaded or saved. Closing or refreshing the page clears it.</div>'},
   {id:'around',label:'Finding your way',icon:'panel-left-open',title:'The workspace',body:'<p>The menu on the left moves between the five views. Counts on each item show what is waiting there.</p><ol><li><b>Dashboard</b> — where an audit lands: totals by level, where the problems sit, milestone readiness, hierarchy health, dependencies, every check that ran, and what the registry is made of. Every number opens the findings list already narrowed to it, and the whole dashboard follows whatever you set in <b>Filters</b> — scope it to one building or discipline and every block recounts.</li><li><b>Audit findings</b> — every issue, most serious first. The level chips are the quick filter; <b>Filters</b> opens one panel for everything else — level, discipline, L2 milestone, UPN, building, source, topic, and individual checks — and whatever you pick shows as chips you can remove one at a time. Deselect a discipline to set it aside — for example, hide Electrical to see which other disciplines list a parent as a dependency.</li><li><b>SSM hierarchy</b> — the registry as a tree from Building down to equipment, with a finding count on every branch. Turn on <b>Findings only</b> to hide clean branches.</li><li><b>Compare projects</b> — line one registry up against a completed one, UPN by UPN.</li><li><b>Rules</b> — every check in plain language, with how many times it fired.</li></ol><p>Use <b>Collapse</b> at the bottom of the menu for more room, or the expand button on any view for a full-screen table.</p>'},
@@ -6065,7 +6126,7 @@ function init(){
   const badgeHome=$('#versionLink').parentElement,mq=window.matchMedia('(max-width:900px)');
   const placeBadge=()=>{const badge=$('#versionLink'),actions=$('.top-actions');if(!badge||!actions)return;if(mq.matches){if(badge.parentElement!==actions)actions.insertBefore(badge,actions.firstChild);}else if(badge.parentElement!==badgeHome)badgeHome.appendChild(badge);};
   placeBadge();if(typeof mq.addEventListener==='function')mq.addEventListener('change',placeBadge);
-  initUpdate();go('upload');
+  loadRulePreferences();initUpdate();go('upload');
 }
 
 init();

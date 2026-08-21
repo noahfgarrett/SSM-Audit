@@ -27,7 +27,7 @@ The full rulebook is in the app under **Rules**, with live counts once a registr
 - **Audit findings** — every issue, most serious first. Level chips, one **Filters** panel for discipline / L2 milestone / UPN / building / source / topic / individual checks (only the active filters show on the page, as chips), grouping by check or phase, and search across tags and reasons. Open any row for *Why this was flagged → What must be true → the relationship diagram (for parent, dependency, and loop findings) → Found / Expected → What to do → the registry row*, with **Show in hierarchy** and Previous/Next.
 - **SSM hierarchy** — Building → Discipline → System → equipment, exactly as uploaded, with finding counts on every branch, a **Findings only** view, header rows marked, and search that opens the matching branches.
 - **Compare projects** — line a registry up against a completed project by UPN.
-- **Rules** — every check in plain language, grouped by source and topic, each with an **Example** button: a small made-up registry showing exactly what gets flagged (cell shaded, offending characters marked), why, what the audit says — run live on that mock data — and what right looks like.
+- **Rules** — every check in plain language, grouped by source and topic, with a switch to turn any check off (it then leaves the findings, the Dashboard, and the Excel report; the choice is remembered on the device) and an **Example** button: a small made-up registry showing exactly what gets flagged (cell shaded, offending characters marked), why, what the audit says — run live on that mock data — and what right looks like.
 
 ## The Excel report
 

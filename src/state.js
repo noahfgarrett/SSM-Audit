@@ -2,7 +2,7 @@ export const S={
   screen:'upload',
   homeMode:'audit',
   ui:{navCollapsed:false},
-  rules:{search:'',source:'all',category:'all'},
+  rules:{search:'',source:'all',category:'all',disabled:[]},
   session:null,
   comparison:null,
   updateInfo:null,

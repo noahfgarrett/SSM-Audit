@@ -10,6 +10,7 @@
 - Use synthetic fixtures for committed tests. Confidential workbooks may be used only for local, uncommitted verification.
 - The source repository is public (made public 2026-08-19). Every release is published twice with the same versioned single-file HTML and gzip artifacts: on `noahfgarrett/SSM-Audit-Releases` (the updater's source of truth, with `latest.json`) and as a GitHub release on `noahfgarrett/SSM-Audit` itself (tag `vX.Y.Z`) so the source repo's Releases page carries the file too. Never publish a bare tag without the release.
 - The updater must use only `noahfgarrett/SSM-Audit-Releases`; it must never consume SSManagement or SSM Builder releases.
+- Changelog and release-note bullets stay short and general (Noah, 2026-08-19): one line per change saying WHAT changed for the user, never how it was implemented, no numbers/measurements, usually one or two bullets per release.
 - For every release, add brief user-facing changelog bullets such as:
   - Fixed an issue where ...
   - Added a new feature to ...
