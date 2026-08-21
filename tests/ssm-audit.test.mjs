@@ -376,7 +376,10 @@ test('commissioning logic distinguishes healthy paths from missing links', () =>
     row({ equipmentId: 'BLD-RIO-OK', closestParent: '650 Facility Management System', closestParentStatus: 'NEW', dependencies: 'BLD-PNL-01', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel' }),
     row({ equipmentId: 'BLD-RIO-MISSING', closestParent: '650 Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel' }),
     row({ equipmentId: 'BLD-CS-OK', closestParent: 'BLD-PUMP-OK', dependencies: 'BLD-RIO-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
-    row({ equipmentId: 'BLD-CS-MISSING', closestParent: 'BLD-PUMP-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
+    /* inherits its link: nested under the pump whose dependency is the VFD */
+    row({ equipmentId: 'BLD-CS-INHERITED', closestParent: 'BLD-PUMP-OK', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
+    /* nothing above it or beside it controls it */
+    row({ equipmentId: 'BLD-CS-MISSING', closestParent: 'BLD-PUMP-MISSING', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'Current Switch' }),
     row({ equipmentId: '1820 Mechanical System - Pumps', closestParent: '1820 Mechanical System', closestParentStatus: 'NEW', upn: '1820', discipline: 'MECHANICAL DRY', systemName: '1820 Mechanical System', equipmentDescription: 'HEADER', itemMaster: 'VF_Blank' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const result = runSsmAudit(snapshot)
@@ -668,4 +671,20 @@ test('a fiber distribution unit is placed by nesting under a PLC, RIO, or patch 
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const flagged = equipmentIdsForRule(runSsmAudit(snapshot), 'fduDependency')
   assert.deepEqual(flagged, ['FDU-HEADER-ONLY'], 'only the FDU that hangs off a header with nothing listed is unplaced')
+})
+
+test('control, RIO, and VESDA links are inherited through the parent chain', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'FMS-PLC', equipmentDescription: 'FMS PLC', closestParent: '650  Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'RIO-PANEL', equipmentDescription: 'RIO panel enclosure', closestParent: 'FMS-PLC', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'RIO-NESTED', equipmentDescription: 'Remote I/O Panel', closestParent: 'RIO-PANEL', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'RIO-ORPHAN', equipmentDescription: 'Remote I/O Panel', closestParent: '650  Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'FAP-1', equipmentDescription: 'Fire alarm control panel', closestParent: '630  Life Safety System', closestParentStatus: 'NEW', upn: '630', discipline: 'LIFE SAFETY SYSTEM', systemName: '630  Life Safety System' }),
+    row({ equipmentId: 'VESDA-UNDER-FAP', equipmentDescription: 'VESDA aspirating smoke detection', closestParent: 'FAP-1', upn: '630', discipline: 'LIFE SAFETY SYSTEM', systemName: '630  Life Safety System' }),
+    row({ equipmentId: 'VESDA-ORPHAN', equipmentDescription: 'VESDA aspirating smoke detection', closestParent: '630  Life Safety System', closestParentStatus: 'NEW', upn: '630', discipline: 'LIFE SAFETY SYSTEM', systemName: '630  Life Safety System' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  assert.deepEqual(equipmentIdsForRule(result, 'rioControlPath'), ['RIO-ORPHAN'], 'an RIO inside a panel under the PLC inherits its controller')
+  assert.deepEqual(equipmentIdsForRule(result, 'vesdaFireAlarm'), ['VESDA-ORPHAN'], 'a VESDA nested under its fire alarm panel needs no dependency')
 })
