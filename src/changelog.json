@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.20.1",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"
+  },
+  {
     "version": "1.20.0",
     "date": "2026-08-19",
     "type": "feature",

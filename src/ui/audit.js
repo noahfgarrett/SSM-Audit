@@ -829,9 +829,12 @@ function renderSeverityStrip(){
 function wireSeverityStrip(){
   $$('[data-audit-severity]').forEach(button=>button.onclick=()=>{
     const level=button.dataset.auditSeverity;
+    /* From "everything on", the first pill narrows to just that level; further
+       pills add or remove levels; removing the last one goes back to all. */
     if(level==='all')S.session.hiddenSeverities=[];
-    else{const hidden=new Set(S.session.hiddenSeverities||[]);if(hidden.has(level))hidden.delete(level);else hidden.add(level);
-      if(hidden.size===SSM_AUDIT_SEVERITIES.length)hidden.clear();S.session.hiddenSeverities=[...hidden];}
+    else{const hidden=new Set(S.session.hiddenSeverities||[]);
+      if(!hidden.size)S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);
+      else{if(hidden.has(level))hidden.delete(level);else hidden.add(level);if(hidden.size===SSM_AUDIT_SEVERITIES.length)hidden.clear();S.session.hiddenSeverities=[...hidden];}}
     applyFilterChange();
   });
 }
