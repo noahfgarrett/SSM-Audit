@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.19.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Relationship checks now respect that nesting carries the link: a control device under equipment whose dependency is the RIO, PLC, or VFD, an RIO inside a panel under the PLC, or a VESDA nested under its fire alarm panel no longer needs to repeat that equipment as a dependency. Only rows with nothing above them or beside them pointing at the controlling equipment are flagged\n- The fire alarm panel check also recognises \"fire alarm control panel\" and FACP"
+  },
+  {
     "version": "1.18.0",
     "date": "2026-08-19",
     "type": "feature",
