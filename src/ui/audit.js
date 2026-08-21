@@ -110,6 +110,39 @@ function severityRank(severity){return {blocker:4,error:3,warning:2,info:1}[seve
 /* ------------------------------------------------------------- rules screen */
 
 function ruleCatalog(){return Object.values(SSM_AUDIT_RULES);}
+/* ---- rule preferences ----
+   The engine runs every check; the user decides which ones count. Switched-off
+   checks are dropped from the result the rest of the app sees (findings,
+   dashboard, hierarchy badges, export), and the choice is remembered on this
+   device. Nothing about the registry is stored -- only rule ids. */
+const RULE_PREFERENCES_KEY='ssm-audit.disabled-rules';
+export function loadRulePreferences(){
+  try{const raw=localStorage.getItem(RULE_PREFERENCES_KEY);const list=raw?JSON.parse(raw):[];S.rules.disabled=Array.isArray(list)?list.filter(id=>typeof id==='string'):[];}catch(_){S.rules.disabled=[];}
+}
+function saveRulePreferences(){try{localStorage.setItem(RULE_PREFERENCES_KEY,JSON.stringify(S.rules.disabled));}catch(_){/* private mode: the choice lasts for this session */}}
+export function isRuleActive(rule){return !!rule&&rule.enabled&&!(S.rules.disabled||[]).includes(rule.id);}
+export function activeRules(){return ruleCatalog().filter(isRuleActive);}
+/* The result the app works from: the engine's output minus switched-off checks,
+   with the summary recounted. `rawResult` keeps the engine output so toggling
+   never needs the workbook again. */
+export function applyRulePreferences(raw,disabled){
+  if(!raw)return raw;const off=new Set(disabled||[]);
+  if(!off.size)return raw;
+  const findings=raw.findings.filter(finding=>!off.has(finding.rule.id));
+  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
+  const status=severity.blocker?'blocked':raw.summary.status==='blocked'?'ready':raw.summary.status;
+  return Object.assign({},raw,{findings,summary:Object.assign({},raw.summary,{findings:findings.length,severity,status})});
+}
+function refreshSessionResult(){
+  if(!S.session||!S.session.rawResult)return;
+  S.session.result=applyRulePreferences(S.session.rawResult,S.rules.disabled);
+  S.session.hierarchy=null;S.session.hierarchyCacheKey='';S.session.hierarchyCacheRows=null;S.session.headerIdSet=null;S.session.rowIndex=null;S.session.exportPlan=null;
+  invalidateFindingCaches();
+}
+function setRuleDisabled(ruleId,off){
+  const set=new Set(S.rules.disabled||[]);if(off)set.add(ruleId);else set.delete(ruleId);
+  S.rules.disabled=[...set];saveRulePreferences();refreshSessionResult();
+}
 function ruleFindingCounts(){
   const result=S.session&&S.session.result;if(!result)return null;
   const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);return counts;
@@ -119,12 +152,12 @@ function ruleCatalogRows(){
   return ruleCatalog().filter(rule=>(source==='all'||rule.source===source)&&(category==='all'||rule.category===category)&&(!query||[rule.title,rule.statement,SOURCE_LABELS[rule.source],RULE_CATEGORY_LABELS[rule.category]].join(' ').toUpperCase().includes(query)));
 }
 function ruleRowHtml(rule,counts,query){
-  const confidence=RULE_CONFIDENCE_LABELS[rule.confidence]||'Guidance',found=counts?counts.get(rule.id)||0:null;
+  const confidence=RULE_CONFIDENCE_LABELS[rule.confidence]||'Guidance',found=counts?counts.get(rule.id)||0:null,active=isRuleActive(rule);
   const findings=found===null?'':found?`<button class="rule-finding-count" type="button" data-rule-findings="${esc(rule.id)}" title="Show only these findings">${found.toLocaleString()} found${ic('arrow-right')}</button>`:`<span class="rule-finding-count clear">${ic('check')}None found</span>`;
-  return `<article class="rule-reference-row ${rule.enabled?'':'is-off'}">
+  return `<article class="rule-reference-row ${active?'':'is-off'}">
     <span class="rule-reference-icon">${ic(rule.category==='dependencies'?'git-branch':rule.category==='metadata'?'database':rule.category==='headers'?'folder-tree':rule.category==='milestones'?'clipboard-list':rule.category==='item-masters'?'tag':'list-tree')}</span>
     <div><h4>${highlightHtml(rule.title,query)}</h4><p>${highlightHtml(rule.statement,query)}</p></div>
-    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span><span class="rule-state ${rule.enabled?'on':'off'}">${rule.enabled?'On':'Off'}</span>${findings}</div>
+    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span>${rule.enabled?`<button class="rule-switch ${active?'on':''}" type="button" role="switch" aria-checked="${active?'true':'false'}" data-rule-toggle="${esc(rule.id)}" title="${active?'Checked — click to switch this check off':'Switched off — click to check it again'}"><i></i><span>${active?'On':'Off'}</span></button>`:`<span class="rule-state off">Off</span>`}${active?findings:'<span class="rule-finding-count muted">Not checked</span>'}</div>
   </article>`;
 }
 
@@ -260,6 +293,10 @@ function renderRuleCatalog(navigate){
   }).join('');
   $$('[data-rule-findings]',container).forEach(button=>button.onclick=()=>showOnlyRule(button.dataset.ruleFindings,navigate));
   $$('[data-rule-example]',container).forEach(button=>button.onclick=()=>openRuleExample(button.dataset.ruleExample));
+  $$('[data-rule-toggle]',container).forEach(button=>button.onclick=()=>{setRuleDisabled(button.dataset.ruleToggle,button.getAttribute('aria-checked')==='true');renderRules(navigate);});
+  const offCount=(S.rules.disabled||[]).filter(id=>ruleCatalog().some(rule=>rule.id===id&&rule.enabled)).length,banner=$('#ruleOffBanner');
+  if(banner){banner.hidden=!offCount;banner.querySelector('b').textContent=`${offCount} check${offCount===1?' is':'s are'} switched off`;}
+  const allOn=$('#ruleAllOn');if(allOn)allOn.onclick=()=>{S.rules.disabled=[];saveRulePreferences();refreshSessionResult();renderRules(navigate);};
 }
 /* `keepScope` leaves the four registry dimensions alone. The dashboard passes it
    so clicking a number inside a scoped dashboard stays inside that scope; the
@@ -275,9 +312,10 @@ export function renderRules(navigate){
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='rules';S.homeMode='rules';
   const rules=ruleCatalog(),sources=new Set(rules.map(rule=>rule.source)),topics=new Set(rules.map(rule=>rule.category)),hasResult=!!(S.session&&S.session.result);
   $('#view').innerHTML=`<section class="rules-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Plain-language reference</span><h2>What SSM Audit checks</h2><p>Every check the audit runs, grouped by where it comes from. ${hasResult?'Counts show how many times each check fired on the registry you loaded.':'Load a registry to see how many times each check fires.'}</p></div></div>
+    <div class="screen-heading"><div><span class="eyebrow">Plain-language reference</span><h2>What SSM Audit checks</h2><p>Every check the audit runs, grouped by where it comes from. Switch any check off to leave it out of the findings, the Dashboard, and the Excel report. ${hasResult?'Counts show how many times each check fired on the registry you loaded.':'Load a registry to see how many times each check fires.'}</p></div></div>
     <div class="rules-overview"><div><span>Checks in use</span><b>${rules.length}</b><p>Applied to every equipment row.</p></div><div><span>Sources</span><b>${sources.size}</b><p>Registry integrity, the SSM SOP, and commissioning logic.</p></div><div><span>Topics</span><b>${topics.size}</b><p>Hierarchy, dependencies, consistency, milestones, and headers.</p></div></div>
     <div class="rules-toolbar"><div class="searchbox">${ic('search')}<input id="ruleSearch" aria-label="Search audit rules" placeholder="Search checks and explanations" value="${esc(S.rules.search)}"></div><select id="ruleSource" aria-label="Filter by rule source"><option value="all">All sources</option>${SSM_AUDIT_SOURCES.map(source=>`<option value="${esc(source.id)}" ${S.rules.source===source.id?'selected':''}>${esc(source.label)}</option>`).join('')}</select><select id="ruleCategory" aria-label="Filter by topic"><option value="all">All topics</option>${Object.entries(RULE_CATEGORY_LABELS).filter(([key])=>rules.some(rule=>rule.category===key)).map(([key,label])=>`<option value="${esc(key)}" ${S.rules.category===key?'selected':''}>${esc(label)}</option>`).join('')}</select><span id="ruleResultCount"></span></div>
+    <div class="rules-note rule-off-banner" id="ruleOffBanner" hidden>${ic('info')}<span><b></b> — switched-off checks are not counted in findings, the Dashboard, or the Excel report. The choice is remembered on this device.</span><button class="btn-link" type="button" id="ruleAllOn">Turn all on</button></div>
     <div class="rule-catalog" id="ruleCatalog"></div>
   </section>`;
   renderSideNav(navigate);
@@ -350,8 +388,8 @@ export async function addAuditTarget(file,navigate){
       const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.6,label));
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
-      const result=runSsmAudit(snapshot);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,result,error:'',auditedAt:Date.now()};
+      const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
+      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -412,7 +450,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,result:auditResult,error:'',auditedAt:Date.now()};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -1126,7 +1164,7 @@ function dashDependencyTiles(stats){
 function dashCheckOverview(scoped){
   const counts=dashRuleCounts(scoped),worst=new Map();
   for(const finding of scoped.findings)if(severityRank(finding.severity)>severityRank(worst.get(finding.rule.id)||''))worst.set(finding.rule.id,finding.severity);
-  const enabled=Object.values(SSM_AUDIT_RULES).filter(rule=>rule.enabled);
+  const enabled=activeRules();
   let max=0;for(const rule of enabled)max=Math.max(max,counts.get(rule.id)||0);
   const groups=SSM_AUDIT_SOURCES.map(source=>{
     const entries=enabled.filter(rule=>rule.source===source.id)

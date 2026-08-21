@@ -5,7 +5,7 @@ import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit, SSM_AUDIT_RULES } from '../src/audit/engine.js'
 import { S, resetSession } from '../src/state.js'
-import { dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, scopedResult } from '../src/ui/audit.js'
+import { activeRules, applyRulePreferences, dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, isRuleActive, scopedResult } from '../src/ui/audit.js'
 
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
 const index = Object.fromEntries(EXTO_REV21_COLUMNS.map(column => [column.field, column.index]))
@@ -118,4 +118,24 @@ test('the checks overview reports every enabled check, firing or not', () => {
   assert.ok(overview.firing > 0 && overview.firing < enabled)
   assert.ok(overview.groups.every(group => group.firing.every(entry => entry.count > 0)))
   assert.ok(overview.groups.every(group => group.passing.every(entry => entry.count === 0 && entry.severity === '')))
+})
+
+test('switching a check off removes its findings, recounts the summary, and drops it from the checks overview', () => {
+  const raw = S.session.result || (() => { throw new Error('fixture session expected') })()
+  const fired = raw.findings[0].rule
+  const before = raw.findings.filter(finding => finding.rule.id === fired.id).length
+  assert.ok(before > 0)
+  const filtered = applyRulePreferences(raw, [fired.id])
+  assert.equal(filtered.findings.filter(finding => finding.rule.id === fired.id).length, 0)
+  assert.equal(filtered.summary.findings, raw.summary.findings - before)
+  const levels = ['blocker', 'error', 'warning', 'info']
+  assert.equal(levels.reduce((sum, level) => sum + filtered.summary.severity[level], 0), filtered.findings.length, 'severity counts add up')
+  assert.equal(applyRulePreferences(raw, []), raw, 'nothing switched off returns the engine result untouched')
+  S.rules.disabled = [fired.id]
+  try {
+    assert.equal(isRuleActive(fired), false)
+    assert.equal(activeRules().some(rule => rule.id === fired.id), false)
+    const overview = dashCheckOverview(scopedResult())
+    assert.ok(!overview.groups.some(group => [...group.firing, ...group.passing].some(entry => entry.rule.id === fired.id)), 'the overview no longer lists it')
+  } finally { S.rules.disabled = [] }
 })

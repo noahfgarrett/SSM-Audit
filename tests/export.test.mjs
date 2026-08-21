@@ -207,13 +207,19 @@ test('progress formulas count the ticks in the Actioned column of the milestone 
     assert.equal(book.Sheets.Dashboard[`D${dashboardRow}`].f, `COUNTIF('${name}'!A:A,"${AUDIT_EXPORT_TICK}")`)
     assert.equal(book.Sheets.Index[`E${indexRow}`].f, `IF(B${indexRow}=0,0,D${indexRow}/B${indexRow})`)
     assert.equal(book.Sheets.Index[`E${indexRow}`].z, '0%')
-    assert.match(book.Sheets.Index[`F${indexRow}`].f, /^REPT\("█",MIN\(10,ROUND\(E\d+\*10,0\)\)\)&REPT\("░",10-MIN\(10,ROUND\(E\d+\*10,0\)\)\)$/)
-    assert.match(book.Sheets.Dashboard[`F${dashboardRow}`].f, /^REPT\("█",MIN\(25,/, 'dashboard bars are the wide 25-segment kind')
+    assert.equal(book.Sheets.Index[`F${indexRow}`].f, `E${indexRow}`, 'the Index bar cell carries the percent (a data bar fills it)')
+    assert.equal(book.Sheets.Index[`F${indexRow}`].z, '0%')
+    assert.equal(book.Sheets.Dashboard[`F${dashboardRow}`].f, `E${dashboardRow}`)
   })
   const last = first + tabs.length - 1
   assert.equal(book.Sheets.Dashboard.F6.f, `IF(SUM(B${first}:B${last})=0,0,SUM(D${first}:D${last})/SUM(B${first}:B${last}))`)
-  assert.match(book.Sheets.Dashboard.A6.f, /^REPT\("█",MIN\(25,ROUND\(F6\*25,0\)\)\)/, 'the overall bar is the big one at the top')
+  assert.equal(book.Sheets.Dashboard.A6.f, 'F6', 'the overall bar cell carries the overall percent')
   assert.ok(book.Sheets.Dashboard.A6.s.font.sz >= 18, 'overall bar uses a large font')
+  /* native data bars are attached as conditional formatting on Dashboard (overall + both tables) and Index */
+  const dashboardBars = book.Sheets.Dashboard['!xmlExtras'].conditionalFormatting.join('')
+  assert.match(dashboardBars, /sqref="A6:A6"><cfRule type="dataBar"/)
+  assert.match(dashboardBars, new RegExp(`sqref="F${first}:F${last}"><cfRule type="dataBar"`))
+  assert.match(book.Sheets.Index['!xmlExtras'].conditionalFormatting.join(''), /sqref="F5:F\d+"><cfRule type="dataBar"/)
 })
 
 test('the dashboard has a per-discipline progress table that sums ticks across milestone tabs', () => {
@@ -357,7 +363,8 @@ test('the Actioned column starts unticked on each equipment line and the written
     const xml = decoder.decode(XLSX.CFB.find(container, `/xl/worksheets/sheet${index + 1}.xml`).content)
     const isMilestone = milestoneSheetNames(book).includes(name)
     assert.equal(xml.includes('<dataValidation type="list"'), isMilestone, name)
-    assert.equal(xml.includes('<conditionalFormatting'), isMilestone, name)
+    assert.equal(xml.includes('dxfId="0"'), isMilestone, `${name}: the green-row format belongs to milestone tabs only`)
+    if (name === 'Dashboard' || name === 'Index') assert.ok(xml.includes('type="dataBar"'), `${name} carries data bars`)
     if (isMilestone) {
       assert.ok(xml.includes(`<formula1>"${AUDIT_EXPORT_TICK},☐"</formula1>`), name)
       assert.match(xml, /<formula>\$R3="☑"<\/formula>/, 'the green format reads the hidden Done helper column')
@@ -522,4 +529,13 @@ test('the compact writer reports monotonic per-entry progress ending at 1', asyn
   for (let at = 1; at < calls.length; at++) assert.ok(calls[at][0] >= calls[at - 1][0], 'progress never goes backwards')
   assert.ok(Math.abs(calls[calls.length - 1][0] - 1) < 1e-9, 'ends at exactly 1')
   assert.ok(calls.some(([, name]) => name.includes('sheet')), 'entry names are reported')
+})
+
+test('switched-off checks are left out of the Rules sheet', () => {
+  const result = auditResult()
+  const firedRule = result.findings[0].rule
+  const book = buildAuditWorkbook(result, 'synthetic-registry.xlsx', { disabledRules: [firedRule.id] })
+  const titles = grid(book.Sheets.Rules).slice(2).map(line => line[0])
+  assert.ok(!titles.includes(firedRule.title), 'the switched-off check is not listed')
+  assert.ok(titles.length > 40, 'the rest of the rulebook is still there')
 })
