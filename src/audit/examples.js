@@ -5,7 +5,7 @@ import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../exto/rev21-contra
    row it is meant to illustrate. `focus` names the cells to shade; `marks`
    optionally splits one cell into plain / offending runs so the exact characters
    stand out. Tags, buildings and descriptions are invented ("B1-…"); UPNs,
-   System Names, disciplines and VF Item Master names are the Rev21 / VF
+   System Names, disciplines and VF Item Master names are the VF Exto Upload Template / VF
    vocabulary that already ships in the app. tests/examples.test.mjs runs the
    real engine over every example and asserts it flags the focused row. */
 
@@ -13,7 +13,7 @@ const sys=upn=>(extoRev21SystemsForUpn(upn)||[])[0]||'';
 const MECH='MECHANICAL WET',MECH_EXH='MECHANICAL EXHAUST',ELEC='ELECTRICAL',FMS='FACILITIES MONITORING SYSTEM',LSS='LIFE SAFETY SYSTEM',UPW='UPW';
 const B='B1';
 
-/* r(...) writes one registry row in the Rev21 field names the engine reads. */
+/* r(...) writes one registry row in the VF Exto Upload Template field names the engine reads. */
 function r(values){
   return {
     equipmentId:values.id||'',equipmentDescription:values.desc||'',closestParent:values.parent||'',
@@ -92,7 +92,7 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),upn:'1040',sys:sys('104'),disc:MECH,im:'VF_MD_GAH/GMAH'})],
     focus:[{row:0,field:'upn'}],
     marks:[{row:0,field:'upn',parts:[['104',false],['0',true]]}],
-    caption:'1040 is not a UPN in the Rev21 upload template — UPNs are three digits (or RR / SEC / MISC).',fix:'Use the approved UPN: 104.'}),
+    caption:'1040 is not a UPN in the VF Exto Upload Template — UPNs are three digits (or RR / SEC / MISC).',fix:'Use the approved UPN: 104.'}),
   ex('metadata.misc-upn-review',{
     rows:[r({id:'B1-HOIST-0001',desc:'Maintenance hoist',parent:'MISC',sys:'MISC',upn:'MISC',disc:'MECHANICAL MISC',im:'VF_PROC_EQ'})],
     focus:[{row:0,field:'upn'}],
@@ -101,11 +101,11 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('111'),upn:'104',sys:sys('111'),disc:MECH,im:'VF_MD_GAH/GMAH'})],
     focus:[{row:0,field:'systemName'},{row:0,field:'upn'}],
     marks:[{row:0,field:'systemName',parts:[['111',true],[sys('111').slice(3),false]]}],
-    caption:`The row is on UPN 104 but its System Name belongs to UPN 111.`,fix:`Use the Rev21 System Name for 104: ${sys('104')}.`}),
+    caption:`The row is on UPN 104 but its System Name belongs to UPN 111.`,fix:`Use the VF Exto Upload Template System Name for 104: ${sys('104')}.`}),
   ex('metadata.ic-discipline',{
     rows:[r({id:'B1-RIO-6501',desc:'Remote I/O panel',parent:sys('650'),upn:'650',disc:'I&C',im:'VF_I&C_RIO W/O SUD'})],
     focus:[{row:0,field:'discipline'}],
-    caption:'"I&C" is not the approved controls discipline in the Rev21 dropdown.',fix:`Use ${FMS}.`}),
+    caption:'"I&C" is not the approved controls discipline in the VF Exto Upload Template dropdown.',fix:`Use ${FMS}.`}),
   ex('metadata.upn-inconsistent',{
     rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH_EXH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1113',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
     focus:[{row:0,field:'discipline'},{row:1,field:'discipline'}],
@@ -118,7 +118,7 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
   ex('metadata.classification-not-in-list',{
     rows:[r({id:'B1-XV-1111',desc:'Isolation valve',parent:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_I&C_VALVE',cls:'XV'}),r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',cls:'PMP'})],
     focus:[{row:0,field:'equipmentClassification'}],
-    caption:'"XV" is not in the Rev21 Equipment Classification dropdown. It may be a legitimate site code — the count tells you whether to add it.',fix:'Pick the Rev21 classification, or raise the site code for addition to the list.'}),
+    caption:'"XV" is not in the VF Exto Upload Template Equipment Classification dropdown. It may be a legitimate site code — the count tells you whether to add it.',fix:'Pick the VF Exto Upload Template classification, or raise the site code for addition to the list.'}),
 
   /* ---------------- milestones ---------------- */
   ex('milestone.incomplete-pair',{
@@ -279,7 +279,7 @@ export function auditExampleColumns(example){
   return [...lead,...flagged,...rest];
 }
 
-/* A snapshot the engine can run: every Rev21 field present, plus the _source
+/* A snapshot the engine can run: every VF Exto Upload Template field present, plus the _source
    the engine expects on a row. */
 export function auditExampleSnapshot(example){
   const rows=example.rows.map((row,index)=>{

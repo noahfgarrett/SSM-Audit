@@ -153,11 +153,11 @@ function ruleCatalogRows(){
 }
 function ruleRowHtml(rule,counts,query){
   const confidence=RULE_CONFIDENCE_LABELS[rule.confidence]||'Guidance',found=counts?counts.get(rule.id)||0:null,active=isRuleActive(rule);
-  const findings=found===null?'':found?`<button class="rule-finding-count" type="button" data-rule-findings="${esc(rule.id)}" title="Show only these findings">${found.toLocaleString()} found${ic('arrow-right')}</button>`:`<span class="rule-finding-count clear">${ic('check')}None found</span>`;
+  const findings=found===null?'<span class="rule-slot-empty" aria-hidden="true"></span>':found?`<button class="rule-finding-count" type="button" data-rule-findings="${esc(rule.id)}" title="Show only these findings">${found.toLocaleString()} found${ic('arrow-right')}</button>`:`<span class="rule-finding-count clear">${ic('check')}None found</span>`;
   return `<article class="rule-reference-row ${active?'':'is-off'}">
     <span class="rule-reference-icon">${ic(rule.category==='dependencies'?'git-branch':rule.category==='metadata'?'database':rule.category==='headers'?'folder-tree':rule.category==='milestones'?'clipboard-list':rule.category==='item-masters'?'tag':'list-tree')}</span>
     <div><h4>${highlightHtml(rule.title,query)}</h4><p>${highlightHtml(rule.statement,query)}</p></div>
-    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:''}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span>${rule.enabled?`<button class="rule-switch ${active?'on':''}" type="button" role="switch" aria-checked="${active?'true':'false'}" data-rule-toggle="${esc(rule.id)}" title="${active?'Checked — click to switch this check off':'Switched off — click to check it again'}"><i></i><span>${active?'On':'Off'}</span></button>`:`<span class="rule-state off">Off</span>`}${active?findings:'<span class="rule-finding-count muted">Not checked</span>'}</div>
+    <div class="rule-reference-tags">${SSM_AUDIT_EXAMPLES[rule.id]?`<button class="rule-example-btn" type="button" data-rule-example="${esc(rule.id)}" title="See a worked example of what this check flags">${ic('eye')}Example</button>`:'<span class="rule-slot-empty" aria-hidden="true"></span>'}<span class="confidence-${esc(rule.confidence)}">${esc(confidence)}</span>${rule.enabled?`<button class="rule-switch ${active?'on':''}" type="button" role="switch" aria-checked="${active?'true':'false'}" data-rule-toggle="${esc(rule.id)}" title="${active?'Checked — click to switch this check off':'Switched off — click to check it again'}"><i></i><span>${active?'On':'Off'}</span></button>`:`<span class="rule-state off">Off</span>`}${active?findings:'<span class="rule-finding-count muted">Not checked</span>'}</div>
   </article>`;
 }
 
@@ -1226,8 +1226,8 @@ function dashStatTiles(stats){
     {label:'Distinct UPNs',value:stats.upns.toLocaleString(),note:'Systems in this registry'},
     {label:'Disciplines',value:stats.disciplines.toLocaleString(),note:'Discipline values in use'},
     {label:'Rows with L1 and L2',value:`${stats.phased}%`,note:'Both milestone levels filled in'},
-    {label:'Site-specific classifications',value:stats.siteClassifications.toLocaleString(),note:stats.siteClassifications?`${stats.siteClassificationRows.toLocaleString()} ${stats.siteClassificationRows===1?'row uses':'rows use'} them`:'Every classification is on the Rev21 list',
-      action:stats.siteClassificationFindings?`rule:${DASH_SITE_CLASS_RULE}`:'',title:'Show the rows whose Equipment Classification is not in the Rev21 dropdown'},
+    {label:'Site-specific classifications',value:stats.siteClassifications.toLocaleString(),note:stats.siteClassifications?`${stats.siteClassificationRows.toLocaleString()} ${stats.siteClassificationRows===1?'row uses':'rows use'} them`:'Every classification is on the VF Exto Upload Template list',
+      action:stats.siteClassificationFindings?`rule:${DASH_SITE_CLASS_RULE}`:'',title:'Show the rows whose Equipment Classification is not in the VF Exto Upload Template dropdown'},
     {label:'Item Master migration',value:`${stats.itemMasterPercent}%`,note:stats.itemMasterRows?`${stats.itemMasterStandard.toLocaleString()} of ${stats.itemMasterRows.toLocaleString()} on the VF standard`:'No Item Masters to migrate',
       bar:stats.itemMasterPercent,action:stats.itemMasterFindings?`rule:${DASH_ITEM_MASTER_RULE}`:'',title:'Show the rows still on a site-prefixed Item Master'},
   ];

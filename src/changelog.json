@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.21.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"
+  },
+  {
     "version": "1.20.3",
     "date": "2026-08-19",
     "type": "fix",
@@ -177,7 +183,7 @@
     "version": "1.6.0",
     "date": "2026-08-14",
     "type": "feature",
-    "notes": "- New Excel report with progress tracking; every check rewritten in plain language; aligned with Rev21"
+    "notes": "- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"
   },
   {
     "version": "1.5.1",
