@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.20.2",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"
+  },
+  {
     "version": "1.20.1",
     "date": "2026-08-19",
     "type": "fix",
