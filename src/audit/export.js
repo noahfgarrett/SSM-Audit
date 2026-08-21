@@ -59,7 +59,7 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   kpiValue:sheetCellStyle({bold:true,size:16,color:AUDIT_EXPORT_PALETTE.ink,align:'center'}),
   kpiPercent:sheetCellStyle({bold:true,size:16,color:AUDIT_EXPORT_PALETTE.accent,align:'center',numFmt:'0%'}),
   overallLabel:sheetCellStyle({bold:true,size:10,color:AUDIT_EXPORT_PALETTE.muted}),
-  overallBar:sheetCellStyle({bold:true,size:20,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center',numFmt:'0%'}),
+  overallBar:sheetCellStyle({fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center',numFmt:';;;'}),
   overallPercent:sheetCellStyle({bold:true,size:26,color:AUDIT_EXPORT_PALETTE.accent,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'center',vertical:'center',numFmt:'0%'}),
   overallCaption:sheetCellStyle({bold:true,size:11,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.barTrack,align:'left',vertical:'center'}),
   header:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.headerText,fill:AUDIT_EXPORT_PALETTE.ink,align:'left',vertical:'center',wrap:true}),
@@ -83,10 +83,10 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   percentBand:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'right',numFmt:'0%'}),
   percentBig:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,align:'right',vertical:'center',numFmt:'0%'}),
   percentBigBand:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'right',vertical:'center',numFmt:'0%'}),
-  bar:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,align:'left',numFmt:'0%'}),
-  barBand:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'left',numFmt:'0%'}),
-  barWide:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,align:'left',vertical:'center',numFmt:'0%'}),
-  barWideBand:sheetCellStyle({bold:true,size:13,color:AUDIT_EXPORT_PALETTE.ink,fill:AUDIT_EXPORT_PALETTE.band,align:'left',vertical:'center',numFmt:'0%'}),
+  bar:sheetCellStyle({align:'left',numFmt:';;;'}),
+  barBand:sheetCellStyle({fill:AUDIT_EXPORT_PALETTE.band,align:'left',numFmt:';;;'}),
+  barWide:sheetCellStyle({align:'left',vertical:'center',numFmt:';;;'}),
+  barWideBand:sheetCellStyle({fill:AUDIT_EXPORT_PALETTE.band,align:'left',vertical:'center',numFmt:';;;'}),
   nest:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,align:'center'}),
   actioned:sheetCellStyle({align:'center',size:14,color:AUDIT_EXPORT_PALETTE.ink,border:AUDIT_EXPORT_PALETTE.line}),
   actionedRepeat:sheetCellStyle({align:'center',fill:AUDIT_EXPORT_PALETTE.band,border:AUDIT_EXPORT_PALETTE.line}),
@@ -246,10 +246,11 @@ function auditExportCalcSheet(groups,disciplines){
   return sheet;
 }
 function auditExportPercentCell(equipmentCell,actionedCell,style){return sheetFormulaCell(`IF(${equipmentCell}=0,0,${actionedCell}/${equipmentCell})`,0,style);}
-/* Progress bars are native Excel data bars on a percent cell: the bar fills the
-   whole cell in proportion to the value and the percentage prints over it. */
+/* Progress bars are native Excel data bars on a percent cell. The cell shows the
+   BAR ONLY (showValue off, and a blank number format for apps that ignore it);
+   the % column next to it carries the number. */
 function auditExportBarCell(percentCell,style){return sheetFormulaCell(percentCell,0,style);}
-function auditExportDataBar(range,priority){return `<conditionalFormatting sqref="${range}"><cfRule type="dataBar" priority="${priority}"><dataBar minLength="0" maxLength="100"><cfvo type="num" val="0"/><cfvo type="num" val="1"/><color rgb="FF${AUDIT_EXPORT_PALETTE.accent}"/></dataBar></cfRule></conditionalFormatting>`;}
+function auditExportDataBar(range,priority){return `<conditionalFormatting sqref="${range}"><cfRule type="dataBar" priority="${priority}"><dataBar minLength="0" maxLength="100" showValue="0"><cfvo type="num" val="0"/><cfvo type="num" val="1"/><color rgb="FF${AUDIT_EXPORT_PALETTE.accent}"/></dataBar></cfRule></conditionalFormatting>`;}
 function auditExportTickValidation(range){return `<dataValidation type="list" allowBlank="1" showDropDown="0" showErrorMessage="1" errorTitle="Actioned" error="Pick ${AUDIT_EXPORT_TICK} or ${AUDIT_EXPORT_UNTICKED} from the list." sqref="${range}"><formula1>"${AUDIT_EXPORT_TICK},${AUDIT_EXPORT_UNTICKED}"</formula1></dataValidation>`;}
 /* ---- export plan ----
    plan.levels[severity] and plan.rules[ruleId] each hold 'include' | 'pretick'
