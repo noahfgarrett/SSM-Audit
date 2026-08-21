@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.18.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- The fiber distribution unit check now follows how FDUs are really placed: an FDU nested under the PLC, RIO, or patch panel it belongs to (same UPN) needs no dependency, and one that names that equipment as a dependency is fine too. Only an FDU hanging off a header alone, with nothing listed, is flagged\n- The rule text and its worked example no longer suggest an FDU should list the equipment it serves — a dependency is what a row relies on, and the equipment an FDU serves is either above it in the tree or lists the FDU itself"
+  },
+  {
     "version": "1.17.4",
     "date": "2026-08-19",
     "type": "fix",

@@ -225,9 +225,9 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     focus:[{row:1,field:'closestParent'}],
     caption:'The heat-trace panel sits directly under the System Name instead of under its transformer.',fix:'Parent B1-HTP-6101 to B1-XFMR-6101.'}),
   ex('logic.fdu-supported-equipment-missing',{
-    rows:[r({id:'B1-FDU-6501',desc:'Fiber optic distribution unit (FDU)',parent:sys('650'),deps:'',upn:'650',disc:FMS,im:'VF_I&C_FDU'})],
-    focus:[{row:0,field:'dependencies'}],
-    caption:'A fiber distribution unit with nothing listed that it enables.',fix:'Add the equipment or system the FDU serves as a dependency.'}),
+    rows:[r({id:'B1-FMS-FIBER',desc:'FMS fiber header',parent:sys('650'),upn:'650',disc:FMS,im:'VF_Blank'}),r({...PLC}),r({id:'B1-FDU-6501',desc:'Fiber optic distribution unit (FDU)',parent:'B1-FMS-FIBER',deps:'',upn:'650',disc:FMS,im:'VF_I&C_FDU'}),r({id:'B1-FDU-6502',desc:'Fiber optic distribution unit (FDU)',parent:'B1-PLC-6501',deps:'',upn:'650',disc:FMS,im:'VF_I&C_FDU'})],
+    focus:[{row:2,field:'closestParent'},{row:2,field:'dependencies'}],
+    caption:'The first FDU hangs off a header with no dependencies, so nothing says what it connects to. The second nests under the PLC — that placement is the relationship, and it needs no dependency.',fix:'Nest B1-FDU-6501 under the PLC, RIO, or patch panel it belongs to (same UPN), or name that equipment as a dependency.'}),
   ex('logic.vesda-fire-alarm-missing',{
     rows:[r({id:'B1-FAP-0001',desc:'Fire alarm panel',parent:sys('630'),upn:'630',disc:LSS,im:'VF_LSS_FAP CARD'}),r({id:'B1-VESDA-0001',desc:'VESDA aspirating smoke detection',parent:sys('630'),deps:'',upn:'630',disc:LSS,im:'VF_LSS_FAP CARD'})],
     focus:[{row:1,field:'dependencies'}],

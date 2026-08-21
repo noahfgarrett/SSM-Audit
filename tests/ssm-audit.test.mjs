@@ -654,3 +654,18 @@ test('a system with no root row, a description typed as a tag, and a site classi
   assert.deepEqual(equipmentIdsForRule(result, 'siteClassification'), ['FCU-1'])
   assert.equal(result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.siteClassification.id).severity, 'info')
 })
+
+test('a fiber distribution unit is placed by nesting under a PLC, RIO, or patch panel, or by a dependency', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'FMS-HDR', equipmentDescription: 'FMS fiber header', closestParent: '650  Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System', itemMaster: 'VF_Blank' }),
+    row({ equipmentId: 'FMS-PLC', equipmentDescription: 'FMS PLC', closestParent: 'FMS-HDR', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'FDU-UNDER-PLC', equipmentDescription: 'Fiber optic distribution unit (FDU)', closestParent: 'FMS-PLC', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'FDU-HEADER-ONLY', equipmentDescription: 'Fiber optic distribution unit (FDU)', closestParent: 'FMS-HDR', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'FDU-HEADER-WITH-DEP', equipmentDescription: 'Fiber optic distribution unit (FDU)', closestParent: 'FMS-HDR', dependencies: 'FMS-PLC', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'FO-PP', equipmentDescription: 'Fiber optic patch panel', closestParent: 'FMS-HDR', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+    row({ equipmentId: 'FDU-UNDER-PATCH', equipmentDescription: 'Fiber optic distribution unit (FDU)', closestParent: 'FO-PP', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650  Facility Management System' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const flagged = equipmentIdsForRule(runSsmAudit(snapshot), 'fduDependency')
+  assert.deepEqual(flagged, ['FDU-HEADER-ONLY'], 'only the FDU that hangs off a header with nothing listed is unplaced')
+})
