@@ -654,6 +654,7 @@ test('a system with no root row, a description typed as a tag, and a site classi
   const noRoot = result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.systemNoRoot.id)
   assert.ok(noRoot && /101/.test(noRoot.actual), 'the 101 system has no root row')
   assert.deepEqual(equipmentIdsForRule(result, 'tagLooksLikeText'), ['Distribution piping east wing'])
+  assert.equal(result.findings.find(f => f.rule.id === 'identity.tag-looks-like-description').severity, 'warning', 'a description-shaped tag is Check this, not Invalid')
   assert.deepEqual(equipmentIdsForRule(result, 'siteClassification'), ['FCU-1'])
   assert.equal(result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.siteClassification.id).severity, 'info')
 })
