@@ -1,7 +1,7 @@
 import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S, resetSession } from '../state.js'
 import { readArrayBuffer } from '../io/workbook.js'
-import { auditNormId, auditSnapshotFromWorkbook, auditSplitReferences } from '../audit/model.js'
+import { auditNormId, auditSnapshotFromWorkbook, auditSplitReferences, auditFingerprint } from '../audit/model.js'
 import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
@@ -143,6 +143,30 @@ function setRuleDisabled(ruleId,off){
   const set=new Set(S.rules.disabled||[]);if(off)set.add(ruleId);else set.delete(ruleId);
   S.rules.disabled=[...set];saveRulePreferences();refreshSessionResult();
 }
+/* ---- actioned in the app ----
+   Marks live in localStorage keyed by a fingerprint of the registry's contents,
+   so reloading the same workbook (even renamed) brings the progress back.
+   Finding ids are content hashes, so they line up run after run. */
+function registryActionKey(){
+  const snapshot=S.session&&S.session.snapshot;if(!snapshot)return '';
+  const rows=snapshot.rows||[];
+  return 'ssm-audit.actioned.'+auditFingerprint(rows.length+'|'+rows.slice(0,64).map(row=>auditNormId(row.equipmentId)).join(','));
+}
+function loadActioned(){
+  S.session.actioned=new Set();S.session.actionedRev=0;
+  try{const raw=localStorage.getItem(registryActionKey());if(raw)S.session.actioned=new Set(JSON.parse(raw).filter(id=>typeof id==='string'));}catch(_){}
+}
+function saveActioned(){try{const key=registryActionKey();if(key)localStorage.setItem(key,JSON.stringify([...S.session.actioned]));}catch(_){/* private mode: kept for this session */}}
+export function isActioned(finding){return !!(finding&&S.session&&S.session.actioned&&S.session.actioned.has(finding.id));}
+function setActioned(finding,on){
+  if(!S.session.actioned)S.session.actioned=new Set();
+  if(on)S.session.actioned.add(finding.id);else S.session.actioned.delete(finding.id);
+  S.session.actionedRev=(S.session.actionedRev||0)+1;saveActioned();
+}
+function actionedInResult(){
+  const result=S.session&&S.session.result;if(!result||!S.session.actioned||!S.session.actioned.size)return 0;
+  let count=0;for(const finding of result.findings)if(S.session.actioned.has(finding.id))count++;return count;
+}
 function ruleFindingCounts(){
   const result=S.session&&S.session.result;if(!result)return null;
   const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);return counts;
@@ -170,7 +194,7 @@ let exportTrapCleanup=null,exportOpener=null;
 function exportPlan(){S.session.exportPlan=S.session.exportPlan||{levels:{},rules:{}};return S.session.exportPlan;}
 function exportPlanSummary(result,plan){
   let included=0,preticked=0,skipped=0;
-  for(const finding of result.findings){const mode=auditExportPlanMode(plan,finding);if(mode==='skip')skipped++;else{included++;if(mode==='pretick')preticked++;}}
+  for(const finding of result.findings){const mode=auditExportPlanMode(plan,finding);if(mode==='skip')skipped++;else{included++;if(mode==='pretick'||isActioned(finding))preticked++;}}
   return {included,preticked,skipped};
 }
 function exportModeGroupHtml(name,current,compact){
@@ -243,7 +267,7 @@ export function openExportOptions(){
 /* ---- worked example modal ----
    The mock rows are run through the real engine when the modal opens, so the
    "What the audit says" line is the live finding text, not a copy of it. */
-let exampleTrapCleanup=null,exampleOpener=null;
+let exampleTrapCleanup=null,exampleOpener=null;let currentNavigate=null;
 function exampleCellHtml(example,rowIndex,field){
   const value=String(example.rows[rowIndex][field]||'');
   const mark=example.marks.find(entry=>entry.row===rowIndex&&entry.field===field);
@@ -389,7 +413,7 @@ export async function addAuditTarget(file,navigate){
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
       const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};
+      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};loadActioned();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -450,7 +474,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};loadActioned();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -517,9 +541,9 @@ function dimRowMatches(finding,active){
 
 function filteredFindings(){
   const query=clean(S.session.search).toUpperCase(),hiddenSources=new Set(S.session.hiddenSources||[]),hiddenSeverities=new Set(S.session.hiddenSeverities||[]),hiddenCategories=new Set(S.session.hiddenCategories||[]),hiddenRules=new Set(S.session.hiddenRules||[]),dimActive=dimActiveSets();
-  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort,DIM_KEYS.map(dimension=>(dimFilterMap()[dimension]||[]).join('~')).join('|')].join('');
+  const key=[...hiddenSources,...hiddenSeverities,...hiddenCategories,...hiddenRules,query,S.session.sort,S.session.hideActioned?'HA':'',S.session.actionedRev||0,DIM_KEYS.map(dimension=>(dimFilterMap()[dimension]||[]).join('~')).join('|')].join('');
   if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
-  let rows=S.session.result.findings.filter(finding=>!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query))&&(!dimActive.length||dimRowMatches(finding,dimActive)));
+  let rows=S.session.result.findings.filter(finding=>!(S.session.hideActioned&&isActioned(finding))&&!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query))&&(!dimActive.length||dimRowMatches(finding,dimActive)));
   const natural=(a,b)=>String(a||'').localeCompare(String(b||''),undefined,{numeric:true,sensitivity:'base'}),sort=S.session.sort;
   if(sort==='severity-asc')rows=[...rows].reverse();
   else if(sort==='equipment-asc'||sort==='equipment-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.equipmentId,b.equipmentId)||a.row-b.row));
@@ -765,11 +789,11 @@ export function renderAuditResult(navigate){
     <div class="audit-head"><div class="audit-title"><span class="audit-title-icon">${ic('check-check')}</span><div><h2>Audit Findings</h2><p>${esc(S.session.name)}</p></div></div><span class="spacer"></span>${statusMarkup(summary)}<button class="btn" id="auditDashboard">${ic('layout-dashboard')}Dashboard</button><button class="btn" id="auditBack">${ic('upload')}New registry</button><button class="btn" id="exportAudit">${ic('file-down')}Export report</button><button class="btn icon-btn" id="auditFullscreen" title="${fullscreen?'Exit full screen':'Full screen'}" aria-label="${fullscreen?'Exit full screen':'Full screen'}">${ic(fullscreen?'minimize-2':'maximize-2')}</button></div>
     ${severityStrip(summary)}
     ${filterChipRowHtml(false)}
-    <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, checks, and explanations" value="${esc(S.session.search)}"></div>${filterButtonHtml('auditFilters')}<select id="auditGroup" aria-label="Group findings">${groupOptions()}</select><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select><span class="audit-count" id="auditCount"></span></div>
+    <div class="audit-toolbar"><div class="searchbox">${ic('search')}<input id="auditSearch" aria-label="Search findings" placeholder="Search tags, checks, and explanations" value="${esc(S.session.search)}"></div>${filterButtonHtml('auditFilters')}<select id="auditGroup" aria-label="Group findings">${groupOptions()}</select><select id="auditSort" aria-label="Sort findings">${sortOptions()}</select>${actionedInResult()?`<button class="chip sm hide-actioned ${S.session.hideActioned?'on':''}" type="button" id="auditHideActioned" aria-pressed="${S.session.hideActioned?'true':'false'}" title="Hide findings marked actioned in the app">${ic('check')}Hide actioned<b>${actionedInResult().toLocaleString()}</b></button>`:''}<span class="audit-count" id="auditCount"></span></div>
     <div class="audit-table-wrap" id="auditTableWrap" tabindex="0" role="group" aria-label="Findings list. Use the arrow keys to move and Enter to open."><table class="audit-table"><thead><tr><th>Severity</th><th>What was found</th><th>Equipment ID</th><th>Source</th><th>Sheet &middot; row</th><th aria-label="Open details"></th></tr></thead><tbody id="auditRows"></tbody></table></div>
   </section>
   ${filterPanelHtml()}`;
-  renderSideNav(navigate);wireAuditResult(navigate);
+  currentNavigate=navigate;renderSideNav(navigate);wireAuditResult(navigate);
 }
 
 function auditGroupRowHtml(item,index){
@@ -778,7 +802,7 @@ function auditGroupRowHtml(item,index){
 }
 function auditRowHtml(item,index,query){
   const finding=item.finding;
-  return `<tr data-row-index="${index}" data-audit-finding="${esc(finding.id)}" tabindex="-1" aria-label="Open finding for ${esc(finding.equipmentId||'the registry')}"><td><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span></td><td><b title="${esc(finding.why)}">${highlightHtml(finding.why,query)}</b><span>${esc(finding.rule.title)}</span><small class="audit-mobile-evidence">${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)} &middot; ${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</small></td><td>${copyTagHtml(finding.equipmentId,highlightHtml(finding.equipmentId,query))}</td><td>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</td><td class="audit-evidence-cell">${esc(finding.sheet||'Registry')} &middot; ${finding.row||'&mdash;'}</td><td>${ic('chevron-right')}</td></tr>`;
+  return `<tr data-row-index="${index}" data-audit-finding="${esc(finding.id)}" tabindex="-1" class="${isActioned(finding)?'is-actioned':''}" aria-label="Open finding for ${esc(finding.equipmentId||'the registry')}"><td><span class="audit-severity ${finding.severity}">${SEVERITY_LABELS[finding.severity]}</span>${isActioned(finding)?`<span class="actioned-flag" title="Marked actioned in the app">${ic('check')}</span>`:''}</td><td><b title="${esc(finding.why)}">${highlightHtml(finding.why,query)}</b><span>${esc(finding.rule.title)}</span><small class="audit-mobile-evidence">${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)} &middot; ${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</small></td><td>${copyTagHtml(finding.equipmentId,highlightHtml(finding.equipmentId,query))}</td><td>${esc(SOURCE_LABELS[finding.rule.source]||finding.rule.source)}</td><td class="audit-evidence-cell">${esc(finding.sheet||'Registry')} &middot; ${finding.row||'&mdash;'}</td><td>${ic('chevron-right')}</td></tr>`;
 }
 function renderRows(){
   const wrap=$('#auditTableWrap'),body=$('#auditRows');if(!wrap||!body)return;
@@ -919,7 +943,7 @@ function openFinding(id,opener){
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
     <div class="finding-evidence">${ic('file-spreadsheet')}${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}${finding.field?' &middot; '+esc(finding.field):''}</div>
-    ${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}
+    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Actioned — click to undo':'Mark actioned'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
     <div class="finding-steps"><button class="btn ghost sm" type="button" id="findingPrev" ${position>0?'':'disabled'}>${ic('chevron-left')}Previous</button><span>${position>=0?`${(position+1).toLocaleString()} of ${list.length.toLocaleString()}`:''}</span><button class="btn ghost sm" type="button" id="findingNext" ${position>=0&&position<list.length-1?'':'disabled'}>Next${ic('chevron-right')}</button></div>
   </div>`;
   wireCopyTags($('#drawerBody'));
@@ -927,6 +951,8 @@ function openFinding(id,opener){
   if(previous)previous.onclick=()=>{const target=list[position-1];if(target)openFinding(target.id,opener);};
   if(next)next.onclick=()=>{const target=list[position+1];if(target)openFinding(target.id,opener);};
   if(inTree)inTree.onclick=()=>{closeDrawer();focusHierarchyOnEquipment(finding.equipmentId);};
+  const actionedButton=$('#findingActioned');
+  if(actionedButton)actionedButton.onclick=()=>{setActioned(finding,!isActioned(finding));if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else renderRows();openFinding(finding.id,opener);};
   const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');
   drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
 }
@@ -949,6 +975,7 @@ function wireAuditResult(navigate){
   $('#auditFullscreen').onclick=()=>{S.session.fullscreen=!S.session.fullscreen;renderAuditResult(navigate);};
   $('#auditSearch').oninput=event=>{S.session.search=event.target.value;S.session.cursor=-1;debounceSearch(()=>rerenderRows(true));};
   $('#auditSort').onchange=event=>{S.session.sort=event.target.value;S.session.cursor=-1;rerenderRows(true);};
+  const hideActioned=$('#auditHideActioned');if(hideActioned)hideActioned.onclick=()=>{S.session.hideActioned=!S.session.hideActioned;S.session.cursor=-1;S.session.scrollTop=0;renderAuditResult(currentNavigate||(()=>{}));};
   $('#auditGroup').onchange=event=>{S.session.groupBy=event.target.value;S.session.collapsedGroups=[];S.session.cursor=-1;S.session.displayCacheKey='';rerenderRows(true);};
   wireSeverityStrip();wireFilterChips();wireFilterPanel();
   const wrap=$('#auditTableWrap');
@@ -1235,6 +1262,22 @@ function dashStatTiles(stats){
 
 /* ---- shared tile + block markup ---- */
 
+/* The per-level breakdown: every check that fired, under its level, each row
+   opening the findings narrowed to exactly that check at that level. */
+function dashBreakdownHtml(scoped,severityCounts){
+  const open=!!S.session.dashBreakdownOpen;
+  const toggle=`<button class="btn ghost sm dash-breakdown-toggle" type="button" id="dashBreakdownToggle" aria-expanded="${open?'true':'false'}">${ic(open?'chevron-down':'chevron-right')}${open?'Hide the breakdown by check':'Breakdown by check'}</button>`;
+  if(!open)return `<div class="dash-breakdown-bar">${toggle}</div>`;
+  const byLevel=new Map(SSM_AUDIT_SEVERITIES.map(level=>[level,new Map()]));
+  for(const finding of scoped.findings){const bucket=byLevel.get(finding.severity);if(!bucket)continue;const entry=bucket.get(finding.rule.id)||{rule:finding.rule,count:0};entry.count++;bucket.set(finding.rule.id,entry);}
+  const columns=SSM_AUDIT_SEVERITIES.map(level=>{
+    const entries=[...byLevel.get(level).values()].sort((left,right)=>right.count-left.count||natCmp(left.rule.title,right.rule.title));
+    return `<div class="dash-breakdown-col ${level}"><header><span class="audit-severity ${level}">${esc(SEVERITY_LABELS[level])}</span><b>${(severityCounts[level]||0).toLocaleString()}</b></header>
+      ${entries.length?entries.map(entry=>`<button type="button" class="dash-breakdown-item" data-dash-breakdown="${level}||${esc(entry.rule.id)}" title="Open just these findings"><span>${esc(entry.rule.title)}</span><b>${entry.count.toLocaleString()}</b></button>`).join(''):'<p class="dash-empty">Nothing at this level.</p>'}
+    </div>`;
+  }).join('');
+  return `<div class="dash-breakdown-bar">${toggle}</div><div class="dash-card dash-breakdown">${columns}</div>`;
+}
 function dashSeverityTileHtml(level,count){
   const empty=!count,label=SEVERITY_LABELS[level];
   return `<button class="dash-tile ${level}${empty?' is-empty':''}" type="button" data-dash-severity="${level}" ${empty?'disabled':''} title="${empty?`Nothing at ${esc(label)} level`:`Show only ${esc(label)} findings`}">
@@ -1315,6 +1358,7 @@ function dashShellHtml(){
   return `<section class="dash-shell" id="dashShell">
     ${head}
     <div class="dash-tiles">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityTileHtml(level,severityCounts[level]||0)).join('')}</div>
+    ${dashBreakdownHtml(scoped,severityCounts)}
     ${dashBlockHtml('Where the problems are','The same findings counted three ways. Pick a row to open the list narrowed to it.',
       `<div class="dash-rank-grid">${dashRankCardHtml('discipline','By discipline','Findings per discipline',scoped.findings)}${dashRankCardHtml('upn','By UPN and system','Findings per system',scoped.findings)}${dashRankCardHtml('milestone','By L2 milestone','Findings per L2 phase',scoped.findings)}</div>`)}
     ${dashTabsHtml(scoped,overview)}
@@ -1328,7 +1372,7 @@ export function renderDashboard(navigate){
   renderSideNav(navigate);
   /* The panel lives outside #dashHost, so a live filter change can rebuild every
      block underneath it without closing the panel or losing focus. */
-  filterRerender=()=>{const host=$('#dashHost');if(!host)return;host.innerHTML=dashShellHtml();wireDashboard(navigate);};
+  filterRerender=()=>redrawDashHost(navigate);
   wireDashboard(navigate);wireFilterPanel();
 }
 function dashOpenFindings(navigate,apply){
@@ -1342,6 +1386,13 @@ function dashOpenFindings(navigate,apply){
 /* The scope and the four counting passes are pure given S.session, so they are
    exported for tests/ui-dashboard.test.mjs. The build strips the statement. */
 export { dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, scopedResult };
+/* Rebuild the dashboard without losing the page's scroll position. */
+function redrawDashHost(navigate){
+  const host=$('#dashHost'),view=$('#view');if(!host)return;
+  const top=view?view.scrollTop:0;
+  host.innerHTML=dashShellHtml();wireDashboard(navigate);
+  if(view)view.scrollTop=top;
+}
 function wireDashboard(navigate){
   $('#dashOpenFindings')?.addEventListener('click',()=>dashOpenFindings(navigate));
   $('#dashExport')?.addEventListener('click',()=>openExportOptions());
@@ -1356,7 +1407,15 @@ function wireDashboard(navigate){
     const open=()=>showOnlyRule(row.dataset.dashRule,navigate,true);
     row.onclick=open;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};
   });
-  $$('[data-dash-tab]').forEach(button=>button.onclick=()=>{S.session.dashTab=button.dataset.dashTab;const host=$('#dashHost');if(host){host.innerHTML=dashShellHtml();wireDashboard(navigate);}});
+  $$('[data-dash-tab]').forEach(button=>button.onclick=()=>{S.session.dashTab=button.dataset.dashTab;redrawDashHost(navigate);});
+  const breakdownToggle=$('#dashBreakdownToggle');if(breakdownToggle)breakdownToggle.onclick=()=>{S.session.dashBreakdownOpen=!S.session.dashBreakdownOpen;redrawDashHost(navigate);};
+  $$('[data-dash-breakdown]').forEach(button=>button.onclick=()=>{
+    const [level,ruleId]=button.dataset.dashBreakdown.split('||');
+    dashOpenFindings(navigate,()=>{
+      S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);
+      S.session.hiddenRules=[...new Set((S.session.result.findings||[]).map(finding=>finding.rule.id))].filter(id=>id!==ruleId);
+    });
+  });
   $$('[data-dash-stat]').forEach(tile=>tile.onclick=()=>{
     const action=tile.dataset.dashStat;
     if(action==='hierarchy'){if(S.session.snapshot)navigate('hierarchy');return;}

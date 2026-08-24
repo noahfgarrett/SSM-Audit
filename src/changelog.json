@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.22.0",
+    "date": "2026-08-19",
+    "type": "feature",
+    "notes": "- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"
+  },
+  {
     "version": "1.21.1",
     "date": "2026-08-19",
     "type": "fix",

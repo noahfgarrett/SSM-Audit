@@ -2013,3 +2013,26 @@ body.nav-collapsed{--sidenav-width:60px}
 .rule-slot-empty{display:block;min-height:23px}
 @media (max-width:1100px){.rule-reference-row{grid-template-columns:32px minmax(0,1fr)}.rule-reference-tags{grid-column:2;width:fit-content;justify-self:start}}
 @media (max-width:640px){.rule-reference-tags{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---- actioned in the app ---- */
+tr.is-actioned td{opacity:.55}
+tr.is-actioned td:first-child{opacity:1}
+.actioned-flag{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;background:var(--ok-bg);color:var(--ok);vertical-align:middle}
+.actioned-flag .ic{width:12px;height:12px}
+.chip.sm.hide-actioned b{margin-left:5px;font:700 10.5px var(--mono)}
+.chip.sm.hide-actioned.on{background:var(--ok-bg);border-color:#bddccc;color:var(--ok)}
+.finding-action-row{display:flex;gap:8px;flex-wrap:wrap}
+#findingActioned.done{background:var(--ok-bg);border-color:#bddccc;color:var(--ok)}
+/* ---- dashboard breakdown ---- */
+.dash-breakdown-bar{margin:10px 0 0}
+.dash-breakdown{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:10px;overflow:hidden}
+.dash-breakdown-col{min-width:0;border-right:1px solid var(--border);padding:12px}
+.dash-breakdown-col:last-child{border-right:0}
+.dash-breakdown-col header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.dash-breakdown-col header b{font:700 15px var(--mono);color:var(--ink)}
+.dash-breakdown-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.dash-breakdown-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-breakdown-item b{font:700 11.5px var(--mono);color:var(--ink)}
+.dash-breakdown-item:hover{background:var(--tint);color:var(--accent-700)}
+.dash-breakdown-item:focus-visible{outline:none;box-shadow:var(--ring)}
+@media (max-width:1100px){.dash-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-breakdown-col:nth-child(2){border-right:0}.dash-breakdown-col{border-bottom:1px solid var(--border)}}

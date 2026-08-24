@@ -539,3 +539,17 @@ test('switched-off checks are left out of the Rules sheet', () => {
   assert.ok(!titles.includes(firedRule.title), 'the switched-off check is not listed')
   assert.ok(titles.length > 40, 'the rest of the rulebook is still there')
 })
+
+test('findings actioned in the app arrive pre-ticked in the report', () => {
+  const result = auditResult()
+  /* action every finding on one equipment */
+  const tag = result.findings[0].equipmentId
+  const ids = result.findings.filter(finding => finding.equipmentId === tag).map(finding => finding.id)
+  const book = buildAuditWorkbook(result, 'synthetic-registry.xlsx', { actionedIds: ids })
+  const sheet = tabHolding(book, tag), lines = grid(sheet).slice(2), tags = carriedTags(sheet)
+  const first = tags.indexOf(tag)
+  assert.equal(lines[first][0], '☑', 'its Actioned box starts ticked')
+  /* an equipment with none of its findings actioned stays unticked */
+  const other = tags.find((candidate, at) => candidate !== tag && String(lines[at][2] || '').trim())
+  assert.equal(lines[tags.indexOf(other)][0], '☐')
+})
