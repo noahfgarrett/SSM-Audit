@@ -270,7 +270,10 @@ export function runSsmAudit(snapshot,options={}){
     /* Info, not warning: real registries roll milestones out gradually, and
        thousands of not-yet-assigned rows must not bury the actionable list. */
     if(projectUsesMilestones){checks++;if(!clean(row.milestone)||!clean(row.milestoneParent))add(SSM_AUDIT_RULES.milestonePair,'info',row,{field:'Milestones',why:'This project uses milestones, but this row is missing its L1 or L2.',actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone filled in',recommendation:'Assign the governing L1 milestone and its L2 milestone.'});}
-    if(clean(row.milestone)&&upn&&SSM_AUDIT_RULES.milestoneUpn.enabled){checks++;
+    /* Letter-code rows (RR / SEC / MISC) are cross-cutting -- rooms and areas
+       ride the milestone of the system they serve -- so only numeric-UPN rows
+       are held to the milestone's UPN. */
+    if(clean(row.milestone)&&upn&&/^[0-9]+$/.test(upn)&&SSM_AUDIT_RULES.milestoneUpn.enabled){checks++;
       const linked=extoRev21MilestoneUpns(row.milestone);
       if(linked.upns.length&&!linked.upns.includes(upn))add(SSM_AUDIT_RULES.milestoneUpn,'warning',row,{field:'L2 Milestone',why:`The L2 milestone belongs to UPN ${linked.upns.join('/')} (matched by ${linked.via}), but this row is on UPN ${row.upn}.`,actual:row.milestone,expected:`An L2 milestone for UPN ${row.upn}`,recommendation:'Confirm the row belongs to this L2 milestone; if not, assign the L2 milestone for its own UPN.'});
       else if(!linked.upns.length&&/^[0-9]+$/.test(upn))add(SSM_AUDIT_RULES.milestoneUpn,'info',row,{field:'L2 Milestone',why:'The L2 milestone name does not point at any UPN or system, so it cannot be checked against this row.',actual:row.milestone,expected:`An L2 milestone naming UPN ${row.upn} or its system`,recommendation:'Confirm the milestone applies to this system.'});
