@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.21.1",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- A description-shaped Equipment ID is now Check this rather than Invalid"
+  },
+  {
     "version": "1.21.0",
     "date": "2026-08-19",
     "type": "feature",
