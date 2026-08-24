@@ -265,12 +265,12 @@ export function auditExportPlanMode(plan,finding){
 }
 /* The result the workbook is built from: skipped findings removed, summary
    recounted, and the set of findings that arrive pre-ticked. */
-export function auditExportApplyPlan(result,plan){
-  const findings=[],preticked=new Set();
+export function auditExportApplyPlan(result,plan,actionedIds){
+  const findings=[],preticked=new Set(),actioned=new Set(actionedIds||[]);
   for(const finding of result&&result.findings||[]){
     const mode=auditExportPlanMode(plan,finding);
     if(mode==='skip')continue;
-    findings.push(finding);if(mode==='pretick')preticked.add(finding);
+    findings.push(finding);if(mode==='pretick'||actioned.has(finding.id))preticked.add(finding);
   }
   const severity={blocker:0,error:0,warning:0,info:0};
   for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
@@ -546,7 +546,7 @@ function auditExportRulesSheet(result,disabledRules){
 }
 
 export function buildAuditWorkbook(sourceResult,sessionName,options={}){
-  const {result,preticked}=auditExportApplyPlan(sourceResult,options.plan);
+  const {result,preticked}=auditExportApplyPlan(sourceResult,options.plan,options.actionedIds);
   const layout=options.layout==='level'?'level':'milestone',groupLabel=layout==='level'?'Finding level':'Milestone';
   const workbook=XLSX.utils.book_new(),groups=layout==='level'?auditExportLevelGroups(result):auditExportGroups(result);
   const used=new Set([AUDIT_EXPORT_DASHBOARD_SHEET,AUDIT_EXPORT_INDEX_SHEET,AUDIT_EXPORT_FINDINGS_SHEET,AUDIT_EXPORT_RULES_SHEET,AUDIT_EXPORT_CALC_SHEET].map(name=>name.toLowerCase()));
@@ -573,7 +573,7 @@ export async function exportSsmAuditXlsx(plan){
   try{
     await runWithProgress('Building the Excel report',S.session.name,async(checkpoint,report)=>{
       report(.04,'Collecting rows and findings');await checkpoint();
-      const workbook=buildAuditWorkbook(result,S.session.name,{plan,layout:plan&&plan.layout,disabledRules:S.rules.disabled});
+      const workbook=buildAuditWorkbook(result,S.session.name,{plan,layout:plan&&plan.layout,disabledRules:S.rules.disabled,actionedIds:[...(S.session.actioned||[])]});
       /* The next stretch is SheetJS serializing the workbook XML in one
          synchronous run -- the label paints first so the loader is honest
          about the wait on a large registry. */
