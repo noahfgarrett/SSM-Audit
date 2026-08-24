@@ -698,6 +698,9 @@ test('an L2 milestone links to its UPN by marker, parentheses, standalone number
   assert.deepEqual(extoRev21MilestoneUpns('L2-M1-104 30% Capacity'), { upns: ['104'], via: 'the UPN in the name' })
   assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1186 CPS System'), { upns: ['605'], via: 'the system name it spells out' }, 'CPS resolves to Continuous Power Supply, and 1186 is never read as 118')
   assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1189 Shakedown').upns, [], 'a name with no link stays unlinked')
+  assert.deepEqual(extoRev21MilestoneUpns('FAB 27.1 480v CPS - UPS Green Tag').upns, [], 'a voltage is not a UPN, and CPS without the word System stays unlinked')
+  assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1185 FAB NPS Substantial').upns, [], 'site jargon acronyms and the (Fab) location note never link')
+  assert.deepEqual(extoRev21MilestoneUpns('Spec Gas Rooms SL1 enabling utilities').upns, [], 'a note shared by a whole family of systems cannot link')
   const snapshot = auditSnapshotFromAoa([
     headers,
     row({ equipmentId: 'CPS-OK', closestParent: '605  Continuous Power Supply', closestParentStatus: 'NEW', upn: '605', discipline: 'ELECTRICAL', systemName: '605  Continuous Power Supply', milestone: 'SP-L2-M1-1186 CPS System', milestoneParent: 'L1-M1 30% Capacity' }),
@@ -706,4 +709,10 @@ test('an L2 milestone links to its UPN by marker, parentheses, standalone number
   const flagged = equipmentIdsForRule(runSsmAudit(snapshot), 'milestoneUpn')
   assert.ok(!flagged.includes('CPS-OK'), 'a 605 row on the CPS milestone passes')
   assert.ok(flagged.includes('CPS-WRONG'), 'a 603 row on the 605 milestone is flagged')
+  /* rooms and areas ride the milestone of the system they serve */
+  const roomSnapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'RR-ROOM', closestParent: 'Civil Structural Architectural Systems (CSA)', closestParentStatus: 'NEW', upn: 'RR', discipline: 'ROOM/AREA/BAY-READY', systemName: 'CSA', milestone: 'SP-L2-M1-1186 CPS System', milestoneParent: 'L1-M1 30% Capacity' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  assert.deepEqual(equipmentIdsForRule(runSsmAudit(roomSnapshot), 'milestoneUpn'), [], 'letter-code rows are not held to the milestone UPN')
 })

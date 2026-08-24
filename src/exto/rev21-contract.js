@@ -48,20 +48,33 @@ export function extoRev21ValidatePartial(record){
       itself carries in parentheses (GAH, CSA), an acronym of the name's words
       (Continuous Power Supply -> CPS), or the full name spelled out.
    Returns {upns:[...], via} — empty upns when nothing links. */
+/* Two kinds of name key. EXPLICIT keys come straight from the Upload Template
+   (an abbreviation it carries in parentheses, or the spelled-out name) and match
+   anywhere. DERIVED acronyms (Continuous Power Supply -> CPS) are only trusted
+   when the milestone says "<acronym> System" -- site jargon like "NPS
+   Substantial" (normal power) collides with derived acronyms otherwise. */
 const EXTO_REV21_MILESTONE_NAME_KEYS=(()=>{
-  const keys=new Map();
-  const addKey=(key,upn)=>{if(key.length<3)return;const set=keys.get(key)||new Set();set.add(upn);keys.set(key,set);};
-  const STOP=new Set(['SYSTEM','SYSTEMS','AND','THE','FOR','OF','R/S','S/R']);
+  const explicit=new Map(),derived=new Map();
+  const addKey=(store,key,upn)=>{if(key.length<3)return;const set=store.get(key)||new Set();set.add(upn);store.set(key,set);};
+  const SKIP=new Set(['AND','THE','FOR','OF','R/S','S/R']);
   for(const name of EXTO_REV21_VOCABULARY['System Name']||[]){
     const normalized=extoRev21Norm(name),upnMatch=normalized.match(/^([0-9]{3}|[A-Z]{2,4}) /);
     const upn=upnMatch?upnMatch[1]:'';if(!upn||!EXTO_REV21_UPN_SET.has(upn))continue;
-    for(const inner of normalized.matchAll(/\(([^)]+)\)/g))addKey(inner[1].trim(),upn);
+    /* A parenthesized note that names a LOCATION (which building the system
+       serves) is not an abbreviation of the system: "(Fab)" on the hydrogen
+       systems must not link every milestone that mentions the FAB. */
+    for(const inner of normalized.matchAll(/\(([^)]+)\)/g)){const key=inner[1].trim();if(key!=='FAB'&&key!=='CUB')addKey(explicit,key,upn);}
     const body=normalized.replace(/^([0-9]{3}|[A-Z]{2,4}) +/,'').replace(/\([^)]*\)/g,' ').trim();
-    const words=body.split(/[^A-Z0-9]+/).filter(word=>word&&!STOP.has(word)&&/^[A-Z]/.test(word));
-    if(words.length>=2)addKey(words.map(word=>word[0]).join(''),upn);
-    if(body.length>=8)addKey(body,upn);
+    const words=body.split(/[^A-Z0-9]+/).filter(word=>word&&!SKIP.has(word)&&/^[A-Z]/.test(word));
+    const significant=words.filter(word=>word!=='SYSTEM'&&word!=='SYSTEMS');
+    if(significant.length>=2)addKey(derived,significant.map(word=>word[0]).join(''),upn);
+    if(words.length>=2)addKey(derived,words.map(word=>word[0]).join(''),upn);
+    if(body.length>=8)addKey(explicit,body,upn);
   }
-  return keys;
+  /* A key shared by more than two UPNs identifies a family, not a system --
+     "(Spec)" appears on thirty-plus specialty-gas systems -- and cannot link. */
+  for(const store of [explicit,derived])for(const [key,upns] of store)if(upns.size>2)store.delete(key);
+  return {explicit,derived};
 })();
 export function extoRev21MilestoneUpns(name){
   const text=extoRev21Norm(name);if(!text)return {upns:[],via:''};
@@ -71,13 +84,18 @@ export function extoRev21MilestoneUpns(name){
   const parens=[];for(const inner of text.matchAll(/\(([^)]+)\)/g))for(const token of inner[1].split(/[^A-Z0-9]+/))if(/^[0-9]{3}$/.test(token)&&valid(token))parens.push(token);
   if(parens.length)return {upns:[...new Set(parens)],via:'the UPN in parentheses'};
   const stripped=text.replace(/\([^)]*\)/g,' ');
-  const standalone=[...new Set([...stripped.matchAll(/(?:^|[^0-9])([0-9]{3})(?![0-9])/g)].map(match=>match[1]).filter(valid))];
+  /* A three-digit run counts only with non-alphanumeric on BOTH sides: 480V is
+     a voltage and 1186 is a milestone sequence, never a UPN. */
+  const standalone=[...new Set([...stripped.matchAll(/(?:^|[^0-9A-Z])([0-9]{3})(?![0-9A-Z])/g)].map(match=>match[1]).filter(valid))];
   if(standalone.length)return {upns:standalone,via:'the UPN in the name'};
   const hits=new Set();
   const tokens=new Set(stripped.split(/[^A-Z0-9/]+/).filter(Boolean));
-  for(const [key,upns] of EXTO_REV21_MILESTONE_NAME_KEYS){
+  for(const [key,upns] of EXTO_REV21_MILESTONE_NAME_KEYS.explicit){
     const matched=key.includes(' ')?stripped.includes(key):tokens.has(key);
     if(matched)for(const upn of upns)hits.add(upn);
+  }
+  for(const [key,upns] of EXTO_REV21_MILESTONE_NAME_KEYS.derived){
+    if(new RegExp(`(?:^|[^A-Z0-9])${key} SYSTEMS?(?:$|[^A-Z0-9])`).test(stripped))for(const upn of upns)hits.add(upn);
   }
   if(hits.size)return {upns:[...hits],via:'the system name it spells out'};
   return {upns:[],via:''};

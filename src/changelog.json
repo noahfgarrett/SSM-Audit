@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.23.1",
+    "date": "2026-08-19",
+    "type": "fix",
+    "notes": "- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"
+  },
+  {
     "version": "1.23.0",
     "date": "2026-08-19",
     "type": "feature",
