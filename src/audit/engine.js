@@ -1,5 +1,5 @@
 import { clean, natCmp } from '../core/text.js'
-import { extoRev21Canonical, extoRev21EffectiveDiscipline, extoRev21IsSystemName, extoRev21IsUpn, extoRev21Norm, extoRev21SystemsForUpn, extoRev21UpnCandidates } from '../exto/rev21-contract.js'
+import { extoRev21Canonical, extoRev21EffectiveDiscipline, extoRev21IsSystemName, extoRev21IsUpn, extoRev21Norm, extoRev21SystemsForUpn, extoRev21UpnCandidates, extoRev21MilestoneUpns } from '../exto/rev21-contract.js'
 import { VF_ITEM_MASTER_NAMES } from '../exto/vf-item-masters.js'
 import { auditFingerprint, auditNormId, auditSplitReferences } from './model.js'
 
@@ -45,7 +45,7 @@ export const SSM_AUDIT_RULES=Object.freeze({
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','One UPN, one system','Every row on a UPN should carry the same System Name and Discipline.'),
   /* milestones — enabled as review-grade checks; engineers decide */
   milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','L1 and L2 assigned together','When a project uses milestones, each row carries both an L1 Milestone Parent and an L2 Milestone.',{confidence:'strong'}),
-  milestoneUpn:auditRule('milestone.l2-upn-mismatch','sop','milestones','L2 milestone names this UPN','The L2 milestone name should contain the row’s own UPN. When it names a different UPN the assignment needs review.',{confidence:'strong'}),
+  milestoneUpn:auditRule('milestone.l2-upn-mismatch','sop','milestones','L2 milestone matches this UPN','An L2 milestone points at its UPN — an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system\u2019s name or abbreviation. When it points at a different UPN the assignment needs review.',{confidence:'strong'}),
   milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','L1 and L2 agree','L1 and L2 milestones on one row should describe the same phase — not, for example, 30% capacity on one and 100% on the other.',{confidence:'strong'}),
   milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','One L2, one meaning','The same L2 milestone should roll up to one consistent L1 meaning across the registry.',{confidence:'strong'}),
   milestoneCohort:auditRule('milestone.local-cohort-outlier','sop','milestones','Matches comparable equipment','Equipment of the same kind, in the same building and system, normally shares one milestone pair.',{confidence:'strong'}),
@@ -271,9 +271,9 @@ export function runSsmAudit(snapshot,options={}){
        thousands of not-yet-assigned rows must not bury the actionable list. */
     if(projectUsesMilestones){checks++;if(!clean(row.milestone)||!clean(row.milestoneParent))add(SSM_AUDIT_RULES.milestonePair,'info',row,{field:'Milestones',why:'This project uses milestones, but this row is missing its L1 or L2.',actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone filled in',recommendation:'Assign the governing L1 milestone and its L2 milestone.'});}
     if(clean(row.milestone)&&upn&&SSM_AUDIT_RULES.milestoneUpn.enabled){checks++;
-      const inName=extoRev21UpnCandidates(row.milestone);
-      if(inName.length&&!inName.includes(upn))add(SSM_AUDIT_RULES.milestoneUpn,'warning',row,{field:'L2 Milestone',why:`The L2 milestone names UPN ${inName.join('/')}, but this row is on UPN ${row.upn}.`,actual:row.milestone,expected:`An L2 milestone for UPN ${row.upn}`,recommendation:'Confirm the row belongs to this L2 milestone; if not, assign the L2 milestone for its own UPN.'});
-      else if(!inName.length&&/^[0-9]+$/.test(upn))add(SSM_AUDIT_RULES.milestoneUpn,'info',row,{field:'L2 Milestone',why:'The L2 milestone name does not mention a UPN, so it cannot be checked against this row.',actual:row.milestone,expected:`An L2 milestone naming UPN ${row.upn}`,recommendation:'Confirm the milestone applies to this system.'});
+      const linked=extoRev21MilestoneUpns(row.milestone);
+      if(linked.upns.length&&!linked.upns.includes(upn))add(SSM_AUDIT_RULES.milestoneUpn,'warning',row,{field:'L2 Milestone',why:`The L2 milestone belongs to UPN ${linked.upns.join('/')} (matched by ${linked.via}), but this row is on UPN ${row.upn}.`,actual:row.milestone,expected:`An L2 milestone for UPN ${row.upn}`,recommendation:'Confirm the row belongs to this L2 milestone; if not, assign the L2 milestone for its own UPN.'});
+      else if(!linked.upns.length&&/^[0-9]+$/.test(upn))add(SSM_AUDIT_RULES.milestoneUpn,'info',row,{field:'L2 Milestone',why:'The L2 milestone name does not point at any UPN or system, so it cannot be checked against this row.',actual:row.milestone,expected:`An L2 milestone naming UPN ${row.upn} or its system`,recommendation:'Confirm the milestone applies to this system.'});
     }
     if(row.milestone&&row.milestoneParent){
       if(SSM_AUDIT_RULES.milestoneIntent.enabled){const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;

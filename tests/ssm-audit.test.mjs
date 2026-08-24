@@ -301,7 +301,7 @@ test('the L2 milestone should name the row UPN; a different UPN is flagged for r
   const byId = Object.fromEntries(result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.milestoneUpn.id).map(f => [f.equipmentId, f]))
   assert.ok(!byId['L2-OWN'], 'an L2 naming the row UPN passes')
   assert.equal(byId['L2-OTHER'].severity, 'warning')
-  assert.match(byId['L2-OTHER'].why, /names UPN 604.*on UPN 602/)
+  assert.match(byId['L2-OTHER'].why, /belongs to UPN 604.*on UPN 602/)
   assert.equal(byId['L2-NONE'].severity, 'info', 'an L2 with no UPN in its name cannot be checked, so it is only noted')
 })
 
@@ -688,4 +688,22 @@ test('control, RIO, and VESDA links are inherited through the parent chain', () 
   const result = runSsmAudit(snapshot)
   assert.deepEqual(equipmentIdsForRule(result, 'rioControlPath'), ['RIO-ORPHAN'], 'an RIO inside a panel under the PLC inherits its controller')
   assert.deepEqual(equipmentIdsForRule(result, 'vesdaFireAlarm'), ['VESDA-ORPHAN'], 'a VESDA nested under its fire alarm panel needs no dependency')
+})
+
+test('an L2 milestone links to its UPN by marker, parentheses, standalone number, or system name', async () => {
+  const { extoRev21MilestoneUpns } = await import('../src/exto/rev21-contract.js')
+  assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1105 UPN 237 Enabling'), { upns: ['237'], via: 'the UPN marker in the name' })
+  assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1107 UPN 118, 119 Enabling').upns, ['118', '119'])
+  assert.deepEqual(extoRev21MilestoneUpns('Phase 2 (605) turnover'), { upns: ['605'], via: 'the UPN in parentheses' })
+  assert.deepEqual(extoRev21MilestoneUpns('L2-M1-104 30% Capacity'), { upns: ['104'], via: 'the UPN in the name' })
+  assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1186 CPS System'), { upns: ['605'], via: 'the system name it spells out' }, 'CPS resolves to Continuous Power Supply, and 1186 is never read as 118')
+  assert.deepEqual(extoRev21MilestoneUpns('SP-L2-M1-1189 Shakedown').upns, [], 'a name with no link stays unlinked')
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'CPS-OK', closestParent: '605  Continuous Power Supply', closestParentStatus: 'NEW', upn: '605', discipline: 'ELECTRICAL', systemName: '605  Continuous Power Supply', milestone: 'SP-L2-M1-1186 CPS System', milestoneParent: 'L1-M1 30% Capacity' }),
+    row({ equipmentId: 'CPS-WRONG', closestParent: '603  Heat Trace / Low Voltage', closestParentStatus: 'NEW', upn: '603', discipline: 'ELECTRICAL', systemName: '603  Heat Trace / Low Voltage', milestone: 'SP-L2-M1-1186 CPS System', milestoneParent: 'L1-M1 30% Capacity' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const flagged = equipmentIdsForRule(runSsmAudit(snapshot), 'milestoneUpn')
+  assert.ok(!flagged.includes('CPS-OK'), 'a 605 row on the CPS milestone passes')
+  assert.ok(flagged.includes('CPS-WRONG'), 'a 603 row on the 605 milestone is flagged')
 })

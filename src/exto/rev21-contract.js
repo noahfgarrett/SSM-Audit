@@ -38,6 +38,51 @@ export function extoRev21ValidatePartial(record){
   }
   return issues;
 }
+/* ---- linking an L2 milestone name to its UPN ----
+   In priority order:
+   1. an explicit "UPN 237" marker (also lists: "UPN 118, 119");
+   2. a UPN written in parentheses;
+   3. a standalone three-digit UPN token — never digits inside a longer run,
+      so the milestone sequence in "SP-L2-M1-1186" can no longer read as 118;
+   4. the system's name or abbreviation: an abbreviation the Upload Template
+      itself carries in parentheses (GAH, CSA), an acronym of the name's words
+      (Continuous Power Supply -> CPS), or the full name spelled out.
+   Returns {upns:[...], via} — empty upns when nothing links. */
+const EXTO_REV21_MILESTONE_NAME_KEYS=(()=>{
+  const keys=new Map();
+  const addKey=(key,upn)=>{if(key.length<3)return;const set=keys.get(key)||new Set();set.add(upn);keys.set(key,set);};
+  const STOP=new Set(['SYSTEM','SYSTEMS','AND','THE','FOR','OF','R/S','S/R']);
+  for(const name of EXTO_REV21_VOCABULARY['System Name']||[]){
+    const normalized=extoRev21Norm(name),upnMatch=normalized.match(/^([0-9]{3}|[A-Z]{2,4}) /);
+    const upn=upnMatch?upnMatch[1]:'';if(!upn||!EXTO_REV21_UPN_SET.has(upn))continue;
+    for(const inner of normalized.matchAll(/\(([^)]+)\)/g))addKey(inner[1].trim(),upn);
+    const body=normalized.replace(/^([0-9]{3}|[A-Z]{2,4}) +/,'').replace(/\([^)]*\)/g,' ').trim();
+    const words=body.split(/[^A-Z0-9]+/).filter(word=>word&&!STOP.has(word)&&/^[A-Z]/.test(word));
+    if(words.length>=2)addKey(words.map(word=>word[0]).join(''),upn);
+    if(body.length>=8)addKey(body,upn);
+  }
+  return keys;
+})();
+export function extoRev21MilestoneUpns(name){
+  const text=extoRev21Norm(name);if(!text)return {upns:[],via:''};
+  const valid=value=>EXTO_REV21_UPN_SET.has(value);
+  const marker=text.match(/\bUPN[\s:#-]*((?:[0-9]{3})(?:\s*[,&/+]\s*[0-9]{3})*)/);
+  if(marker){const upns=[...new Set(marker[1].split(/[^0-9]+/).filter(Boolean).filter(valid))];if(upns.length)return {upns,via:'the UPN marker in the name'};}
+  const parens=[];for(const inner of text.matchAll(/\(([^)]+)\)/g))for(const token of inner[1].split(/[^A-Z0-9]+/))if(/^[0-9]{3}$/.test(token)&&valid(token))parens.push(token);
+  if(parens.length)return {upns:[...new Set(parens)],via:'the UPN in parentheses'};
+  const stripped=text.replace(/\([^)]*\)/g,' ');
+  const standalone=[...new Set([...stripped.matchAll(/(?:^|[^0-9])([0-9]{3})(?![0-9])/g)].map(match=>match[1]).filter(valid))];
+  if(standalone.length)return {upns:standalone,via:'the UPN in the name'};
+  const hits=new Set();
+  const tokens=new Set(stripped.split(/[^A-Z0-9/]+/).filter(Boolean));
+  for(const [key,upns] of EXTO_REV21_MILESTONE_NAME_KEYS){
+    const matched=key.includes(' ')?stripped.includes(key):tokens.has(key);
+    if(matched)for(const upn of upns)hits.add(upn);
+  }
+  if(hits.size)return {upns:[...hits],via:'the system name it spells out'};
+  return {upns:[],via:''};
+}
+
 export function extoRev21UpnCandidates(tag){
   const text=String(tag==null?'':tag),found=new Set();let match;
   /* UPN is the first three-digit run after a nomenclature boundary. Some sites
