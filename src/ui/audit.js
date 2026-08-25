@@ -431,8 +431,9 @@ function modifyGroupsBuild(){
 }
 function modifyRowHtml(finding,compact){
   const excluded=isExcludedId(finding.id);
-  if(compact)return `<label class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><b class="modify-tag">${finding.equipmentId?modifyHighlight(finding.equipmentId):'<i>Registry-wide</i>'}</b><span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span></label>`;
-  return `<label class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span><b class="modify-tag">${finding.equipmentId?modifyHighlight(finding.equipmentId):'<i>Registry-wide</i>'}</b><span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span></label>`;
+  const tag=finding.equipmentId?`<button type="button" class="modify-tag" data-mod-open="${esc(finding.id)}" title="Open this finding's details">${modifyHighlight(finding.equipmentId)}</button>`:'<b class="modify-tag"><i>Registry-wide</i></b>';
+  if(compact)return `<label class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}>${tag}<span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span></label>`;
+  return `<label class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span></label>`;
 }
 /* Findings with the same explanation are one pattern -- "row on UPN 603, parent
    on UPN RR" -- so a whole family of matches is kept or set aside with a single
@@ -449,15 +450,16 @@ function modifyPatterns(entry){
   return {groups,singles};
 }
 function modifyPatternCountText(findings){
-  const kept=findings.filter(finding=>!isExcludedId(finding.id)).length;
-  return kept===findings.length?`${findings.length.toLocaleString()} kept`:`${kept.toLocaleString()} of ${findings.length.toLocaleString()} kept`;
+  const kept=findings.filter(finding=>!isExcludedId(finding.id)).length,pctMode=S.session&&S.session.modifyCountMode==='percent';
+  if(kept!==findings.length)return `${modifyAmount(kept)} of ${modifyAmount(findings.length)} kept`;
+  return pctMode?`${modifyAmount(findings.length)} of tags`:`${findings.length.toLocaleString()} kept`;
 }
 /* The equipment list inside a pattern is only built the first time it opens. */
 function modifyPatternHtml(group){
   const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
   const severity=group.findings[0].severity;
   return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
-    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
     <div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
@@ -495,8 +497,30 @@ function modifyRuleSeverity(entry){
   let top='info';for(const finding of entry.findings)if(severityRank(finding.severity)>severityRank(top))top=finding.severity;
   return top;
 }
-function modifyRuleCountText(entry){const aside=entry.findings.length-entry.kept;return aside?`${entry.kept.toLocaleString()} of ${entry.findings.length.toLocaleString()} kept`:`${entry.findings.length.toLocaleString()} kept`;}
-function modifyCategoryCountText(group){const aside=group.total-group.kept;return aside?`${group.kept.toLocaleString()} of ${group.total.toLocaleString()} kept`:`${group.total.toLocaleString()} findings`;}
+/* Counts can read as a share of every tag in the registry instead -- the tiny
+   %/# button beside any count flips the whole tab at once. */
+function modifyTotalTags(){const snapshot=S.session&&S.session.snapshot;return snapshot&&snapshot.rows?snapshot.rows.length:0;}
+function modifyShare(count){
+  const total=modifyTotalTags();if(!total)return '0%';
+  const pct=count/total*100;
+  if(count&&pct<0.1)return '<0.1%';
+  return (pct>=10?Math.round(pct):Number(pct.toFixed(1)))+'%';
+}
+function modifyAmount(count){return S.session&&S.session.modifyCountMode==='percent'?modifyShare(count):count.toLocaleString();}
+function modifyPctBtn(){
+  const pctMode=S.session&&S.session.modifyCountMode==='percent';
+  return `<button class="modify-pct-toggle" type="button" data-mod-pct title="${pctMode?'Show counts':'Show as % of all tags'}">${pctMode?'#':'%'}</button>`;
+}
+function modifyRuleCountText(entry){
+  const aside=entry.findings.length-entry.kept,pctMode=S.session&&S.session.modifyCountMode==='percent';
+  if(aside)return `${modifyAmount(entry.kept)} of ${modifyAmount(entry.findings.length)} kept`;
+  return pctMode?`${modifyAmount(entry.findings.length)} of tags`:`${modifyAmount(entry.findings.length)} kept`;
+}
+function modifyCategoryCountText(group){
+  const aside=group.total-group.kept,pctMode=S.session&&S.session.modifyCountMode==='percent';
+  if(aside)return `${modifyAmount(group.kept)} of ${modifyAmount(group.total)} kept`;
+  return pctMode?`${modifyAmount(group.total)} of tags`:`${modifyAmount(group.total)} findings`;
+}
 /* A closed rule card holds a placeholder instead of its list -- on a registry
    with thousands of findings, building every hidden row up front is what made
    the screen (and every full re-render) stall for seconds. The list is built
@@ -505,7 +529,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span><span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
+    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -542,7 +566,7 @@ export function renderModifications(navigate){
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!query&&(S.session.modifyClosedCats||[]).includes(group.category);
-      return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b></header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</div></section>`;
+      return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</div></section>`;
     }).join(''):`<div class="rule-reference-empty">${ic(query?'search':'check-check')}<b>${query?'No findings match that search':'Nothing to modify'}</b><span>${query?'Try a shorter word or a different tag.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
   const body=$('#modifyBody');
@@ -563,6 +587,17 @@ export function renderModifications(navigate){
     updateModifyCounts(navigate);
   };
   body.onclick=event=>{
+    const pct=event.target.closest('[data-mod-pct]');
+    if(pct){
+      event.preventDefault();
+      S.session.modifyCountMode=S.session.modifyCountMode==='percent'?'count':'percent';
+      updateModifyCounts(navigate);syncAllModifyPatternBoxes();
+      const pctMode=S.session.modifyCountMode==='percent';
+      $$('.modify-pct-toggle',body).forEach(button=>{button.textContent=pctMode?'#':'%';button.title=pctMode?'Show counts':'Show as % of all tags';});
+      return;
+    }
+    const openBtn=event.target.closest('[data-mod-open]');
+    if(openBtn){event.preventDefault();openFinding(openBtn.dataset.modOpen,openBtn);return;}
     const catHead=event.target.closest('[data-mod-cat-toggle]');
     if(catHead){
       const section=catHead.closest('.modify-category'),catBody=section.querySelector('.modify-cat-body');
@@ -1340,7 +1375,9 @@ function relationshipDiagramHtml(finding){
   return `<section class="finding-section rel-section"><h4>How these are linked</h4>${body}<p class="rel-legend">Reading this: ${esc(RELATIONSHIP_LEGENDS[kind]||'')}</p></section>`;
 }
 function openFinding(id,opener){
-  const finding=S.session.result.findings.find(item=>item.id===id);if(!finding)return;
+  /* Set-aside findings are not in the session result, but the Modifications
+     screen still opens them -- the raw engine result is the fallback. */
+  const finding=S.session.result.findings.find(item=>item.id===id)||(S.session.rawResult&&S.session.rawResult.findings.find(item=>item.id===id));if(!finding)return;
   const list=filteredFindings(),position=list.findIndex(item=>item.id===id);
   const sourceLabel=SOURCE_LABELS[finding.rule.source]||finding.rule.source,confidenceLabel=RULE_CONFIDENCE_LABELS[finding.rule.confidence]||finding.rule.confidence;
   const actual=typeof finding.actual==='string'?finding.actual:JSON.stringify(finding.actual),expected=typeof finding.expected==='string'?finding.expected:JSON.stringify(finding.expected);
@@ -1355,7 +1392,7 @@ function openFinding(id,opener){
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
     <div class="finding-evidence">${ic('file-spreadsheet')}${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}${finding.field?' &middot; '+esc(finding.field):''}</div>
-    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Actioned — click to undo':'Mark actioned'}</button><button class="btn" type="button" id="findingExclude" title="Disagree with this finding? Set it aside — it leaves every metric until restored on the Modifications screen">${ic('circle-x')}Set aside</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
+    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Actioned — click to undo':'Mark actioned'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is set aside — click to have it count again':'Disagree with this finding? Set it aside — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Set aside — click to restore':'Set aside'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
     <div class="finding-steps"><button class="btn ghost sm" type="button" id="findingPrev" ${position>0?'':'disabled'}>${ic('chevron-left')}Previous</button><span>${position>=0?`${(position+1).toLocaleString()} of ${list.length.toLocaleString()}`:''}</span><button class="btn ghost sm" type="button" id="findingNext" ${position>=0&&position<list.length-1?'':'disabled'}>Next${ic('chevron-right')}</button></div>
   </div>`;
   wireCopyTags($('#drawerBody'));
@@ -1367,9 +1404,19 @@ function openFinding(id,opener){
   if(actionedButton)actionedButton.onclick=()=>{setActioned(finding,!isActioned(finding));if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else renderRows();openFinding(finding.id,opener);};
   const excludeButton=$('#findingExclude');
   if(excludeButton)excludeButton.onclick=()=>{
-    setExcluded(finding.id,true);closeDrawer();
+    const on=!isExcludedId(finding.id);
+    setExcluded(finding.id,on);
+    if(S.screen==='modify'){
+      /* Update the row and counts in place; the drawer stays open on the finding. */
+      const row=$(`[data-mod-finding="${finding.id.replace(/"/g,'\\"')}"]`);
+      if(row){row.checked=!on;row.closest('.modify-row').classList.toggle('is-excluded',on);const pattern=row.closest('[data-mod-pattern]');if(pattern)syncModifyPatternBox(pattern.dataset.modPattern);}
+      if(currentNavigate)updateModifyCounts(currentNavigate);
+      openFinding(finding.id,opener);
+      return;
+    }
+    closeDrawer();
     if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else if(currentNavigate)renderSideNav(currentNavigate);
-    toast('Set aside — restore it on the Modifications screen');
+    toast(on?'Set aside — restore it on the Modifications screen':'This finding counts again');
   };
   const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');
   drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();

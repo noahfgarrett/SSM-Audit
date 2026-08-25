@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.29.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Modifications: every count can flip to a % of all tags with the small button beside it\n- Equipment tags open the full finding panel, including for set-aside findings\n- Fixed the Equipment expand/collapse arrows not closing a list once opened"
+  },
+  {
     "version": "1.28.1",
     "date": "2026-08-25",
     "type": "fix",

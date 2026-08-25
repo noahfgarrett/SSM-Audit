@@ -2131,3 +2131,14 @@ tr.is-actioned td:first-child{opacity:1}
 .modify-cat-chevron .ic{width:14px;height:14px;transition:transform var(--t-fast,120ms) ease}
 .modify-category.is-closed .modify-cat-chevron .ic{transform:rotate(-90deg)}
 .modify-category.is-closed>.modify-cat-head{border-bottom:0}
+
+/* ---- modifications: pct toggle, clickable tags, and the collapse fix ---- */
+/* display:grid on the class was overriding the hidden attribute's display:none,
+   so a filled equipment list could never visually collapse again. */
+.modify-pattern-rows[hidden]{display:none}
+.modify-pct-toggle{display:inline-grid;place-items:center;width:20px;height:20px;flex:0 0 20px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--ink-3);font:700 10px var(--mono);cursor:pointer;padding:0}
+.modify-pct-toggle:hover{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
+button.modify-tag{border:0;background:none;padding:0;margin:0;cursor:pointer;text-align:left;font:650 11px var(--mono);color:var(--ink)}
+button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
+.modify-row.is-excluded button.modify-tag{color:var(--ink-3);text-decoration:line-through}
+.modify-row.is-excluded button.modify-tag:hover{color:var(--accent-700)}
