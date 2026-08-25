@@ -2122,3 +2122,12 @@ tr.is-actioned td:first-child{opacity:1}
 /* ---- modifications: search match accents ---- */
 .modify-chip.match{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
 .modify-pattern-why mark,.modify-why mark,.modify-tag mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padding:0 1px}
+
+/* ---- modifications: collapsible categories ---- */
+.modify-cat-head{cursor:pointer;user-select:none}
+.modify-cat-head:hover{background:#f4f6f9}
+.modify-cat-head h3{flex:1 1 auto}
+.modify-cat-chevron{display:grid;place-items:center;width:18px;height:18px;color:var(--ink-3)}
+.modify-cat-chevron .ic{width:14px;height:14px;transition:transform var(--t-fast,120ms) ease}
+.modify-category.is-closed .modify-cat-chevron .ic{transform:rotate(-90deg)}
+.modify-category.is-closed>.modify-cat-head{border-bottom:0}

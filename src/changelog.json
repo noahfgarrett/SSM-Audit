@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.28.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Modifications: Expand all and Collapse all in the toolbar, and every group heading collapses on its own\n- Open and closed groups are remembered while moving between tabs"
+  },
+  {
     "version": "1.27.0",
     "date": "2026-08-25",
     "type": "feature",

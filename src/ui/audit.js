@@ -402,7 +402,17 @@ function modifyHighlight(text){
   }
   return out+esc(value.slice(from));
 }
+/* Grouping walks every finding, so the result is memoized on what it depends
+   on -- the search, the exclusion set, and the switched-off checks. Count
+   updates and expand-all then reuse one pass instead of one per card. */
 function modifyGroups(){
+  const key=modifyQueryNorm()+''+(S.session&&S.session.excludedRev||0)+''+(S.rules.disabled||[]).join(',');
+  if(S.session&&S.session.modifyGroupsVal&&S.session.modifyGroupsKey===key)return S.session.modifyGroupsVal;
+  const groups=modifyGroupsBuild();
+  if(S.session){S.session.modifyGroupsKey=key;S.session.modifyGroupsVal=groups;}
+  return groups;
+}
+function modifyGroupsBuild(){
   const base=modifyBaseResult();if(!base)return [];
   const query=modifyQueryNorm();
   const byRule=new Map();
@@ -529,8 +539,11 @@ export function renderModifications(navigate){
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Modifications</h2><p>${esc(S.session.name)} — untick any finding you disagree with and it is set aside: dropped from the findings list, the Dashboard, and the Excel report. Decisions are remembered for this registry, even after a reload.</p></div></div>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(query)}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
-    <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>`<section class="modify-category"><header><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b></header>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</section>`).join(''):`<div class="rule-reference-empty">${ic(query?'search':'check-check')}<b>${query?'No findings match that search':'Nothing to modify'}</b><span>${query?'Try a shorter word or a different tag.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(query)}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
+      const closed=!query&&(S.session.modifyClosedCats||[]).includes(group.category);
+      return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b></header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</div></section>`;
+    }).join(''):`<div class="rule-reference-empty">${ic(query?'search':'check-check')}<b>${query?'No findings match that search':'Nothing to modify'}</b><span>${query?'Try a shorter word or a different tag.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
   const body=$('#modifyBody');
   body.onchange=event=>{
@@ -550,6 +563,16 @@ export function renderModifications(navigate){
     updateModifyCounts(navigate);
   };
   body.onclick=event=>{
+    const catHead=event.target.closest('[data-mod-cat-toggle]');
+    if(catHead){
+      const section=catHead.closest('.modify-category'),catBody=section.querySelector('.modify-cat-body');
+      const closing=!catBody.hidden;
+      catBody.hidden=closing;section.classList.toggle('is-closed',closing);
+      const set=new Set(S.session.modifyClosedCats||[]);
+      if(closing)set.add(section.dataset.modCat);else set.delete(section.dataset.modCat);
+      S.session.modifyClosedCats=[...set];
+      return;
+    }
     const head=event.target.closest('.modify-pattern-head');
     if(head&&!event.target.closest('input')){
       const pattern=head.closest('.modify-pattern'),rows=pattern.querySelector('.modify-pattern-rows'),expand=pattern.querySelector('[data-mod-expand]');
@@ -616,6 +639,22 @@ export function renderModifications(navigate){
     if(!excludedInBase())return;
     S.session.excluded=new Set();S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
     rerenderModifications(navigate);toast('Every finding counts again');
+  };
+  /* Expand/collapse work directly on the DOM -- no screen rebuild. Expand all
+     fills every still-lazy card from the one memoized grouping pass. */
+  $('#modifyExpandAll').onclick=()=>{
+    S.session.modifyClosedCats=[];
+    $$('.modify-category',body).forEach(section=>{section.classList.remove('is-closed');const catBody=section.querySelector('.modify-cat-body');if(catBody)catBody.hidden=false;});
+    const ids=[];
+    $$('.modify-rule',body).forEach(details=>{if(!details.open){modifyFillLazyList(details);details.open=true;}ids.push(details.dataset.modRule);});
+    S.session.modifyOpenRules=ids;
+  };
+  $('#modifyCollapseAll').onclick=()=>{
+    $$('.modify-rule',body).forEach(details=>{details.open=false;});
+    S.session.modifyOpenRules=[];
+    const cats=[];
+    $$('.modify-category',body).forEach(section=>{section.classList.add('is-closed');const catBody=section.querySelector('.modify-cat-body');if(catBody)catBody.hidden=true;cats.push(section.dataset.modCat);});
+    S.session.modifyClosedCats=cats;
   };
   const collectMatchIds=()=>{const ids=[];for(const group of modifyGroups())for(const entry of group.rules)for(const finding of entry.matches)ids.push(finding.id);return ids;};
   const keepMatches=$('#modifyKeepMatches');
