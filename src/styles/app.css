@@ -2057,3 +2057,44 @@ tr.is-actioned td:first-child{opacity:1}
 .filter-chip-group-label{border:0;background:transparent;padding:0;margin:0;color:var(--ink-3);font:700 10px var(--mono);text-transform:uppercase;letter-spacing:.2px;cursor:pointer}
 .filter-chip-group-label:hover{color:var(--accent-700);text-decoration:underline}
 .filter-sheet-foot .btn.ghost{flex:0 1 auto}
+
+/* ---- modifications screen ---- */
+.modify-shell{max-width:1180px;margin:0 auto;padding-bottom:40px}
+.modify-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px;border:1px solid var(--border);background:var(--surface-2)}
+.modify-toolbar .searchbox{display:flex;align-items:center;gap:8px;height:38px;min-width:260px;flex:1 1 260px;padding:0 10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface)}
+.modify-toolbar .searchbox:focus-within{border-color:var(--accent-400);box-shadow:var(--ring)}
+.modify-toolbar .searchbox .ic{width:15px;height:15px;flex:0 0 15px;color:var(--ink-3)}
+.modify-toolbar input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--ink);font:12px var(--sans)}
+.modify-chip{display:inline-flex;align-items:center;min-height:26px;padding:3px 9px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--ink-2);font:650 10px var(--mono);white-space:nowrap}
+.modify-chip.aside{border-color:#ecd0a7;background:var(--warn-bg);color:var(--warn)}
+.modify-body{display:grid;gap:12px;margin-top:12px}
+.modify-category{border:1px solid var(--border);background:var(--surface)}
+.modify-category>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 13px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.modify-category>header h3{margin:0;font-size:13px;letter-spacing:0}
+.modify-category>header b{color:var(--ink-2);font:700 10px var(--mono);white-space:nowrap}
+.modify-rule{border-bottom:1px solid var(--border)}
+.modify-rule:last-child{border-bottom:0}
+.modify-rule>summary{display:flex;align-items:center;gap:10px;min-height:46px;padding:8px 13px;cursor:pointer;list-style:none}
+.modify-rule>summary::-webkit-details-marker{display:none}
+.modify-rule>summary::before{content:"";flex:0 0 8px;width:8px;height:8px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(-45deg);transition:transform var(--t-fast,120ms) ease}
+.modify-rule[open]>summary::before{transform:rotate(45deg)}
+.modify-rule>summary:hover{background:#fbfcfe}
+.modify-rule>summary>b{min-width:0;color:var(--ink);font-size:11.5px;font-weight:650}
+.modify-rule-count{margin-left:auto;color:var(--ink-3);font:650 10px var(--mono);white-space:nowrap}
+.modify-rule-buttons{display:inline-flex;gap:5px}
+.modify-rule-buttons .btn.sm{min-height:24px;padding:2px 8px;font-size:10.5px}
+.modify-list{display:grid;border-top:1px solid var(--border);background:var(--surface)}
+.modify-row{display:grid;grid-template-columns:auto auto minmax(120px,auto) minmax(0,1fr) auto;align-items:center;gap:10px;min-height:34px;padding:5px 13px 5px 31px;border-bottom:1px dashed var(--border);cursor:pointer}
+.modify-row:last-of-type{border-bottom:0}
+.modify-row:hover{background:#fbfcfe}
+.modify-row input{width:14px;height:14px;accent-color:var(--accent-600,#d97a26);cursor:pointer}
+.modify-row .audit-severity{flex:none}
+.modify-tag{color:var(--ink);font:650 11px var(--mono);overflow-wrap:anywhere}
+.modify-tag i{color:var(--ink-3);font-style:normal;font-weight:500}
+.modify-why{min-width:0;color:var(--ink-2);font-size:10.5px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modify-where{color:var(--ink-3);font:10px var(--mono);white-space:nowrap}
+.modify-row.is-excluded{background:var(--surface-2)}
+.modify-row.is-excluded .modify-tag,.modify-row.is-excluded .modify-why{color:var(--ink-3);text-decoration:line-through}
+.modify-row.is-excluded .audit-severity{opacity:.45}
+.modify-more{margin:8px 13px 10px;justify-self:start}
+@media(max-width:800px){.modify-row{grid-template-columns:auto auto minmax(0,1fr) auto}.modify-why{display:none}}

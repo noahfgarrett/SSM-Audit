@@ -2065,6 +2065,47 @@ tr.is-actioned td:first-child{opacity:1}
 .filter-chip-group-label:hover{color:var(--accent-700);text-decoration:underline}
 .filter-sheet-foot .btn.ghost{flex:0 1 auto}
 
+/* ---- modifications screen ---- */
+.modify-shell{max-width:1180px;margin:0 auto;padding-bottom:40px}
+.modify-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px;border:1px solid var(--border);background:var(--surface-2)}
+.modify-toolbar .searchbox{display:flex;align-items:center;gap:8px;height:38px;min-width:260px;flex:1 1 260px;padding:0 10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface)}
+.modify-toolbar .searchbox:focus-within{border-color:var(--accent-400);box-shadow:var(--ring)}
+.modify-toolbar .searchbox .ic{width:15px;height:15px;flex:0 0 15px;color:var(--ink-3)}
+.modify-toolbar input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--ink);font:12px var(--sans)}
+.modify-chip{display:inline-flex;align-items:center;min-height:26px;padding:3px 9px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--ink-2);font:650 10px var(--mono);white-space:nowrap}
+.modify-chip.aside{border-color:#ecd0a7;background:var(--warn-bg);color:var(--warn)}
+.modify-body{display:grid;gap:12px;margin-top:12px}
+.modify-category{border:1px solid var(--border);background:var(--surface)}
+.modify-category>header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 13px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.modify-category>header h3{margin:0;font-size:13px;letter-spacing:0}
+.modify-category>header b{color:var(--ink-2);font:700 10px var(--mono);white-space:nowrap}
+.modify-rule{border-bottom:1px solid var(--border)}
+.modify-rule:last-child{border-bottom:0}
+.modify-rule>summary{display:flex;align-items:center;gap:10px;min-height:46px;padding:8px 13px;cursor:pointer;list-style:none}
+.modify-rule>summary::-webkit-details-marker{display:none}
+.modify-rule>summary::before{content:"";flex:0 0 8px;width:8px;height:8px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(-45deg);transition:transform var(--t-fast,120ms) ease}
+.modify-rule[open]>summary::before{transform:rotate(45deg)}
+.modify-rule>summary:hover{background:#fbfcfe}
+.modify-rule>summary>b{min-width:0;color:var(--ink);font-size:11.5px;font-weight:650}
+.modify-rule-count{margin-left:auto;color:var(--ink-3);font:650 10px var(--mono);white-space:nowrap}
+.modify-rule-buttons{display:inline-flex;gap:5px}
+.modify-rule-buttons .btn.sm{min-height:24px;padding:2px 8px;font-size:10.5px}
+.modify-list{display:grid;border-top:1px solid var(--border);background:var(--surface)}
+.modify-row{display:grid;grid-template-columns:auto auto minmax(120px,auto) minmax(0,1fr) auto;align-items:center;gap:10px;min-height:34px;padding:5px 13px 5px 31px;border-bottom:1px dashed var(--border);cursor:pointer}
+.modify-row:last-of-type{border-bottom:0}
+.modify-row:hover{background:#fbfcfe}
+.modify-row input{width:14px;height:14px;accent-color:var(--accent-600,#d97a26);cursor:pointer}
+.modify-row .audit-severity{flex:none}
+.modify-tag{color:var(--ink);font:650 11px var(--mono);overflow-wrap:anywhere}
+.modify-tag i{color:var(--ink-3);font-style:normal;font-weight:500}
+.modify-why{min-width:0;color:var(--ink-2);font-size:10.5px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modify-where{color:var(--ink-3);font:10px var(--mono);white-space:nowrap}
+.modify-row.is-excluded{background:var(--surface-2)}
+.modify-row.is-excluded .modify-tag,.modify-row.is-excluded .modify-why{color:var(--ink-3);text-decoration:line-through}
+.modify-row.is-excluded .audit-severity{opacity:.45}
+.modify-more{margin:8px 13px 10px;justify-self:start}
+@media(max-width:800px){.modify-row{grid-template-columns:auto auto minmax(0,1fr) auto}.modify-why{display:none}}
+
 </style>
 </head>
 <body>
@@ -2161,7 +2202,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.24.0","date":"2026-08-25","type":"feature","notes":"- Filters reworked: one smooth scroll, Select all / Clear all for everything, and All / None buttons on each list\n- Filter views can be saved, loaded, and removed from the top of the filter panel\n- Active filter groups on the findings page jump straight back into the panel"},{"version":"1.23.1","date":"2026-08-19","type":"fix","notes":"- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"},{"version":"1.23.0","date":"2026-08-19","type":"feature","notes":"- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"},{"version":"1.22.0","date":"2026-08-19","type":"feature","notes":"- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"},{"version":"1.21.1","date":"2026-08-19","type":"fix","notes":"- A description-shaped Equipment ID is now Check this rather than Invalid"},{"version":"1.21.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"},{"version":"1.20.3","date":"2026-08-19","type":"fix","notes":"- Excel report: the Progress column is the orange bar only; the number stays in the % column"},{"version":"1.20.2","date":"2026-08-19","type":"fix","notes":"- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"},{"version":"1.20.1","date":"2026-08-19","type":"fix","notes":"- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"},{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
+const CHANGELOG=Object.freeze([{"version":"1.25.0","date":"2026-08-25","type":"feature","notes":"- New Modifications tab: every finding listed under its check, ready to untick — set-aside findings leave the findings list, the Dashboard, and the Excel report until restored\n- Decisions are remembered for the registry they were made on\n- Findings can also be set aside straight from their detail panel"},{"version":"1.24.0","date":"2026-08-25","type":"feature","notes":"- Filters reworked: one smooth scroll, Select all / Clear all for everything, and All / None buttons on each list\n- Filter views can be saved, loaded, and removed from the top of the filter panel\n- Active filter groups on the findings page jump straight back into the panel"},{"version":"1.23.1","date":"2026-08-19","type":"fix","notes":"- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"},{"version":"1.23.0","date":"2026-08-19","type":"feature","notes":"- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"},{"version":"1.22.0","date":"2026-08-19","type":"feature","notes":"- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"},{"version":"1.21.1","date":"2026-08-19","type":"fix","notes":"- A description-shaped Equipment ID is now Check this rather than Invalid"},{"version":"1.21.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"},{"version":"1.20.3","date":"2026-08-19","type":"fix","notes":"- Excel report: the Progress column is the orange bar only; the number stays in the % column"},{"version":"1.20.2","date":"2026-08-19","type":"fix","notes":"- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"},{"version":"1.20.1","date":"2026-08-19","type":"fix","notes":"- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"},{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -2172,7 +2213,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.24.0';
+const APP_VERSION='1.25.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -2190,7 +2231,7 @@ const S={
 };
 
 function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',auditedAt:0,dimFilters:{discipline:[],milestone:[],upn:[],building:[]},dimOptionCache:null,filterOptionCache:null,hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,panelOpen:false,panelSearch:'',selectedFindingId:'',scrollTop:0,actioned:null,actionedRev:0,hideActioned:false,dashBreakdownOpen:false,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,scopedCacheKey:'',scopedCache:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
+  S.session={name:'',snapshot:null,result:null,error:'',auditedAt:0,dimFilters:{discipline:[],milestone:[],upn:[],building:[]},dimOptionCache:null,filterOptionCache:null,hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,panelOpen:false,panelSearch:'',selectedFindingId:'',scrollTop:0,actioned:null,actionedRev:0,hideActioned:false,excluded:null,excludedRev:0,modifySearch:'',modifyOpenRules:[],modifyScrollTop:0,dashBreakdownOpen:false,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,scopedCacheKey:'',scopedCache:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
 }
 
 function resetComparison(){
@@ -4650,6 +4691,7 @@ let drawerTrapCleanup=null,searchDebounceTimer=0;
 const NAV_SECTIONS=[
   {id:'dashboard',icon:'layout-dashboard',label:'Dashboard',hint:'Everything this registry turned up, at a glance'},
   {id:'audit',icon:'check-check',label:'Audit Findings',hint:'Every issue found in this registry'},
+  {id:'modify',icon:'sliders-horizontal',label:'Modifications',hint:'Set aside findings you disagree with'},
   {id:'hierarchy',icon:'list-tree',label:'SSM Hierarchy',hint:'Browse the registry as a tree'},
   {id:'compare',icon:'square-stack',label:'Compare Projects',hint:'Line this registry up beside a finished one'},
   {id:'rules',icon:'book-open',label:'Rules',hint:'What the audit checks, in plain language'},
@@ -4657,6 +4699,7 @@ const NAV_SECTIONS=[
 function navActiveId(){
   if(S.screen==='dashboard')return 'dashboard';
   if(S.screen==='audit')return 'audit';
+  if(S.screen==='modify')return 'modify';
   if(S.screen==='hierarchy')return 'hierarchy';
   if(S.screen==='compare')return 'compare';
   if(S.screen==='rules')return 'rules';
@@ -4679,6 +4722,7 @@ function navBadges(id){
     const blockers=result.summary.severity.blocker;
     return `${navCountHtml(result.summary.findings,'','findings')}${blockers?navCountHtml(blockers,'blocker',SEVERITY_LABELS.blocker.toLowerCase()):''}`;
   }
+  if(id==='modify'&&S.session&&S.session.rawResult){const aside=excludedInBase();return aside?navCountHtml(aside,'','set aside'):'';}
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return navCountHtml(S.session.snapshot.rows.length,'','rows');
   if(id==='compare'&&comparison)return navCountHtml(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems,'','systems with differences');
   return '';
@@ -4686,6 +4730,7 @@ function navBadges(id){
 function navDisabled(id){
   if(id==='hierarchy')return !(S.session&&S.session.result&&S.session.snapshot);
   if(id==='dashboard')return !(S.session&&S.session.result);
+  if(id==='modify')return !(S.session&&S.session.rawResult);
   return false;
 }
 function navItemHtml(section,active,collapsed){
@@ -4711,6 +4756,7 @@ function navigateSection(id,navigate){
   if(id==='dashboard'){S.homeMode='audit';navigate(S.session&&S.session.result?'dashboard':'upload');return;}
   if(id==='rules'){S.homeMode='rules';navigate('rules');return;}
   if(id==='compare'){S.homeMode='compare';navigate(S.comparison&&S.comparison.result?'compare':'upload');return;}
+  if(id==='modify'){if(S.session&&S.session.rawResult)navigate('modify');return;}
   if(id==='hierarchy'){if(S.session&&S.session.result)navigate('hierarchy');return;}
   S.homeMode='audit';navigate(S.session&&S.session.result?'audit':'upload');
 }
@@ -4752,9 +4798,19 @@ function applyRulePreferences(raw,disabled){
   const status=severity.blocker?'blocked':raw.summary.status==='blocked'?'ready':raw.summary.status;
   return Object.assign({},raw,{findings,summary:Object.assign({},raw.summary,{findings:findings.length,severity,status})});
 }
+/* Individual findings the user set aside on the Modifications screen are dropped
+   the same way switched-off checks are, with the summary recounted properly. */
+function applyFindingExclusions(result,excluded){
+  if(!result||!excluded||!excluded.size)return result;
+  const findings=result.findings.filter(finding=>!excluded.has(finding.id));
+  if(findings.length===result.findings.length)return result;
+  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
+  const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
+  return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
+}
 function refreshSessionResult(){
   if(!S.session||!S.session.rawResult)return;
-  S.session.result=applyRulePreferences(S.session.rawResult,S.rules.disabled);
+  S.session.result=applyFindingExclusions(applyRulePreferences(S.session.rawResult,S.rules.disabled),S.session.excluded);
   S.session.hierarchy=null;S.session.hierarchyCacheKey='';S.session.hierarchyCacheRows=null;S.session.headerIdSet=null;S.session.rowIndex=null;S.session.exportPlan=null;
   invalidateFindingCaches();
 }
@@ -4766,11 +4822,12 @@ function setRuleDisabled(ruleId,off){
    Marks live in localStorage keyed by a fingerprint of the registry's contents,
    so reloading the same workbook (even renamed) brings the progress back.
    Finding ids are content hashes, so they line up run after run. */
-function registryActionKey(){
+function registryStoreKey(prefix){
   const snapshot=S.session&&S.session.snapshot;if(!snapshot)return '';
   const rows=snapshot.rows||[];
-  return 'ssm-audit.actioned.'+auditFingerprint(rows.length+'|'+rows.slice(0,64).map(row=>auditNormId(row.equipmentId)).join(','));
+  return 'ssm-audit.'+prefix+'.'+auditFingerprint(rows.length+'|'+rows.slice(0,64).map(row=>auditNormId(row.equipmentId)).join(','));
 }
+function registryActionKey(){return registryStoreKey('actioned');}
 function loadActioned(){
   S.session.actioned=new Set();S.session.actionedRev=0;
   try{const raw=localStorage.getItem(registryActionKey());if(raw)S.session.actioned=new Set(JSON.parse(raw).filter(id=>typeof id==='string'));}catch(_){}
@@ -4785,6 +4842,33 @@ function setActioned(finding,on){
 function actionedInResult(){
   const result=S.session&&S.session.result;if(!result||!S.session.actioned||!S.session.actioned.size)return 0;
   let count=0;for(const finding of result.findings)if(S.session.actioned.has(finding.id))count++;return count;
+}
+/* ---- modifications: findings set aside ----
+   The user's per-finding overrides. A set-aside finding disappears from every
+   metric -- findings list, dashboard, hierarchy badges, export -- until it is
+   restored on the Modifications screen. Stored like actioned marks: keyed by the
+   registry's content fingerprint, so the same workbook brings the decisions back. */
+function loadExcluded(){
+  S.session.excluded=new Set();S.session.excludedRev=0;
+  try{const raw=localStorage.getItem(registryStoreKey('excluded'));if(raw)S.session.excluded=new Set(JSON.parse(raw).filter(id=>typeof id==='string'));}catch(_){}
+}
+function saveExcluded(){try{const key=registryStoreKey('excluded');if(key)localStorage.setItem(key,JSON.stringify([...S.session.excluded]));}catch(_){/* private mode: kept for this session */}}
+function isExcludedId(id){return !!(S.session&&S.session.excluded&&S.session.excluded.has(id));}
+function setExcluded(id,on){
+  if(!S.session.excluded)S.session.excluded=new Set();
+  if(on)S.session.excluded.add(id);else S.session.excluded.delete(id);
+  S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
+}
+/* The Modifications screen works from the result BEFORE exclusions (but after
+   switched-off checks), so set-aside findings stay visible to restore. */
+function modifyBaseResult(){
+  const raw=S.session&&S.session.rawResult;if(!raw)return null;
+  return applyRulePreferences(raw,S.rules.disabled);
+}
+function excludedInBase(){
+  const excluded=S.session&&S.session.excluded;if(!excluded||!excluded.size)return 0;
+  const base=modifyBaseResult();if(!base)return 0;
+  let count=0;for(const finding of base.findings)if(excluded.has(finding.id))count++;return count;
 }
 function ruleFindingCounts(){
   const result=S.session&&S.session.result;if(!result)return null;
@@ -4951,6 +5035,131 @@ function showOnlyRule(ruleId,navigate,keepScope){
   if(!keepScope)clearDimFilters();
   invalidateFindingCaches();S.homeMode='audit';navigate('audit');
 }
+
+/* ------------------------------------------------------ modifications screen */
+/* Every fired check, grouped by topic, with each match individually ticked.
+   Unticking sets the finding aside: it leaves every metric until restored here.
+   Long lists render in chunks so a 20k-findings registry stays responsive. */
+const MODIFY_CHUNK=300;
+function modifyQueryNorm(){return auditNormId(clean(S.session&&S.session.modifySearch));}
+function modifyGroups(){
+  const base=modifyBaseResult();if(!base)return [];
+  const query=modifyQueryNorm();
+  const byRule=new Map();
+  for(const finding of base.findings){
+    let entry=byRule.get(finding.rule.id);
+    if(!entry){entry={rule:finding.rule,findings:[],matches:[],kept:0};byRule.set(finding.rule.id,entry);}
+    entry.findings.push(finding);
+    if(!isExcludedId(finding.id))entry.kept++;
+    if(!query||finding.searchKey.includes(query))entry.matches.push(finding);
+  }
+  return Object.keys(RULE_CATEGORY_LABELS).map(category=>{
+    const rules=[...byRule.values()].filter(entry=>entry.rule.category===category&&(!query||entry.matches.length)).sort((left,right)=>right.findings.length-left.findings.length);
+    const total=rules.reduce((sum,entry)=>sum+entry.findings.length,0),kept=rules.reduce((sum,entry)=>sum+entry.kept,0);
+    return {category,label:RULE_CATEGORY_LABELS[category]||category,rules,total,kept};
+  }).filter(group=>group.rules.length);
+}
+function modifyRowHtml(finding){
+  const excluded=isExcludedId(finding.id);
+  return `<label class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span><b class="modify-tag">${finding.equipmentId?esc(finding.equipmentId):'<i>Registry-wide</i>'}</b><span class="modify-why" title="${esc(finding.why)}">${esc(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span></label>`;
+}
+function modifyListHtml(entry){
+  const rows=entry.matches;
+  const first=rows.slice(0,MODIFY_CHUNK).map(modifyRowHtml).join('');
+  const rest=rows.length-MODIFY_CHUNK;
+  return `<div class="modify-list" data-mod-list="${esc(entry.rule.id)}">${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more="${esc(entry.rule.id)}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`;
+}
+function modifyRuleSeverity(entry){
+  let top='info';for(const finding of entry.findings)if(severityRank(finding.severity)>severityRank(top))top=finding.severity;
+  return top;
+}
+function modifyRuleCountText(entry){const aside=entry.findings.length-entry.kept;return aside?`${entry.kept.toLocaleString()} of ${entry.findings.length.toLocaleString()} kept`:`${entry.findings.length.toLocaleString()} kept`;}
+function modifyCategoryCountText(group){const aside=group.total-group.kept;return aside?`${group.kept.toLocaleString()} of ${group.total.toLocaleString()} kept`:`${group.total.toLocaleString()} findings`;}
+function modifyRuleHtml(entry,forceOpen){
+  const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
+  const severity=modifyRuleSeverity(entry);
+  return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
+    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${esc(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span><span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="Keep every finding of this check">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="Set every finding of this check aside">${ic('circle-x')}Set all aside</button></span></summary>
+    ${modifyListHtml(entry)}
+  </details>`;
+}
+function updateModifyCounts(navigate){
+  const groups=modifyGroups();
+  for(const group of groups){
+    const label=$(`[data-mod-cat-count="${group.category}"]`);if(label)label.textContent=modifyCategoryCountText(group);
+    for(const entry of group.rules){const count=$(`[data-mod-count="${entry.rule.id}"]`);if(count)count.textContent=modifyRuleCountText(entry);}
+  }
+  const result=S.session.result,aside=excludedInBase();
+  const included=$('#modifyIncluded');if(included&&result)included.textContent=`${result.summary.findings.toLocaleString()} counted`;
+  const asideChip=$('#modifyAside');if(asideChip)asideChip.textContent=`${aside.toLocaleString()} set aside`;
+  const restore=$('#modifyRestore');if(restore)restore.disabled=!aside;
+  renderSideNav(navigate);
+}
+function renderModifications(navigate){
+  if(!(S.session&&S.session.rawResult)){navigate('upload');return;}
+  teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='modify';S.homeMode='audit';
+  currentNavigate=navigate;
+  const groups=modifyGroups(),query=clean(S.session.modifySearch),aside=excludedInBase(),result=S.session.result;
+  const scrollTop=S.session.modifyScrollTop||0;
+  $('#view').innerHTML=`<section class="modify-shell">
+    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Modifications</h2><p>${esc(S.session.name)} — untick any finding you disagree with and it is set aside: dropped from the findings list, the Dashboard, and the Excel report. Decisions are remembered for this registry, even after a reload.</p></div></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(query)}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span><span class="spacer"></span><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>`<section class="modify-category"><header><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b></header>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</section>`).join(''):`<div class="rule-reference-empty">${ic(query?'search':'check-check')}<b>${query?'No findings match that search':'Nothing to modify'}</b><span>${query?'Try a shorter word or a different tag.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
+  </section>`;
+  const body=$('#modifyBody');
+  body.onchange=event=>{
+    const input=event.target.closest('[data-mod-finding]');if(!input)return;
+    setExcluded(input.dataset.modFinding,!input.checked);
+    input.closest('.modify-row').classList.toggle('is-excluded',!input.checked);
+    updateModifyCounts(navigate);
+  };
+  body.onclick=event=>{
+    const more=event.target.closest('[data-mod-more]');
+    if(more){
+      const groupsNow=modifyGroups();let entry=null;
+      for(const group of groupsNow){entry=group.rules.find(item=>item.rule.id===more.dataset.modMore)||entry;}
+      if(!entry)return;
+      const offset=Number(more.dataset.modOffset)||0,rows=entry.matches.slice(offset,offset+MODIFY_CHUNK);
+      const fragment=document.createElement('div');fragment.innerHTML=rows.map(modifyRowHtml).join('');
+      const rest=entry.matches.length-offset-rows.length;
+      more.before(...fragment.children);
+      if(rest>0){more.dataset.modOffset=String(offset+rows.length);more.innerHTML=`${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}`;}
+      else more.remove();
+      return;
+    }
+    const keep=event.target.closest('[data-mod-keep]'),asideAll=event.target.closest('[data-mod-aside]');
+    if(keep||asideAll){
+      event.preventDefault();
+      const ruleId=(keep||asideAll).dataset.modKeep||(keep||asideAll).dataset.modAside;
+      const base=modifyBaseResult();if(!base)return;
+      if(!S.session.excluded)S.session.excluded=new Set();
+      for(const finding of base.findings)if(finding.rule.id===ruleId){if(asideAll)S.session.excluded.add(finding.id);else S.session.excluded.delete(finding.id);}
+      S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
+      rerenderModifications(navigate);
+    }
+  };
+  $$('.modify-rule',body).forEach(details=>details.addEventListener('toggle',()=>{
+    const set=new Set(S.session.modifyOpenRules||[]);
+    if(details.open)set.add(details.dataset.modRule);else set.delete(details.dataset.modRule);
+    S.session.modifyOpenRules=[...set];
+  }));
+  $('#modifySearch').oninput=event=>{S.session.modifySearch=event.target.value;debounceSearch(()=>rerenderModifications(navigate,true));};
+  $('#modifyRestore').onclick=()=>{
+    if(!excludedInBase())return;
+    S.session.excluded=new Set();S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
+    rerenderModifications(navigate);toast('Every finding counts again');
+  };
+  $('#view').scrollTop=scrollTop;
+  $('#view').onscroll=()=>{if(S.screen==='modify')S.session.modifyScrollTop=$('#view').scrollTop;};
+}
+/* Re-render keeping the reading position; a search change starts back at the top. */
+function rerenderModifications(navigate,resetScroll){
+  if(resetScroll)S.session.modifyScrollTop=0;else S.session.modifyScrollTop=$('#view')?$('#view').scrollTop:0;
+  const focused=document.activeElement&&document.activeElement.id==='modifySearch';
+  renderModifications(navigate);
+  if(focused){const input=$('#modifySearch');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
+}
+
 function renderRules(navigate){
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='rules';S.homeMode='rules';
   const rules=ruleCatalog(),sources=new Set(rules.map(rule=>rule.source)),topics=new Set(rules.map(rule=>rule.category)),hasResult=!!(S.session&&S.session.result);
@@ -5032,7 +5241,7 @@ async function addAuditTarget(file,navigate){
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
       const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};loadActioned();
+      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -5093,7 +5302,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};loadActioned();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -5630,7 +5839,7 @@ function openFinding(id,opener){
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
     <div class="finding-evidence">${ic('file-spreadsheet')}${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}${finding.field?' &middot; '+esc(finding.field):''}</div>
-    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Actioned — click to undo':'Mark actioned'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
+    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Actioned — click to undo':'Mark actioned'}</button><button class="btn" type="button" id="findingExclude" title="Disagree with this finding? Set it aside — it leaves every metric until restored on the Modifications screen">${ic('circle-x')}Set aside</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
     <div class="finding-steps"><button class="btn ghost sm" type="button" id="findingPrev" ${position>0?'':'disabled'}>${ic('chevron-left')}Previous</button><span>${position>=0?`${(position+1).toLocaleString()} of ${list.length.toLocaleString()}`:''}</span><button class="btn ghost sm" type="button" id="findingNext" ${position>=0&&position<list.length-1?'':'disabled'}>Next${ic('chevron-right')}</button></div>
   </div>`;
   wireCopyTags($('#drawerBody'));
@@ -5640,6 +5849,12 @@ function openFinding(id,opener){
   if(inTree)inTree.onclick=()=>{closeDrawer();focusHierarchyOnEquipment(finding.equipmentId);};
   const actionedButton=$('#findingActioned');
   if(actionedButton)actionedButton.onclick=()=>{setActioned(finding,!isActioned(finding));if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else renderRows();openFinding(finding.id,opener);};
+  const excludeButton=$('#findingExclude');
+  if(excludeButton)excludeButton.onclick=()=>{
+    setExcluded(finding.id,true);closeDrawer();
+    if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else if(currentNavigate)renderSideNav(currentNavigate);
+    toast('Set aside — restore it on the Modifications screen');
+  };
   const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');
   drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
 }
@@ -6373,7 +6588,7 @@ let activeGuide='start';
 let guideOpener=null;
 let guideTrapCleanup=null;
 
-function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
+function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='modify')renderModifications(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
 /* A screen change slides the new content in; re-renders of the same screen (filters, sorting) stay still. */
 function markViewEnter(){const view=$('#view');if(!view||motionReduced())return;view.classList.remove('view-enter');void view.offsetWidth;view.classList.add('view-enter');view.addEventListener('animationend',()=>view.classList.remove('view-enter'),{once:true});}
 function renderGuide(){

@@ -5,7 +5,7 @@ import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit, SSM_AUDIT_RULES } from '../src/audit/engine.js'
 import { S, resetSession } from '../src/state.js'
-import { activeRules, applyRulePreferences, dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, isRuleActive, scopedResult } from '../src/ui/audit.js'
+import { activeRules, applyFindingExclusions, applyRulePreferences, dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, isRuleActive, scopedResult } from '../src/ui/audit.js'
 
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
 const index = Object.fromEntries(EXTO_REV21_COLUMNS.map(column => [column.field, column.index]))
@@ -138,4 +138,23 @@ test('switching a check off removes its findings, recounts the summary, and drop
     const overview = dashCheckOverview(scopedResult())
     assert.ok(!overview.groups.some(group => [...group.firing, ...group.passing].some(entry => entry.rule.id === fired.id)), 'the overview no longer lists it')
   } finally { S.rules.disabled = [] }
+})
+
+test('setting individual findings aside removes exactly those findings and recounts the summary', () => {
+  const raw = S.session.result || (() => { throw new Error('fixture session expected') })()
+  const [first, second] = raw.findings
+  const excluded = new Set([first.id, second.id])
+  const trimmed = applyFindingExclusions(raw, excluded)
+  assert.equal(trimmed.summary.findings, raw.summary.findings - 2)
+  assert.ok(!trimmed.findings.some(finding => excluded.has(finding.id)))
+  const levels = ['blocker', 'error', 'warning', 'info']
+  assert.equal(levels.reduce((sum, level) => sum + trimmed.summary.severity[level], 0), trimmed.findings.length, 'severity counts add up')
+  assert.equal(applyFindingExclusions(raw, new Set()), raw, 'an empty set returns the result untouched')
+  assert.equal(applyFindingExclusions(raw, new Set(['not-a-real-id'])), raw, 'stale ids from an edited registry are ignored')
+  const everyBlocker = new Set(raw.findings.filter(finding => finding.severity === 'blocker').map(finding => finding.id))
+  if (everyBlocker.size) {
+    const unblocked = applyFindingExclusions(raw, everyBlocker)
+    assert.equal(unblocked.summary.severity.blocker, 0)
+    assert.notEqual(unblocked.summary.status, 'blocked', 'status recomputes once every blocker is set aside')
+  }
 })
