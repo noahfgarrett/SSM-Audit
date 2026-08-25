@@ -2118,3 +2118,7 @@ tr.is-actioned td:first-child{opacity:1}
 .modify-pattern.is-excluded .modify-pattern-why{color:var(--ink-3);text-decoration:line-through}
 .modify-pattern.is-excluded .audit-severity{opacity:.45}
 .modify-pattern.is-excluded>.modify-pattern-head{background:var(--surface-2)}
+
+/* ---- modifications: search match accents ---- */
+.modify-chip.match{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
+.modify-pattern-why mark,.modify-why mark,.modify-tag mark{background:var(--accent-200);color:var(--accent-700);border-radius:3px;padding:0 1px}

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.27.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Modifications search reaches every individual finding, with the matched words highlighted in place\n- Keep matches / Set matches aside act on everything the search surfaced in one click\n- With a search active, a check's Keep all and Set all aside touch only the matches shown"
+  },
+  {
     "version": "1.26.1",
     "date": "2026-08-25",
     "type": "fix",
