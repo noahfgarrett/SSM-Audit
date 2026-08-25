@@ -108,8 +108,8 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     caption:'"I&C" is not the approved controls discipline in the VF Exto Upload Template dropdown.',fix:`Use ${FMS}.`}),
   ex('metadata.upn-inconsistent',{
     rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH_EXH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1113',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
-    focus:[{row:0,field:'discipline'},{row:1,field:'discipline'}],
-    caption:'Rows on UPN 111 carry different disciplines. Every row on a UPN should agree on System Name and Discipline.',fix:`Set all three pumps to ${MECH}.`}),
+    focus:[{row:1,field:'discipline'}],
+    caption:'The middle pump disagrees with the rest of UPN 111 on Discipline. Every row on a UPN should agree on System Name and Discipline, so the odd row out is the one flagged.',fix:`Set the middle pump to ${MECH} like its neighbours.`}),
   ex('identity.tag-looks-like-description',{
     rows:[r({id:'Chilled water pumps',desc:'',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Blank'})],
     focus:[{row:0,field:'equipmentId'}],

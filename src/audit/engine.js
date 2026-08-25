@@ -284,7 +284,10 @@ export function runSsmAudit(snapshot,options={}){
       if(SSM_AUDIT_RULES.milestoneInconsistent.enabled){const key=auditNormId(row.milestone),entry=milestoneGroups.get(key)||{row,parents:new Map()};
         const intent=auditMilestoneIntentKey(row.milestoneParent),values=entry.parents.get(intent)||new Set();values.add(clean(row.milestoneParent));entry.parents.set(intent,values);milestoneGroups.set(key,entry);}
     }
-    if(upn){const group=upnGroups.get(upn)||{systems:new Set(),disciplines:new Set(),rows:[]};if(row.systemName)group.systems.add(auditNormId(row.systemName));if(row.discipline)group.disciplines.add(auditNormId(row.discipline));group.rows.push(row);upnGroups.set(upn,group);}
+    if(upn){const group=upnGroups.get(upn)||{systems:new Map(),disciplines:new Map(),rows:[]};
+      if(row.systemName){const key=auditNormId(row.systemName),entry=group.systems.get(key)||{count:0,display:clean(row.systemName)};entry.count++;group.systems.set(key,entry);}
+      if(row.discipline){const key=auditNormId(row.discipline),entry=group.disciplines.get(key)||{count:0,display:clean(row.discipline)};entry.count++;group.disciplines.set(key,entry);}
+      group.rows.push(row);upnGroups.set(upn,group);}
     /* --- parents --- */
     checks++;if(!parentId)add(SSM_AUDIT_RULES.blankParent,'blocker',row,{field:'Closest Parent',why:'No Closest Parent is filled in.',expected:'The equipment this nests under, or the row’s own System Name if it is the top of the system',recommendation:'Enter the parent equipment in the same UPN, or the System Name for a root.'});
     else if(parentId===id)add(SSM_AUDIT_RULES.selfParent,'blocker',row,{field:'Closest Parent',why:'The row lists itself as its own parent.',actual:row.closestParent,expected:'A different parent tag or the System Name',recommendation:'Enter the real parent.'});
@@ -347,7 +350,38 @@ export function runSsmAudit(snapshot,options={}){
     }
   }
   for(const entry of generatedHeaders.values()){checks++;add(SSM_AUDIT_RULES.generatedHeader,'warning',entry.row,{field:'Closest Parent',why:`${entry.count.toLocaleString()} row${entry.count===1?' nests':'s nest'} under a parent that is not any equipment in this registry.`,actual:entry.parent,expected:'An intentional header row (with a Blank Item Master) or the row’s System Name',recommendation:'If this is meant to be a header, add it as a row with a Blank Item Master. If not, correct the parent.'});}
-  for(const [upn,group] of upnGroups){checks++;if(group.systems.size>1||group.disciplines.size>1)add(SSM_AUDIT_RULES.upnInconsistent,'error',group.rows[0],{field:'UPN',why:`Rows on UPN ${upn} use more than one System Name or Discipline.`,actual:`Systems: ${[...group.systems].join('; ')}; Disciplines: ${[...group.disciplines].join('; ')}`,expected:'One System Name and one Discipline for the whole UPN',recommendation:`Review every row on UPN ${upn} and align them.`});}
+  /* One aggregate finding pinned to a UPN's first row pointed at nothing the
+     reader could see -- the disagreeing row might be twenty thousand rows away,
+     so the finding read as a false alarm. When a UPN has a dominant majority,
+     each row that disagrees with it is flagged on the row itself. A UPN that is
+     broadly split (a site-wide service system carrying rows named after the
+     systems it serves) gets one review note instead of thousands of errors. */
+  for(const [upn,group] of upnGroups){checks++;
+    if(group.systems.size<2&&group.disciplines.size<2)continue;
+    const majority=map=>{let best=null,total=0;for(const [key,entry] of map){total+=entry.count;if(!best||entry.count>best.entry.count)best={key,entry};}return {key:best.key,entry:best.entry,share:best.entry.count/total,outliers:total-best.entry.count};};
+    const dominant=info=>info.share>=0.9||info.outliers<=3;
+    const topList=map=>{const entries=[...map.values()].sort((left,right)=>right.count-left.count);const top=entries.slice(0,3).map(entry=>`${entry.display} ×${entry.count.toLocaleString()}`);const more=entries.length-3;return top.join('; ')+(more>0?` (+${more} more)`:'');};
+    let majoritySystem=null,majorityDiscipline=null;const split=[];
+    if(group.systems.size>1){const info=majority(group.systems);if(dominant(info))majoritySystem=info;else split.push(`${group.systems.size} System Names (the most common, "${info.entry.display}", covers ${Math.round(info.share*100)}% of them)`);}
+    if(group.disciplines.size>1){const info=majority(group.disciplines);if(dominant(info))majorityDiscipline=info;else split.push(`${group.disciplines.size} Disciplines (the most common, "${info.entry.display}", covers ${Math.round(info.share*100)}% of them)`);}
+    if(split.length)add(SSM_AUDIT_RULES.upnInconsistent,'warning',group.rows[0],{field:'UPN',
+      why:`The ${group.rows.length.toLocaleString()} rows on UPN ${upn} are split across ${split.join(' and ')}. A site-wide service system may do this deliberately, but it breaks the one-UPN-one-system rule.`,
+      actual:`Systems: ${topList(group.systems)}; Disciplines: ${topList(group.disciplines)}`,
+      expected:'One System Name and one Discipline for the whole UPN',
+      recommendation:`Confirm the split on UPN ${upn} is intended site practice; if not, align the rows.`});
+    if(!majoritySystem&&!majorityDiscipline)continue;
+    const total=group.rows.length;
+    for(const row of group.rows){
+      const parts=[];let field='';
+      if(majoritySystem&&row.systemName&&auditNormId(row.systemName)!==majoritySystem.key){parts.push(`System Name "${clean(row.systemName)}" while ${majoritySystem.entry.count.toLocaleString()} of the ${total.toLocaleString()} rows on UPN ${upn} carry "${majoritySystem.entry.display}"`);field='System Name';}
+      if(majorityDiscipline&&row.discipline&&auditNormId(row.discipline)!==majorityDiscipline.key){parts.push(`Discipline "${clean(row.discipline)}" while ${majorityDiscipline.entry.count.toLocaleString()} of the ${total.toLocaleString()} rows on UPN ${upn} carry "${majorityDiscipline.entry.display}"`);if(!field)field='Discipline';}
+      if(!parts.length)continue;
+      add(SSM_AUDIT_RULES.upnInconsistent,'error',row,{field,why:`This row carries ${parts.join(', and ')}.`,
+        actual:`System: ${row.systemName||'blank'}; Discipline: ${row.discipline||'blank'}`,
+        expected:`The UPN's usual System Name${majoritySystem?` ("${majoritySystem.entry.display}")`:''}${majoritySystem&&majorityDiscipline?' and ':''}${majorityDiscipline?`Discipline ("${majorityDiscipline.entry.display}")`:''}`,
+        recommendation:`Confirm this row belongs on UPN ${upn}; if it does, align it with the rest of the UPN.`});
+    }
+  }
   if(SSM_AUDIT_RULES.systemNoRoot.enabled){const systems=new Map();
     for(const row of rows){const key=auditNormId(row.systemName);if(!key)continue;const entry=systems.get(key)||{row,rows:0,roots:0};entry.rows++;if(auditNormId(row.closestParent)===key)entry.roots++;systems.set(key,entry);}
     for(const [key,entry] of systems){if(entry.roots)continue;checks++;add(SSM_AUDIT_RULES.systemNoRoot,'warning',entry.row,{field:'System Name',why:`${entry.rows.toLocaleString()} row${entry.rows===1?' uses':'s use'} this System Name, but none of them sits at the top of it.`,actual:entry.row.systemName,expected:'At least one row whose Closest Parent is the System Name',recommendation:'Make the top piece of equipment in this system a root (Closest Parent = System Name), or move these rows to the system they really belong to.'});}
