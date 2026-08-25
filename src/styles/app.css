@@ -2098,3 +2098,23 @@ tr.is-actioned td:first-child{opacity:1}
 .modify-row.is-excluded .audit-severity{opacity:.45}
 .modify-more{margin:8px 13px 10px;justify-self:start}
 @media(max-width:800px){.modify-row{grid-template-columns:auto auto minmax(0,1fr) auto}.modify-why{display:none}}
+
+/* ---- modifications: pattern groups ---- */
+.modify-pattern{border-bottom:1px solid var(--border)}
+.modify-pattern:last-child{border-bottom:0}
+.modify-pattern-head{display:flex;align-items:center;gap:10px;min-height:40px;padding:7px 13px 7px 31px;cursor:pointer}
+.modify-pattern-head:hover{background:#fbfcfe}
+.modify-pattern-head input{width:14px;height:14px;flex:0 0 14px;accent-color:var(--accent-600,#d97a26);cursor:pointer}
+.modify-pattern-head .audit-severity{flex:none}
+.modify-pattern-why{min-width:0;flex:1 1 auto;color:var(--ink);font-size:11px;line-height:1.45}
+.modify-pattern-count{color:var(--ink-3);font:650 10px var(--mono);white-space:nowrap}
+.modify-pattern-expand{white-space:nowrap}
+.modify-pattern-expand .ic{transition:transform var(--t-fast,120ms) ease}
+.modify-pattern-expand.open .ic{transform:rotate(180deg)}
+.modify-pattern-rows{display:grid;border-top:1px dashed var(--border);background:var(--surface-2)}
+.modify-pattern-rows .modify-row{padding-left:56px;background:transparent}
+.modify-pattern-rows .modify-row:hover{background:#f4f6f9}
+.modify-row.compact{grid-template-columns:auto minmax(120px,1fr) auto;min-height:28px}
+.modify-pattern.is-excluded .modify-pattern-why{color:var(--ink-3);text-decoration:line-through}
+.modify-pattern.is-excluded .audit-severity{opacity:.45}
+.modify-pattern.is-excluded>.modify-pattern-head{background:var(--surface-2)}

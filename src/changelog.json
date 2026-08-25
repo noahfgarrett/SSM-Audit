@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.26.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Modifications: findings with the same explanation are grouped under one box, so a whole family can be kept or set aside in one click\n- Each group opens to show its equipment, with every row still individually switchable"
+  },
+  {
     "version": "1.25.0",
     "date": "2026-08-25",
     "type": "feature",
