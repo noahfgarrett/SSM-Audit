@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.24.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Filters reworked: one smooth scroll, Select all / Clear all for everything, and All / None buttons on each list\n- Filter views can be saved, loaded, and removed from the top of the filter panel\n- Active filter groups on the findings page jump straight back into the panel"
+  },
+  {
     "version": "1.23.1",
     "date": "2026-08-19",
     "type": "fix",
@@ -9,7 +15,7 @@
     "version": "1.23.0",
     "date": "2026-08-19",
     "type": "feature",
-    "notes": "- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"
+    "notes": "- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation \u2014 digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"
   },
   {
     "version": "1.22.0",

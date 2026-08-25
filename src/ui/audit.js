@@ -513,6 +513,9 @@ const DIM_FIELDS={discipline:'discipline',milestone:'milestone',upn:'upn',buildi
 const DIM_LABELS={discipline:'Discipline',milestone:'L2 milestone',upn:'UPN / system',building:'Building'};
 
 function dimFilterMap(){return S.session.dimFilters||(S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]])));}
+/* "Keep nothing" needs a representable state: an impossible value that matches
+   no row. Empty means "not filtering", so unchecking the last box stores this. */
+const DIM_NONE='\u0001none';
 function dimSelected(dimension){return new Set(dimFilterMap()[dimension]||[]);}
 function clearDimFilters(){S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]]));}
 /* Options are the same buckets the dashboard ranks by — the dashboard just ranks
@@ -635,17 +638,69 @@ function filterSectionKept(section){
   return options.filter(option=>!hidden.has(option.key));
 }
 function filterSectionReset(section){if(section.kind==='dim')dimFilterMap()[section.id]=[];else S.session[section.stateKey]=[];}
+function filterSectionNone(section){
+  if(section.kind==='dim'){dimFilterMap()[section.id]=[DIM_NONE];return;}
+  S.session[section.stateKey]=filterSectionOptions(section).map(option=>option.key);
+}
+function noneAllFilters(){for(const section of FILTER_SECTIONS)if(filterSectionOptions(section).length)filterSectionNone(section);}
 /* Ticking is computed from state rather than from the checkboxes on screen, so a
    search that hides half the list cannot silently unselect what it hid. */
 function filterSectionSet(section,key,on){
   if(section.kind==='dim'){
     const options=filterSectionOptions(section),selected=dimSelected(section.id),keys=selected.size?new Set(selected):new Set(options.map(option=>option.key));
     if(on)keys.add(key);else keys.delete(key);
+    keys.delete(DIM_NONE);
+    if(!keys.size){dimFilterMap()[section.id]=[DIM_NONE];return;}
     setDimSelection(section.id,keys);return;
   }
   const hidden=new Set(S.session[section.stateKey]||[]);
   if(on)hidden.delete(key);else hidden.add(key);
   S.session[section.stateKey]=[...hidden];
+}
+/* ---- saved filter views ----
+   A view is a named copy of every filter list, kept on the device. Values that
+   do not exist in the current registry simply match nothing. */
+const FILTER_VIEWS_KEY='ssm-audit.filter-views';
+function loadFilterViews(){try{const raw=localStorage.getItem(FILTER_VIEWS_KEY);const list=raw?JSON.parse(raw):[];return Array.isArray(list)?list.filter(view=>view&&typeof view.name==='string'&&view.filters):[];}catch(_){return [];}}
+function saveFilterViews(views){try{localStorage.setItem(FILTER_VIEWS_KEY,JSON.stringify(views));}catch(_){/* private mode */}}
+function captureFilterView(name){
+  return {name,filters:{hiddenSeverities:[...(S.session.hiddenSeverities||[])],hiddenSources:[...(S.session.hiddenSources||[])],hiddenCategories:[...(S.session.hiddenCategories||[])],hiddenRules:[...(S.session.hiddenRules||[])],dimFilters:JSON.parse(JSON.stringify(dimFilterMap()))}};
+}
+function applyFilterView(view){
+  const filters=view.filters||{};
+  S.session.hiddenSeverities=[...(filters.hiddenSeverities||[])];S.session.hiddenSources=[...(filters.hiddenSources||[])];
+  S.session.hiddenCategories=[...(filters.hiddenCategories||[])];S.session.hiddenRules=[...(filters.hiddenRules||[])];
+  S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[...((filters.dimFilters||{})[key]||[])]]));
+}
+function filterViewsRowHtml(){
+  const views=loadFilterViews();
+  const chips=views.map(view=>`<span class="filter-view-chip"><button type="button" data-filter-view-load="${esc(view.name)}" title="Load this view">${esc(view.name)}</button><button type="button" class="filter-view-x" data-filter-view-delete="${esc(view.name)}" aria-label="Delete the view ${esc(view.name)}">${ic('x')}</button></span>`).join('');
+  return `<div class="filter-views" id="filterViewsRow"><span class="filter-views-label">Views</span>${chips||'<span class="filter-views-empty">None saved yet</span>'}<button class="btn ghost sm" type="button" id="filterViewSave">${ic('plus')}Save view</button></div>`;
+}
+function wireFilterViewsRow(){
+  $$('[data-filter-view-load]').forEach(button=>button.onclick=()=>{
+    const view=loadFilterViews().find(entry=>entry.name===button.dataset.filterViewLoad);if(!view)return;
+    applyFilterView(view);applyFilterChange();toast(`View \u201c${view.name}\u201d loaded`);
+  });
+  $$('[data-filter-view-delete]').forEach(button=>button.onclick=()=>{
+    saveFilterViews(loadFilterViews().filter(entry=>entry.name!==button.dataset.filterViewDelete));
+    renderFilterViewsRow();
+  });
+  const save=$('#filterViewSave');
+  if(save)save.onclick=()=>{
+    const row=$('#filterViewsRow');if(!row)return;
+    row.innerHTML=`<span class="filter-views-label">Views</span><input id="filterViewName" class="filter-view-name" maxlength="40" placeholder="Name this view" aria-label="Name for the saved view"><button class="btn primary sm" type="button" id="filterViewConfirm">Save</button><button class="btn ghost sm" type="button" id="filterViewCancel">Cancel</button>`;
+    const input=$('#filterViewName');input.focus();
+    const commit=()=>{const name=clean(input.value);if(!name){renderFilterViewsRow();return;}
+      const views=loadFilterViews().filter(entry=>entry.name!==name);views.push(captureFilterView(name));saveFilterViews(views);renderFilterViewsRow();toast(`View \u201c${name}\u201d saved`);};
+    $('#filterViewConfirm').onclick=commit;$('#filterViewCancel').onclick=()=>renderFilterViewsRow();
+    input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();commit();}if(event.key==='Escape'){event.stopPropagation();renderFilterViewsRow();}};
+  };
+}
+function renderFilterViewsRow(){
+  const row=$('#filterViewsRow');if(!row)return;
+  const replacement=document.createElement('div');replacement.innerHTML=filterViewsRowHtml();
+  row.replaceWith(replacement.firstElementChild);wireFilterViewsRow();
 }
 function filterActiveCount(){return FILTER_SECTIONS.filter(filterSectionActive).length;}
 function clearAllFilters(){S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];clearDimFilters();}
@@ -660,10 +715,10 @@ function filterChipRowHtml(includeSeverity){
     const kept=filterSectionKept(section);
     const chips=kept.length?kept.map(option=>`<span class="filter-chip"><span>${esc(option.label)}</span><button class="filter-chip-x" type="button" data-filter-chip="${esc(section.id)}" data-filter-chip-value="${esc(option.key)}" title="Stop showing ${esc(option.label)}" aria-label="Stop showing ${esc(option.label)}">${ic('x')}</button></span>`).join('')
       :'<span class="filter-chip is-none">Nothing shown</span>';
-    groups.push(`<span class="filter-chip-group"><b>${esc(section.label)}</b>${chips}</span>`);
+    groups.push(`<span class="filter-chip-group"><button type="button" class="filter-chip-group-label" data-filter-edit="${esc(section.id)}" title="Change the ${esc(section.label)} filter">${esc(section.label)}</button>${chips}</span>`);
   }
   if(!groups.length)return '<div class="filter-chip-row" id="filterChipRow" hidden></div>';
-  return `<div class="filter-chip-row" id="filterChipRow">${ic('filter')}${groups.join('')}<button class="filter-chip-clear" type="button" data-filter-clear-all>Clear all</button></div>`;
+  return `<div class="filter-chip-row" id="filterChipRow"><button class="filter-chip-edit" type="button" data-filter-button title="Open the filters">${ic('filter')}Edit</button>${groups.join('')}<button class="filter-chip-clear" type="button" data-filter-clear-all title="Remove every filter and show everything">Reset filters</button></div>`;
 }
 function filterButtonHtml(id){
   const count=filterActiveCount();
@@ -679,7 +734,7 @@ function filterPanelSectionHtml(section,query){
   return `<section class="filter-section ${active?'is-active':''}" data-filter-section="${esc(section.id)}">
     <div class="filter-section-head"><div><b>${esc(section.label)}</b><span>${esc(section.hint)}</span></div>
       <span class="filter-section-state">${active?`${kept.toLocaleString()} of ${options.length.toLocaleString()}`:''}</span>
-      <button class="btn ghost sm" type="button" data-filter-all="${esc(section.id)}" ${active?'':'disabled'} title="Show every ${esc(section.label.toLowerCase())}">${ic('rotate-ccw')}All</button></div>
+      <span class="filter-section-buttons"><button class="btn ghost sm" type="button" data-filter-all="${esc(section.id)}" ${active?'':'disabled'} title="Tick every ${esc(section.label.toLowerCase())}">All</button><button class="btn ghost sm" type="button" data-filter-none="${esc(section.id)}" title="Untick every ${esc(section.label.toLowerCase())}">None</button></span></div>
     <div class="filter-section-list">${body}</div></section>`;
 }
 function filterPanelBodyHtml(){
@@ -693,9 +748,10 @@ function filterPanelHtml(){
   return `<div class="filter-sheet-back ${open?'show':''}" id="filterSheetBack" ${open?'':'hidden'}>
     <aside class="filter-sheet" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filters" tabindex="-1">
       <header class="filter-sheet-head"><div><b>Filters</b><span id="filterSheetSummary">${esc(filterPanelSummary())}</span></div><button class="xbtn icon-btn" type="button" id="filterSheetClose" aria-label="Close filters">${ic('x')}</button></header>
+      ${filterViewsRowHtml()}
       <div class="filter-sheet-search"><div class="searchbox">${ic('search')}<input id="filterSheetSearch" aria-label="Search the filter options" placeholder="Search filter options" value="${esc(S.session.panelSearch)}"></div></div>
       <div class="filter-sheet-scroll" id="filterSheetBody">${filterPanelBodyHtml()}</div>
-      <footer class="filter-sheet-foot"><button class="btn ghost" type="button" id="filterSheetClear">${ic('rotate-ccw')}Clear all</button><button class="btn primary" type="button" id="filterSheetDone">Done</button></footer>
+      <footer class="filter-sheet-foot"><button class="btn ghost" type="button" id="filterSheetSelectAll" title="Tick every box — show everything">${ic('check-check')}Select all</button><button class="btn ghost" type="button" id="filterSheetClear" title="Untick every box">${ic('x')}Clear all</button><button class="btn primary" type="button" id="filterSheetDone">Done</button></footer>
     </aside></div>`;
 }
 function focusFilterOption(sectionId,value){
@@ -726,7 +782,11 @@ function wireFilterPanelBody(){
   });
   $$('[data-filter-all]').forEach(button=>button.onclick=()=>{
     const section=filterSection(button.dataset.filterAll);if(!section)return;
-    filterSectionReset(section);applyFilterChange(()=>$(`[data-filter-section="${section.id}"] input`)?.focus());
+    filterSectionReset(section);applyFilterChange(()=>$(`[data-filter-all="${section.id}"]`)?.focus());
+  });
+  $$('[data-filter-none]').forEach(button=>button.onclick=()=>{
+    const section=filterSection(button.dataset.filterNone);if(!section)return;
+    filterSectionNone(section);applyFilterChange(()=>$(`[data-filter-none="${section.id}"]`)?.focus());
   });
 }
 function renderFilterChipRow(includeSeverity){
@@ -742,6 +802,12 @@ function wireFilterChips(){
   /* The chip row carries one, and the dashboard's empty-scope card carries
      another — both are on screen at once when the filters exclude everything. */
   $$('[data-filter-clear-all]').forEach(button=>button.onclick=()=>{clearAllFilters();applyFilterChange();});
+  $$('[data-filter-edit]').forEach(button=>button.onclick=()=>{
+    const sectionId=button.dataset.filterEdit;
+    setFilterPanelOpen(true);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{const target=$(`[data-filter-section="${sectionId}"]`);target?.scrollIntoView({block:'start'});target?.querySelector('input')?.focus({preventScroll:true});}));
+  });
+  wireFilterButtons();
 }
 function setFilterPanelOpen(open){
   const back=$('#filterSheetBack');if(!back)return;
@@ -774,7 +840,9 @@ function wireFilterPanel(){
   back.onpointerdown=event=>{if(event.target===back)setFilterPanelOpen(false);};
   $('#filterSheetClose').onclick=()=>setFilterPanelOpen(false);
   $('#filterSheetDone').onclick=()=>setFilterPanelOpen(false);
-  $('#filterSheetClear').onclick=()=>{clearAllFilters();applyFilterChange(()=>$('#filterSheetClear')?.focus());};
+  $('#filterSheetClear').onclick=()=>{noneAllFilters();applyFilterChange(()=>$('#filterSheetClear')?.focus());};
+  $('#filterSheetSelectAll').onclick=()=>{clearAllFilters();applyFilterChange(()=>$('#filterSheetSelectAll')?.focus());};
+  wireFilterViewsRow();
   $('#filterSheetSearch').oninput=event=>{S.session.panelSearch=event.target.value;debounceSearch(renderFilterPanelBody);};
   wireFilterButtons();wireFilterPanelBody();
 }

@@ -1633,7 +1633,8 @@ body.audit-fullscreen{overflow:hidden}
 .filter-section-state{flex:0 0 auto;color:var(--ink-3);font:10.5px var(--mono)}
 .filter-section.is-active .filter-section-state{color:var(--accent-700)}
 .filter-section.is-active .filter-section-head b{color:var(--accent-700)}
-.filter-section-list{max-height:302px;overflow:auto;overscroll-behavior:contain}
+/* One continuous scroll: the sheet body scrolls, the sections do not. */
+.filter-section-list{overflow:visible}
 .filter-section-empty{margin:0;padding:10px 6px;color:var(--ink-3);font-size:11.5px}
 .filter-sheet-foot{display:flex;align-items:center;gap:9px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface-2)}
 .filter-sheet-foot .btn{flex:1;justify-content:center;height:38px}
@@ -2036,3 +2037,23 @@ tr.is-actioned td:first-child{opacity:1}
 .dash-breakdown-item:hover{background:var(--tint);color:var(--accent-700)}
 .dash-breakdown-item:focus-visible{outline:none;box-shadow:var(--ring)}
 @media (max-width:1100px){.dash-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-breakdown-col:nth-child(2){border-right:0}.dash-breakdown-col{border-bottom:1px solid var(--border)}}
+
+/* ---- filter sheet rework ---- */
+.filter-views{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.filter-views-label{color:var(--ink-3);font:700 9.5px var(--mono);text-transform:uppercase;letter-spacing:.3px;margin-right:2px}
+.filter-views-empty{color:var(--ink-3);font-size:11.5px}
+.filter-view-chip{display:inline-flex;align-items:stretch;border:1px solid var(--border-strong);border-radius:99px;overflow:hidden;background:var(--surface)}
+.filter-view-chip>button{border:0;background:transparent;font:600 11.5px var(--sans);color:var(--ink-2);cursor:pointer;padding:4px 4px 4px 10px}
+.filter-view-chip>button:hover{color:var(--accent-700)}
+.filter-view-chip .filter-view-x{display:inline-grid;place-items:center;padding:0 7px 0 3px;color:var(--ink-3)}
+.filter-view-chip .filter-view-x:hover{color:var(--danger)}
+.filter-view-chip .filter-view-x .ic{width:11px;height:11px}
+.filter-view-name{flex:1;min-width:120px;height:30px;padding:0 10px;border:1px solid var(--accent-400);border-radius:6px;background:var(--surface);color:var(--ink);font:12px var(--sans);outline:none;box-shadow:var(--ring)}
+.filter-views .btn.sm,.filter-section-buttons .btn.sm{height:26px;padding:0 9px;font-size:11px}
+.filter-section-buttons{display:inline-flex;gap:4px;flex:0 0 auto}
+.filter-chip-edit{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border-strong);border-radius:99px;background:var(--surface);color:var(--ink-2);font:650 11px var(--sans);cursor:pointer}
+.filter-chip-edit .ic{width:12px;height:12px;color:var(--accent-700)}
+.filter-chip-edit:hover{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
+.filter-chip-group-label{border:0;background:transparent;padding:0;margin:0;color:var(--ink-3);font:700 10px var(--mono);text-transform:uppercase;letter-spacing:.2px;cursor:pointer}
+.filter-chip-group-label:hover{color:var(--accent-700);text-decoration:underline}
+.filter-sheet-foot .btn.ghost{flex:0 1 auto}
