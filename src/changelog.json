@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.25.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- New Modifications tab: every finding listed under its check, ready to untick \u2014 set-aside findings leave the findings list, the Dashboard, and the Excel report until restored\n- Decisions are remembered for the registry they were made on\n- Findings can also be set aside straight from their detail panel"
+  },
+  {
     "version": "1.24.0",
     "date": "2026-08-25",
     "type": "feature",
