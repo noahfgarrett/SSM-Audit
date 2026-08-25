@@ -422,15 +422,21 @@ function modifyPatternCountText(findings){
   const kept=findings.filter(finding=>!isExcludedId(finding.id)).length;
   return kept===findings.length?`${findings.length.toLocaleString()} kept`:`${kept.toLocaleString()} of ${findings.length.toLocaleString()} kept`;
 }
+/* The equipment list inside a pattern is only built the first time it opens. */
 function modifyPatternHtml(group){
   const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
   const severity=group.findings[0].severity;
-  const rows=group.findings.slice(0,MODIFY_CHUNK).map(finding=>modifyRowHtml(finding,true)).join('');
-  const rest=group.findings.length-MODIFY_CHUNK;
   return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
     <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${esc(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
-    <div class="modify-pattern-rows" hidden>${rows}${rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more-group="${group.key}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>
+    <div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
+}
+function modifyFillPatternRows(pattern){
+  const body=pattern.querySelector('.modify-pattern-rows');if(!body||!body.dataset.modEmpty)return;
+  delete body.dataset.modEmpty;
+  const key=pattern.dataset.modPattern,findings=modifyPatternMap.get(key)||[];
+  const rest=findings.length-MODIFY_CHUNK;
+  body.innerHTML=findings.slice(0,MODIFY_CHUNK).map(finding=>modifyRowHtml(finding,true)).join('')+(rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more-group="${key}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:'');
 }
 function modifyListHtml(entry){
   const {groups,singles}=modifyPatterns(entry);
@@ -461,13 +467,26 @@ function modifyRuleSeverity(entry){
 }
 function modifyRuleCountText(entry){const aside=entry.findings.length-entry.kept;return aside?`${entry.kept.toLocaleString()} of ${entry.findings.length.toLocaleString()} kept`:`${entry.findings.length.toLocaleString()} kept`;}
 function modifyCategoryCountText(group){const aside=group.total-group.kept;return aside?`${group.kept.toLocaleString()} of ${group.total.toLocaleString()} kept`:`${group.total.toLocaleString()} findings`;}
+/* A closed rule card holds a placeholder instead of its list -- on a registry
+   with thousands of findings, building every hidden row up front is what made
+   the screen (and every full re-render) stall for seconds. The list is built
+   the first time the card opens. */
 function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
     <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${esc(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span><span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="Keep every finding of this check">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="Set every finding of this check aside">${ic('circle-x')}Set all aside</button></span></summary>
-    ${modifyListHtml(entry)}
+    ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
+}
+function modifyFillLazyList(details){
+  const lazy=details.querySelector('[data-mod-lazy]');if(!lazy)return;
+  const groupsNow=modifyGroups();let entry=null;
+  for(const group of groupsNow){entry=group.rules.find(item=>item.rule.id===lazy.dataset.modLazy)||entry;}
+  if(!entry){lazy.remove();return;}
+  const holder=document.createElement('div');holder.innerHTML=modifyListHtml(entry);
+  lazy.replaceWith(holder.firstElementChild);
+  $$('[data-mod-pattern]',details).forEach(pattern=>syncModifyPatternBox(pattern.dataset.modPattern));
 }
 function updateModifyCounts(navigate){
   const groups=modifyGroups();
@@ -513,6 +532,7 @@ export function renderModifications(navigate){
     const head=event.target.closest('.modify-pattern-head');
     if(head&&!event.target.closest('input')){
       const pattern=head.closest('.modify-pattern'),rows=pattern.querySelector('.modify-pattern-rows'),expand=pattern.querySelector('[data-mod-expand]');
+      if(rows.hidden)modifyFillPatternRows(pattern);
       rows.hidden=!rows.hidden;if(expand){expand.setAttribute('aria-expanded',rows.hidden?'false':'true');expand.classList.toggle('open',!rows.hidden);}
       return;
     }
@@ -546,12 +566,22 @@ export function renderModifications(navigate){
       event.preventDefault();
       const ruleId=(keep||asideAll).dataset.modKeep||(keep||asideAll).dataset.modAside;
       const base=modifyBaseResult();if(!base)return;
-      setExcludedMany(base.findings.filter(finding=>finding.rule.id===ruleId).map(finding=>finding.id),!!asideAll);
-      rerenderModifications(navigate);
+      const on=!!asideAll;
+      setExcludedMany(base.findings.filter(finding=>finding.rule.id===ruleId).map(finding=>finding.id),on);
+      /* The card is updated in place -- a full screen rebuild here is what made
+         these buttons stall on a large registry. Rows not rendered yet pick the
+         state up from the store when they are. */
+      const card=body.querySelector(`.modify-rule[data-mod-rule="${CSS.escape(ruleId)}"]`);
+      if(card){
+        $$('[data-mod-finding]',card).forEach(row=>{row.checked=!on;row.closest('.modify-row').classList.toggle('is-excluded',on);});
+        $$('[data-mod-pattern]',card).forEach(pattern=>syncModifyPatternBox(pattern.dataset.modPattern));
+      }
+      updateModifyCounts(navigate);
     }
   };
   syncAllModifyPatternBoxes();
   $$('.modify-rule',body).forEach(details=>details.addEventListener('toggle',()=>{
+    if(details.open)modifyFillLazyList(details);
     const set=new Set(S.session.modifyOpenRules||[]);
     if(details.open)set.add(details.dataset.modRule);else set.delete(details.dataset.modRule);
     S.session.modifyOpenRules=[...set];
