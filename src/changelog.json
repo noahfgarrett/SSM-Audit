@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.31.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Exports carrying an Equipment Status Report tab are understood: equipment whose OA/BT step is Completed is treated as finished on site and leaves every metric\n- The registry itself still comes from the Full Export tab, unchanged\n- The Dashboard and Modifications say how many completed equipment were set aside"
+  },
+  {
     "version": "1.30.0",
     "date": "2026-08-25",
     "type": "fix",

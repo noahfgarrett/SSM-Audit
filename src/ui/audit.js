@@ -10,6 +10,7 @@ import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx } from
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
+import { auditStatusFromWorkbook } from '../audit/status-report.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -148,9 +149,25 @@ export function applyFindingExclusions(result,excluded){
   const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
   return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
 }
+/* Equipment the site has finished (per the Equipment Status Report tab) is out
+   of every metric. The registry is still audited whole first, so a completed
+   parent keeps anchoring its children -- only its findings are dropped.
+   Findings that are not about one piece of equipment (registry-wide) stay. */
+export function applyCompletedEquipment(result,completed){
+  if(!result||!completed||!completed.size)return result;
+  const findings=result.findings.filter(finding=>!finding.equipmentId||!completed.has(auditNormId(finding.equipmentId)));
+  if(findings.length===result.findings.length)return result;
+  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
+  const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
+  return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
+}
+function sessionEffectiveRaw(){
+  const raw=S.session&&S.session.rawResult;if(!raw)return raw;
+  return applyCompletedEquipment(raw,S.session.status&&S.session.status.completed);
+}
 function refreshSessionResult(){
   if(!S.session||!S.session.rawResult)return;
-  S.session.result=applyFindingExclusions(applyRulePreferences(S.session.rawResult,S.rules.disabled),S.session.excluded);
+  S.session.result=applyFindingExclusions(applyRulePreferences(sessionEffectiveRaw(),S.rules.disabled),S.session.excluded);
   S.session.hierarchy=null;S.session.hierarchyCacheKey='';S.session.hierarchyCacheRows=null;S.session.headerIdSet=null;S.session.rowIndex=null;S.session.exportPlan=null;
   invalidateFindingCaches();
 }
@@ -202,7 +219,7 @@ function setExcluded(id,on){
 /* The Modifications screen works from the result BEFORE exclusions (but after
    switched-off checks), so set-aside findings stay visible to restore. */
 function modifyBaseResult(){
-  const raw=S.session&&S.session.rawResult;if(!raw)return null;
+  const raw=sessionEffectiveRaw();if(!raw)return null;
   return applyRulePreferences(raw,S.rules.disabled);
 }
 function excludedInBase(){
@@ -563,7 +580,7 @@ export function renderModifications(navigate){
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Modifications</h2><p>${esc(S.session.name)} — untick any finding you disagree with and it is set aside: dropped from the findings list, the Dashboard, and the Excel report. Decisions are remembered for this registry, even after a reload.</p></div></div>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!query&&(S.session.modifyClosedCats||[]).includes(group.category);
       return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</div></section>`;
@@ -791,14 +808,24 @@ export async function addAuditTarget(file,navigate){
       const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.6,label));
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
+      const status=await sessionStatusReport(workbook,snapshot,checkpoint);
       const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();
+      S.session={...S.session,snapshot,rawResult,result,status,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
   }catch(error){
     console.error('SSM Audit failed',error);S.session.error=error&&error.message||'Could not read this registry';S.session.snapshot=null;S.session.result=null;renderUpload(navigate);
   }
+}
+
+/* Reads the status tab (when present) and records how many completed equipment
+   actually match registry tags -- the matched count is what changes the audit. */
+async function sessionStatusReport(workbook,snapshot,checkpoint){
+  const status=await auditStatusFromWorkbook(workbook,checkpoint);
+  if(!status)return null;
+  let matched=0;for(const row of snapshot.rows)if(status.completed.has(auditNormId(row.equipmentId)))matched++;
+  return {...status,matched};
 }
 
 function clearComparisonTarget(){S.comparison.targetName='';S.comparison.targetSnapshot=null;S.comparison.targetError='';S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};}
@@ -847,13 +874,13 @@ async function addComparisonFile(file,side,navigate){
   if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook (.xlsx or .xls)');return;}
   const errorKey=side==='target'?'targetError':'referenceError';S.comparison[errorKey]='';
   try{
-    let snapshot,auditResult;
+    let snapshot,auditResult,statusReport=null;
     await runWithProgress(side==='target'?'Loading registry to audit':'Loading finished project',file.name,async(checkpoint,report)=>{
       const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
-      report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
+      report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){statusReport=await sessionStatusReport(workbook,snapshot,checkpoint);auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -1800,7 +1827,7 @@ function dashBlockHtml(title,explainer,body,extra){
 
 function dashScopeLine(scoped){
   const summary=S.session.result.summary;
-  if(!dashIsScoped())return `Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(dashAuditedAt())}`;
+  if(!dashIsScoped())return `Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(dashAuditedAt())}${S.session.status&&S.session.status.matched?` &middot; <span title="Marked Completed on the Equipment Status Report tab — their findings are not counted anywhere">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}`;
   return `Scoped: ${scoped.rows.length.toLocaleString()} of ${summary.rows.toLocaleString()} rows &middot; ${scoped.findings.length.toLocaleString()} of ${summary.findings.toLocaleString()} findings`;
 }
 function dashAuditedAt(){return S.session.auditedAt?new Date(S.session.auditedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'this session';}
