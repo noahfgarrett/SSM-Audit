@@ -1640,7 +1640,8 @@ body.audit-fullscreen{overflow:hidden}
 .filter-section-state{flex:0 0 auto;color:var(--ink-3);font:10.5px var(--mono)}
 .filter-section.is-active .filter-section-state{color:var(--accent-700)}
 .filter-section.is-active .filter-section-head b{color:var(--accent-700)}
-.filter-section-list{max-height:302px;overflow:auto;overscroll-behavior:contain}
+/* One continuous scroll: the sheet body scrolls, the sections do not. */
+.filter-section-list{overflow:visible}
 .filter-section-empty{margin:0;padding:10px 6px;color:var(--ink-3);font-size:11.5px}
 .filter-sheet-foot{display:flex;align-items:center;gap:9px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface-2)}
 .filter-sheet-foot .btn{flex:1;justify-content:center;height:38px}
@@ -2044,6 +2045,26 @@ tr.is-actioned td:first-child{opacity:1}
 .dash-breakdown-item:focus-visible{outline:none;box-shadow:var(--ring)}
 @media (max-width:1100px){.dash-breakdown{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-breakdown-col:nth-child(2){border-right:0}.dash-breakdown-col{border-bottom:1px solid var(--border)}}
 
+/* ---- filter sheet rework ---- */
+.filter-views{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.filter-views-label{color:var(--ink-3);font:700 9.5px var(--mono);text-transform:uppercase;letter-spacing:.3px;margin-right:2px}
+.filter-views-empty{color:var(--ink-3);font-size:11.5px}
+.filter-view-chip{display:inline-flex;align-items:stretch;border:1px solid var(--border-strong);border-radius:99px;overflow:hidden;background:var(--surface)}
+.filter-view-chip>button{border:0;background:transparent;font:600 11.5px var(--sans);color:var(--ink-2);cursor:pointer;padding:4px 4px 4px 10px}
+.filter-view-chip>button:hover{color:var(--accent-700)}
+.filter-view-chip .filter-view-x{display:inline-grid;place-items:center;padding:0 7px 0 3px;color:var(--ink-3)}
+.filter-view-chip .filter-view-x:hover{color:var(--danger)}
+.filter-view-chip .filter-view-x .ic{width:11px;height:11px}
+.filter-view-name{flex:1;min-width:120px;height:30px;padding:0 10px;border:1px solid var(--accent-400);border-radius:6px;background:var(--surface);color:var(--ink);font:12px var(--sans);outline:none;box-shadow:var(--ring)}
+.filter-views .btn.sm,.filter-section-buttons .btn.sm{height:26px;padding:0 9px;font-size:11px}
+.filter-section-buttons{display:inline-flex;gap:4px;flex:0 0 auto}
+.filter-chip-edit{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border-strong);border-radius:99px;background:var(--surface);color:var(--ink-2);font:650 11px var(--sans);cursor:pointer}
+.filter-chip-edit .ic{width:12px;height:12px;color:var(--accent-700)}
+.filter-chip-edit:hover{border-color:var(--accent-400);background:var(--tint);color:var(--accent-700)}
+.filter-chip-group-label{border:0;background:transparent;padding:0;margin:0;color:var(--ink-3);font:700 10px var(--mono);text-transform:uppercase;letter-spacing:.2px;cursor:pointer}
+.filter-chip-group-label:hover{color:var(--accent-700);text-decoration:underline}
+.filter-sheet-foot .btn.ghost{flex:0 1 auto}
+
 </style>
 </head>
 <body>
@@ -2140,7 +2161,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.23.1","date":"2026-08-19","type":"fix","notes":"- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"},{"version":"1.23.0","date":"2026-08-19","type":"feature","notes":"- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"},{"version":"1.22.0","date":"2026-08-19","type":"feature","notes":"- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"},{"version":"1.21.1","date":"2026-08-19","type":"fix","notes":"- A description-shaped Equipment ID is now Check this rather than Invalid"},{"version":"1.21.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"},{"version":"1.20.3","date":"2026-08-19","type":"fix","notes":"- Excel report: the Progress column is the orange bar only; the number stays in the % column"},{"version":"1.20.2","date":"2026-08-19","type":"fix","notes":"- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"},{"version":"1.20.1","date":"2026-08-19","type":"fix","notes":"- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"},{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
+const CHANGELOG=Object.freeze([{"version":"1.24.0","date":"2026-08-25","type":"feature","notes":"- Filters reworked: one smooth scroll, Select all / Clear all for everything, and All / None buttons on each list\n- Filter views can be saved, loaded, and removed from the top of the filter panel\n- Active filter groups on the findings page jump straight back into the panel"},{"version":"1.23.1","date":"2026-08-19","type":"fix","notes":"- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"},{"version":"1.23.0","date":"2026-08-19","type":"feature","notes":"- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"},{"version":"1.22.0","date":"2026-08-19","type":"feature","notes":"- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"},{"version":"1.21.1","date":"2026-08-19","type":"fix","notes":"- A description-shaped Equipment ID is now Check this rather than Invalid"},{"version":"1.21.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"},{"version":"1.20.3","date":"2026-08-19","type":"fix","notes":"- Excel report: the Progress column is the orange bar only; the number stays in the % column"},{"version":"1.20.2","date":"2026-08-19","type":"fix","notes":"- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"},{"version":"1.20.1","date":"2026-08-19","type":"fix","notes":"- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"},{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -2151,7 +2172,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.23.1';
+const APP_VERSION='1.24.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -5111,6 +5132,9 @@ const DIM_FIELDS={discipline:'discipline',milestone:'milestone',upn:'upn',buildi
 const DIM_LABELS={discipline:'Discipline',milestone:'L2 milestone',upn:'UPN / system',building:'Building'};
 
 function dimFilterMap(){return S.session.dimFilters||(S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]])));}
+/* "Keep nothing" needs a representable state: an impossible value that matches
+   no row. Empty means "not filtering", so unchecking the last box stores this. */
+const DIM_NONE='\u0001none';
 function dimSelected(dimension){return new Set(dimFilterMap()[dimension]||[]);}
 function clearDimFilters(){S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[]]));}
 /* Options are the same buckets the dashboard ranks by — the dashboard just ranks
@@ -5233,17 +5257,69 @@ function filterSectionKept(section){
   return options.filter(option=>!hidden.has(option.key));
 }
 function filterSectionReset(section){if(section.kind==='dim')dimFilterMap()[section.id]=[];else S.session[section.stateKey]=[];}
+function filterSectionNone(section){
+  if(section.kind==='dim'){dimFilterMap()[section.id]=[DIM_NONE];return;}
+  S.session[section.stateKey]=filterSectionOptions(section).map(option=>option.key);
+}
+function noneAllFilters(){for(const section of FILTER_SECTIONS)if(filterSectionOptions(section).length)filterSectionNone(section);}
 /* Ticking is computed from state rather than from the checkboxes on screen, so a
    search that hides half the list cannot silently unselect what it hid. */
 function filterSectionSet(section,key,on){
   if(section.kind==='dim'){
     const options=filterSectionOptions(section),selected=dimSelected(section.id),keys=selected.size?new Set(selected):new Set(options.map(option=>option.key));
     if(on)keys.add(key);else keys.delete(key);
+    keys.delete(DIM_NONE);
+    if(!keys.size){dimFilterMap()[section.id]=[DIM_NONE];return;}
     setDimSelection(section.id,keys);return;
   }
   const hidden=new Set(S.session[section.stateKey]||[]);
   if(on)hidden.delete(key);else hidden.add(key);
   S.session[section.stateKey]=[...hidden];
+}
+/* ---- saved filter views ----
+   A view is a named copy of every filter list, kept on the device. Values that
+   do not exist in the current registry simply match nothing. */
+const FILTER_VIEWS_KEY='ssm-audit.filter-views';
+function loadFilterViews(){try{const raw=localStorage.getItem(FILTER_VIEWS_KEY);const list=raw?JSON.parse(raw):[];return Array.isArray(list)?list.filter(view=>view&&typeof view.name==='string'&&view.filters):[];}catch(_){return [];}}
+function saveFilterViews(views){try{localStorage.setItem(FILTER_VIEWS_KEY,JSON.stringify(views));}catch(_){/* private mode */}}
+function captureFilterView(name){
+  return {name,filters:{hiddenSeverities:[...(S.session.hiddenSeverities||[])],hiddenSources:[...(S.session.hiddenSources||[])],hiddenCategories:[...(S.session.hiddenCategories||[])],hiddenRules:[...(S.session.hiddenRules||[])],dimFilters:JSON.parse(JSON.stringify(dimFilterMap()))}};
+}
+function applyFilterView(view){
+  const filters=view.filters||{};
+  S.session.hiddenSeverities=[...(filters.hiddenSeverities||[])];S.session.hiddenSources=[...(filters.hiddenSources||[])];
+  S.session.hiddenCategories=[...(filters.hiddenCategories||[])];S.session.hiddenRules=[...(filters.hiddenRules||[])];
+  S.session.dimFilters=Object.fromEntries(DIM_KEYS.map(key=>[key,[...((filters.dimFilters||{})[key]||[])]]));
+}
+function filterViewsRowHtml(){
+  const views=loadFilterViews();
+  const chips=views.map(view=>`<span class="filter-view-chip"><button type="button" data-filter-view-load="${esc(view.name)}" title="Load this view">${esc(view.name)}</button><button type="button" class="filter-view-x" data-filter-view-delete="${esc(view.name)}" aria-label="Delete the view ${esc(view.name)}">${ic('x')}</button></span>`).join('');
+  return `<div class="filter-views" id="filterViewsRow"><span class="filter-views-label">Views</span>${chips||'<span class="filter-views-empty">None saved yet</span>'}<button class="btn ghost sm" type="button" id="filterViewSave">${ic('plus')}Save view</button></div>`;
+}
+function wireFilterViewsRow(){
+  $$('[data-filter-view-load]').forEach(button=>button.onclick=()=>{
+    const view=loadFilterViews().find(entry=>entry.name===button.dataset.filterViewLoad);if(!view)return;
+    applyFilterView(view);applyFilterChange();toast(`View \u201c${view.name}\u201d loaded`);
+  });
+  $$('[data-filter-view-delete]').forEach(button=>button.onclick=()=>{
+    saveFilterViews(loadFilterViews().filter(entry=>entry.name!==button.dataset.filterViewDelete));
+    renderFilterViewsRow();
+  });
+  const save=$('#filterViewSave');
+  if(save)save.onclick=()=>{
+    const row=$('#filterViewsRow');if(!row)return;
+    row.innerHTML=`<span class="filter-views-label">Views</span><input id="filterViewName" class="filter-view-name" maxlength="40" placeholder="Name this view" aria-label="Name for the saved view"><button class="btn primary sm" type="button" id="filterViewConfirm">Save</button><button class="btn ghost sm" type="button" id="filterViewCancel">Cancel</button>`;
+    const input=$('#filterViewName');input.focus();
+    const commit=()=>{const name=clean(input.value);if(!name){renderFilterViewsRow();return;}
+      const views=loadFilterViews().filter(entry=>entry.name!==name);views.push(captureFilterView(name));saveFilterViews(views);renderFilterViewsRow();toast(`View \u201c${name}\u201d saved`);};
+    $('#filterViewConfirm').onclick=commit;$('#filterViewCancel').onclick=()=>renderFilterViewsRow();
+    input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();commit();}if(event.key==='Escape'){event.stopPropagation();renderFilterViewsRow();}};
+  };
+}
+function renderFilterViewsRow(){
+  const row=$('#filterViewsRow');if(!row)return;
+  const replacement=document.createElement('div');replacement.innerHTML=filterViewsRowHtml();
+  row.replaceWith(replacement.firstElementChild);wireFilterViewsRow();
 }
 function filterActiveCount(){return FILTER_SECTIONS.filter(filterSectionActive).length;}
 function clearAllFilters(){S.session.hiddenSources=[];S.session.hiddenSeverities=[];S.session.hiddenCategories=[];S.session.hiddenRules=[];clearDimFilters();}
@@ -5258,10 +5334,10 @@ function filterChipRowHtml(includeSeverity){
     const kept=filterSectionKept(section);
     const chips=kept.length?kept.map(option=>`<span class="filter-chip"><span>${esc(option.label)}</span><button class="filter-chip-x" type="button" data-filter-chip="${esc(section.id)}" data-filter-chip-value="${esc(option.key)}" title="Stop showing ${esc(option.label)}" aria-label="Stop showing ${esc(option.label)}">${ic('x')}</button></span>`).join('')
       :'<span class="filter-chip is-none">Nothing shown</span>';
-    groups.push(`<span class="filter-chip-group"><b>${esc(section.label)}</b>${chips}</span>`);
+    groups.push(`<span class="filter-chip-group"><button type="button" class="filter-chip-group-label" data-filter-edit="${esc(section.id)}" title="Change the ${esc(section.label)} filter">${esc(section.label)}</button>${chips}</span>`);
   }
   if(!groups.length)return '<div class="filter-chip-row" id="filterChipRow" hidden></div>';
-  return `<div class="filter-chip-row" id="filterChipRow">${ic('filter')}${groups.join('')}<button class="filter-chip-clear" type="button" data-filter-clear-all>Clear all</button></div>`;
+  return `<div class="filter-chip-row" id="filterChipRow"><button class="filter-chip-edit" type="button" data-filter-button title="Open the filters">${ic('filter')}Edit</button>${groups.join('')}<button class="filter-chip-clear" type="button" data-filter-clear-all title="Remove every filter and show everything">Reset filters</button></div>`;
 }
 function filterButtonHtml(id){
   const count=filterActiveCount();
@@ -5277,7 +5353,7 @@ function filterPanelSectionHtml(section,query){
   return `<section class="filter-section ${active?'is-active':''}" data-filter-section="${esc(section.id)}">
     <div class="filter-section-head"><div><b>${esc(section.label)}</b><span>${esc(section.hint)}</span></div>
       <span class="filter-section-state">${active?`${kept.toLocaleString()} of ${options.length.toLocaleString()}`:''}</span>
-      <button class="btn ghost sm" type="button" data-filter-all="${esc(section.id)}" ${active?'':'disabled'} title="Show every ${esc(section.label.toLowerCase())}">${ic('rotate-ccw')}All</button></div>
+      <span class="filter-section-buttons"><button class="btn ghost sm" type="button" data-filter-all="${esc(section.id)}" ${active?'':'disabled'} title="Tick every ${esc(section.label.toLowerCase())}">All</button><button class="btn ghost sm" type="button" data-filter-none="${esc(section.id)}" title="Untick every ${esc(section.label.toLowerCase())}">None</button></span></div>
     <div class="filter-section-list">${body}</div></section>`;
 }
 function filterPanelBodyHtml(){
@@ -5291,9 +5367,10 @@ function filterPanelHtml(){
   return `<div class="filter-sheet-back ${open?'show':''}" id="filterSheetBack" ${open?'':'hidden'}>
     <aside class="filter-sheet" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filters" tabindex="-1">
       <header class="filter-sheet-head"><div><b>Filters</b><span id="filterSheetSummary">${esc(filterPanelSummary())}</span></div><button class="xbtn icon-btn" type="button" id="filterSheetClose" aria-label="Close filters">${ic('x')}</button></header>
+      ${filterViewsRowHtml()}
       <div class="filter-sheet-search"><div class="searchbox">${ic('search')}<input id="filterSheetSearch" aria-label="Search the filter options" placeholder="Search filter options" value="${esc(S.session.panelSearch)}"></div></div>
       <div class="filter-sheet-scroll" id="filterSheetBody">${filterPanelBodyHtml()}</div>
-      <footer class="filter-sheet-foot"><button class="btn ghost" type="button" id="filterSheetClear">${ic('rotate-ccw')}Clear all</button><button class="btn primary" type="button" id="filterSheetDone">Done</button></footer>
+      <footer class="filter-sheet-foot"><button class="btn ghost" type="button" id="filterSheetSelectAll" title="Tick every box — show everything">${ic('check-check')}Select all</button><button class="btn ghost" type="button" id="filterSheetClear" title="Untick every box">${ic('x')}Clear all</button><button class="btn primary" type="button" id="filterSheetDone">Done</button></footer>
     </aside></div>`;
 }
 function focusFilterOption(sectionId,value){
@@ -5324,7 +5401,11 @@ function wireFilterPanelBody(){
   });
   $$('[data-filter-all]').forEach(button=>button.onclick=()=>{
     const section=filterSection(button.dataset.filterAll);if(!section)return;
-    filterSectionReset(section);applyFilterChange(()=>$(`[data-filter-section="${section.id}"] input`)?.focus());
+    filterSectionReset(section);applyFilterChange(()=>$(`[data-filter-all="${section.id}"]`)?.focus());
+  });
+  $$('[data-filter-none]').forEach(button=>button.onclick=()=>{
+    const section=filterSection(button.dataset.filterNone);if(!section)return;
+    filterSectionNone(section);applyFilterChange(()=>$(`[data-filter-none="${section.id}"]`)?.focus());
   });
 }
 function renderFilterChipRow(includeSeverity){
@@ -5340,6 +5421,12 @@ function wireFilterChips(){
   /* The chip row carries one, and the dashboard's empty-scope card carries
      another — both are on screen at once when the filters exclude everything. */
   $$('[data-filter-clear-all]').forEach(button=>button.onclick=()=>{clearAllFilters();applyFilterChange();});
+  $$('[data-filter-edit]').forEach(button=>button.onclick=()=>{
+    const sectionId=button.dataset.filterEdit;
+    setFilterPanelOpen(true);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{const target=$(`[data-filter-section="${sectionId}"]`);target?.scrollIntoView({block:'start'});target?.querySelector('input')?.focus({preventScroll:true});}));
+  });
+  wireFilterButtons();
 }
 function setFilterPanelOpen(open){
   const back=$('#filterSheetBack');if(!back)return;
@@ -5372,7 +5459,9 @@ function wireFilterPanel(){
   back.onpointerdown=event=>{if(event.target===back)setFilterPanelOpen(false);};
   $('#filterSheetClose').onclick=()=>setFilterPanelOpen(false);
   $('#filterSheetDone').onclick=()=>setFilterPanelOpen(false);
-  $('#filterSheetClear').onclick=()=>{clearAllFilters();applyFilterChange(()=>$('#filterSheetClear')?.focus());};
+  $('#filterSheetClear').onclick=()=>{noneAllFilters();applyFilterChange(()=>$('#filterSheetClear')?.focus());};
+  $('#filterSheetSelectAll').onclick=()=>{clearAllFilters();applyFilterChange(()=>$('#filterSheetSelectAll')?.focus());};
+  wireFilterViewsRow();
   $('#filterSheetSearch').oninput=event=>{S.session.panelSearch=event.target.value;debounceSearch(renderFilterPanelBody);};
   wireFilterButtons();wireFilterPanelBody();
 }
