@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.28.1",
+    "date": "2026-08-25",
+    "type": "fix",
+    "notes": "- Modifications search accepts spaces properly while typing"
+  },
+  {
     "version": "1.28.0",
     "date": "2026-08-25",
     "type": "feature",
