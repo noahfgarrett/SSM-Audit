@@ -401,14 +401,45 @@ test('RIO panels require a controller path, not only an electrical dependency', 
   assert.deepEqual(equipmentIdsForRule(runSsmAudit(snapshot), 'rioControlPath'), ['RIO-NO-CONTROLLER'])
 })
 
-test('rows on one UPN must agree on System Name and Discipline', () => {
+test('rows on one UPN must agree on System Name and Discipline, and the outlier row is the one flagged', () => {
   const snapshot = auditSnapshotFromAoa([
     headers,
     row({ equipmentId: 'UPN-A', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage' }),
-    row({ equipmentId: 'UPN-B', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'MECHANICAL DRY', systemName: '602  Medium Voltage' }),
+    row({ equipmentId: 'UPN-B', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage' }),
+    row({ equipmentId: 'UPN-C', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'MECHANICAL DRY', systemName: '602  Medium Voltage' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const result = runSsmAudit(snapshot)
-  assert.equal(result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.upnInconsistent.id).length, 1)
+  const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.upnInconsistent.id)
+  assert.equal(findings.length, 1, 'only the row that disagrees with the majority is flagged')
+  assert.equal(findings[0].equipmentId, 'UPN-C', 'the finding sits on the outlier row, not the first row of the UPN')
+  assert.ok(findings[0].why.includes('2 of the 3 rows'), 'the why names the majority')
+})
+
+test('a UPN whose rows disagree on System Name flags the stray rows against the majority system', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'SWS-1', closestParent: '237  Softer Water System', closestParentStatus: 'NEW', upn: '237', discipline: 'UPW', systemName: '237  Softer Water System' }),
+    row({ equipmentId: 'SWS-2', closestParent: 'SWS-1', closestParentStatus: 'NEW', upn: '237', discipline: 'UPW', systemName: '237  Softer Water System' }),
+    row({ equipmentId: 'CCW-PIPE-SWS', closestParent: 'SWS-1', closestParentStatus: 'NEW', upn: '237', discipline: 'UPW', systemName: '279  Concentrated Copper Waste (CCW) Treatment System' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.upnInconsistent.id)
+  assert.deepEqual(findings.map(f => f.equipmentId), ['CCW-PIPE-SWS'])
+  assert.equal(findings[0].field, 'System Name')
+  assert.ok(findings[0].why.includes('279'), 'the why names the stray system')
+  assert.ok(findings[0].why.includes('237  Softer Water System'), 'the why names the majority system')
+})
+
+test('a UPN broadly split across systems gets one review note instead of per-row errors', () => {
+  const mixed = []
+  for (let i = 0; i < 6; i++) mixed.push(row({ equipmentId: `FMS-${i}`, closestParent: '650 Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System' }))
+  for (let i = 0; i < 5; i++) mixed.push(row({ equipmentId: `SRV-${i}`, closestParent: '650 Facility Management System', closestParentStatus: 'NEW', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: `10${i} Served System ${i}` }))
+  const snapshot = auditSnapshotFromAoa([headers, ...mixed], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.upnInconsistent.id)
+  assert.equal(findings.length, 1, 'one summary, not one error per stray row')
+  assert.equal(findings[0].severity, 'warning')
+  assert.ok(findings[0].why.includes('split across'), 'the why describes a UPN-wide split')
 })
 
 test('drives and motor starters are parented by the driven equipment they serve', () => {

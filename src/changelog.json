@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.30.0",
+    "date": "2026-08-25",
+    "type": "fix",
+    "notes": "- The One UPN, one system check now flags the actual rows that disagree with the rest of their UPN, instead of one confusing note pinned far from the problem\n- A UPN that is broadly split across many systems gets a single review note rather than a flood of errors"
+  },
+  {
     "version": "1.29.0",
     "date": "2026-08-25",
     "type": "feature",
