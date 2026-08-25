@@ -62,3 +62,18 @@ test('completed equipment leaves the metrics entirely while registry-wide findin
   assert.equal(levels.reduce((sum, level) => sum + trimmed.summary.severity[level], 0), trimmed.findings.length)
   assert.equal(applyCompletedEquipment(raw, new Set()), raw, 'no completed equipment returns the result untouched')
 })
+
+test('each completed equipment records which OA/BT step said Completed', () => {
+  const status = auditStatusCompleted([
+    HEADERS,
+    ['B1-AHU-1', 'FAB', 'Completed', '', '', ''],
+    ['B1-AHU-5', 'FAB', 'Completed', 'In Progress', '', ''],
+    ['B1-AHU-6', 'FAB', '', '', '', 'completed'],
+    ['B1-AHU-6', 'FAB', '', 'Completed', '', ''],
+  ])
+  const byName = Object.fromEntries(status.equipment.map(entry => [entry.name, entry.steps]))
+  assert.deepEqual(byName['B1-AHU-1'], ['RR OA/BT'])
+  assert.deepEqual(byName['B1-AHU-5'], ['RR OA/BT'], 'In Progress columns are not listed as completed steps')
+  assert.deepEqual(byName['B1-AHU-6'].sort(), ['DIST OA/BT', 'SYS OA/BT'], 'duplicate rows merge their steps')
+  assert.equal(status.completedRows, 3, 'completed count is distinct equipment, not rows')
+})

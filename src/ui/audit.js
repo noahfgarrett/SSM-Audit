@@ -33,6 +33,7 @@ const NAV_SECTIONS=[
   {id:'dashboard',icon:'layout-dashboard',label:'Dashboard',hint:'Everything this registry turned up, at a glance'},
   {id:'audit',icon:'check-check',label:'Audit Findings',hint:'Every issue found in this registry'},
   {id:'modify',icon:'sliders-horizontal',label:'Modifications',hint:'Set aside findings you disagree with'},
+  {id:'completed',icon:'circle-check',label:'Completed Equipment',hint:'Equipment finished on site per the Equipment Status Report'},
   {id:'hierarchy',icon:'list-tree',label:'SSM Hierarchy',hint:'Browse the registry as a tree'},
   {id:'compare',icon:'square-stack',label:'Compare Projects',hint:'Line this registry up beside a finished one'},
   {id:'rules',icon:'book-open',label:'Rules',hint:'What the audit checks, in plain language'},
@@ -41,6 +42,7 @@ function navActiveId(){
   if(S.screen==='dashboard')return 'dashboard';
   if(S.screen==='audit')return 'audit';
   if(S.screen==='modify')return 'modify';
+  if(S.screen==='completed')return 'completed';
   if(S.screen==='hierarchy')return 'hierarchy';
   if(S.screen==='compare')return 'compare';
   if(S.screen==='rules')return 'rules';
@@ -64,6 +66,7 @@ function navBadges(id){
     return `${navCountHtml(result.summary.findings,'','findings')}${blockers?navCountHtml(blockers,'blocker',SEVERITY_LABELS.blocker.toLowerCase()):''}`;
   }
   if(id==='modify'&&S.session&&S.session.rawResult){const aside=excludedInBase();return aside?navCountHtml(aside,'','set aside'):'';}
+  if(id==='completed'&&S.session&&S.session.status)return navCountHtml(S.session.status.equipment.length,'','completed on the report');
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return navCountHtml(S.session.snapshot.rows.length,'','rows');
   if(id==='compare'&&comparison)return navCountHtml(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems,'','systems with differences');
   return '';
@@ -72,10 +75,12 @@ function navDisabled(id){
   if(id==='hierarchy')return !(S.session&&S.session.result&&S.session.snapshot);
   if(id==='dashboard')return !(S.session&&S.session.result);
   if(id==='modify')return !(S.session&&S.session.rawResult);
+  if(id==='completed')return !(S.session&&S.session.rawResult&&S.session.status);
   return false;
 }
 function navItemHtml(section,active,collapsed){
-  const disabled=navDisabled(section.id),title=collapsed||disabled?`${section.label}${disabled?' — run an audit first':''}`:section.hint;
+  const disabled=navDisabled(section.id),disabledHint=section.id==='completed'?' — needs an export with an Equipment Status Report tab':' — run an audit first';
+  const title=collapsed||disabled?`${section.label}${disabled?disabledHint:''}`:section.hint;
   return `<button class="sidenav-item ${active===section.id?'active':''}" type="button" data-nav="${section.id}" ${disabled?'disabled':''} title="${esc(title)}" aria-current="${active===section.id?'page':'false'}">${ic(section.icon)}<span>${esc(section.label)}</span>${navBadges(section.id)}</button>`;
 }
 export function renderSideNav(navigate){
@@ -98,6 +103,7 @@ function navigateSection(id,navigate){
   if(id==='rules'){S.homeMode='rules';navigate('rules');return;}
   if(id==='compare'){S.homeMode='compare';navigate(S.comparison&&S.comparison.result?'compare':'upload');return;}
   if(id==='modify'){if(S.session&&S.session.rawResult)navigate('modify');return;}
+  if(id==='completed'){if(S.session&&S.session.rawResult&&S.session.status)navigate('completed');return;}
   if(id==='hierarchy'){if(S.session&&S.session.result)navigate('hierarchy');return;}
   S.homeMode='audit';navigate(S.session&&S.session.result?'audit':'upload');
 }
@@ -720,6 +726,48 @@ export function renderModifications(navigate){
   $('#view').onscroll=()=>{if(S.screen==='modify')S.session.modifyScrollTop=$('#view').scrollTop;};
   renderSideNav(navigate);
 }
+/* ------------------------------------------------- completed equipment screen */
+/* Read-only view of what the Equipment Status Report finished: each completed
+   equipment, the OA/BT step(s) that said Completed, and where the tag sits in
+   the loaded registry (or a note that it is not in it at all). */
+const COMPLETED_CHUNK=500;
+const COMPLETED_STEP_SHORT={'RR OA/BT':'RR','DIST OA/BT':'DIST','EQ OA/BT':'EQ','SYS OA/BT':'SYS'};
+function completedRowHtml(entry,registryRow){
+  const steps=entry.steps.map(step=>`<span class="completed-step" title="${esc(step)} step completed">${esc(COMPLETED_STEP_SHORT[step]||step)}</span>`).join('');
+  const where=registryRow
+    ?`UPN ${esc(registryRow.upn||'—')}${registryRow.systemName?` &middot; ${esc(registryRow.systemName)}`:''} &middot; row ${registryRow._source&&registryRow._source.row||'—'}`
+    :'<i>Not in this registry</i>';
+  return `<div class="completed-row ${registryRow?'':'is-unmatched'}"><b class="completed-tag">${esc(entry.name)}</b><span class="completed-steps">${steps}</span><span class="completed-where">${where}</span></div>`;
+}
+export function renderCompletedEquipment(navigate){
+  const status=S.session&&S.session.status;
+  if(!(S.session&&S.session.rawResult&&status)){navigate('upload');return;}
+  teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='completed';S.homeMode='audit';
+  currentNavigate=navigate;
+  const query=clean(S.session.completedSearch||'').toUpperCase();
+  const byTag=new Map();
+  for(const row of S.session.snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byTag.has(key))byTag.set(key,row);}
+  const all=[...status.equipment].sort((left,right)=>natCmp(left.name,right.name));
+  const list=query?all.filter(entry=>entry.name.toUpperCase().includes(query)||entry.steps.some(step=>step.toUpperCase().includes(query))):all;
+  const first=list.slice(0,COMPLETED_CHUNK).map(entry=>completedRowHtml(entry,byTag.get(auditNormId(entry.name)))).join('');
+  const rest=list.length-COMPLETED_CHUNK;
+  $('#view').innerHTML=`<section class="completed-shell">
+    <div class="screen-heading"><div><span class="eyebrow">Finished on site</span><h2>Completed Equipment</h2><p>${esc(S.session.name)} — equipment the Equipment Status Report marks as Completed. Their findings are left out of the findings list, the Dashboard, and the Excel report. The chips show which OA/BT step said Completed.</p></div></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="completedSearch" aria-label="Search completed equipment" placeholder="Search tags and steps" value="${esc(S.session.completedSearch||'')}"></div><span class="modify-chip done">${status.equipment.length.toLocaleString()} completed on the report</span><span class="modify-chip" title="Completed equipment whose tag matches a row in this registry — the count that changes the audit">${(status.matched||0).toLocaleString()} matched in this registry</span><span class="spacer"></span><span class="completed-count">${query?`${list.length.toLocaleString()} of ${all.length.toLocaleString()} shown`:''}</span></div>
+    <div class="completed-body" id="completedBody">${list.length?`<div class="completed-list"><div class="completed-row completed-head"><b>Equipment</b><span>Step completed</span><span>In this registry</span></div>${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" id="completedMore" data-offset="${COMPLETED_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,COMPLETED_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`:`<div class="rule-reference-empty">${ic('search')}<b>${query?'No completed equipment matches that search':'Nothing is marked Completed'}</b><span>${query?'Try a shorter word or a different tag.':'The Equipment Status Report tab has no rows whose OA/BT step says Completed.'}</span></div>`}</div>
+  </section>`;
+  $('#completedSearch').oninput=event=>{S.session.completedSearch=event.target.value;debounceSearch(()=>{const focused=document.activeElement&&document.activeElement.id==='completedSearch';renderCompletedEquipment(navigate);if(focused){const input=$('#completedSearch');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}});};
+  const more=$('#completedMore');
+  if(more)more.onclick=()=>{
+    const offset=Number(more.dataset.offset)||0,slice=list.slice(offset,offset+COMPLETED_CHUNK);
+    const fragment=document.createElement('div');fragment.innerHTML=slice.map(entry=>completedRowHtml(entry,byTag.get(auditNormId(entry.name)))).join('');
+    const remaining=list.length-offset-slice.length;
+    more.before(...fragment.children);
+    if(remaining>0){more.dataset.offset=String(offset+slice.length);more.innerHTML=`${ic('chevrons-down')}Show ${Math.min(remaining,COMPLETED_CHUNK).toLocaleString()} more of ${remaining.toLocaleString()}`;}
+    else more.remove();
+  };
+}
+
 /* Re-render keeping the reading position; a search change starts back at the top. */
 function rerenderModifications(navigate,resetScroll){
   if(resetScroll)S.session.modifyScrollTop=0;else S.session.modifyScrollTop=$('#view')?$('#view').scrollTop:0;
