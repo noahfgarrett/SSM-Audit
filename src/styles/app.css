@@ -2145,3 +2145,21 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 
 /* ---- completed-on-site chip ---- */
 .modify-chip.done{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}
+
+/* ---- completed equipment screen ---- */
+.completed-shell{max-width:1180px;margin:0 auto;padding-bottom:40px}
+.completed-body{margin-top:12px}
+.completed-list{border:1px solid var(--border);background:var(--surface)}
+.completed-row{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(120px,auto) minmax(0,2fr);align-items:center;gap:12px;min-height:36px;padding:6px 13px;border-bottom:1px dashed var(--border)}
+.completed-row:last-of-type{border-bottom:0}
+.completed-row:hover{background:#fbfcfe}
+.completed-row.completed-head{min-height:32px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.completed-row.completed-head b,.completed-row.completed-head span{color:var(--ink-3);font:700 9px var(--mono);text-transform:uppercase}
+.completed-tag{color:var(--ink);font:650 11px var(--mono);overflow-wrap:anywhere}
+.completed-steps{display:inline-flex;gap:5px}
+.completed-step{display:inline-flex;align-items:center;min-height:20px;padding:1px 7px;border:1px solid #bddccc;border-radius:4px;background:var(--ok-bg);color:var(--ok);font:700 9.5px var(--mono)}
+.completed-where{color:var(--ink-2);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.completed-row.is-unmatched .completed-tag{color:var(--ink-3)}
+.completed-row.is-unmatched .completed-where i{color:var(--warn);font-style:normal}
+.completed-count{color:var(--ink-3);font:10px var(--mono)}
+@media(max-width:800px){.completed-row{grid-template-columns:minmax(0,1fr) auto}.completed-where{display:none}}

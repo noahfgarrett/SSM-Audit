@@ -3,7 +3,7 @@ import { APP_VERSION } from './version.js'
 import { S } from './state.js'
 import { ic } from './ui/icons.js'
 import { activateFocusTrap, animateClose, animateOpen, motionReduced } from './ui/feedback.js'
-import { closeDrawer, renderAuditResult, renderComparisonResult, renderDashboard, renderHierarchyResult, renderModifications, renderRules, renderSideNav, renderUpload, closeRuleExample, closeExportOptions, loadRulePreferences } from './ui/audit.js'
+import { closeDrawer, renderAuditResult, renderComparisonResult, renderDashboard, renderCompletedEquipment, renderHierarchyResult, renderModifications, renderRules, renderSideNav, renderUpload, closeRuleExample, closeExportOptions, loadRulePreferences } from './ui/audit.js'
 import { closeUpdateModal, initUpdate } from './update/update.js'
 
 const ruleGuide=()=>'<p>Open Rules in the menu on the left for a searchable, plain-language list of every check the audit runs.</p><div class="guide-note">'+ic('info')+'Checks are grouped by where they come from and what they cover, so they are easy to scan. Every check has a switch — turn one off and it leaves the findings, the Dashboard, and the Excel report (remembered on this device) — and an <b>Example</b> button: a small made-up registry showing exactly what gets flagged, with the cell shaded and the offending characters marked. Once a registry is loaded, each check also shows how many times it fired.</div><button class="btn primary guide-rules-link" id="guideOpenRules" type="button">'+ic('book-open')+'View the rules</button>';
@@ -23,7 +23,7 @@ let activeGuide='start';
 let guideOpener=null;
 let guideTrapCleanup=null;
 
-function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='modify')renderModifications(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
+function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='modify')renderModifications(go);else if(screen==='completed')renderCompletedEquipment(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
 /* A screen change slides the new content in; re-renders of the same screen (filters, sorting) stay still. */
 function markViewEnter(){const view=$('#view');if(!view||motionReduced())return;view.classList.remove('view-enter');void view.offsetWidth;view.classList.add('view-enter');view.addEventListener('animationend',()=>view.classList.remove('view-enter'),{once:true});}
 function renderGuide(){
