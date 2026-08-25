@@ -399,15 +399,61 @@ function modifyGroups(){
     return {category,label:RULE_CATEGORY_LABELS[category]||category,rules,total,kept};
   }).filter(group=>group.rules.length);
 }
-function modifyRowHtml(finding){
+function modifyRowHtml(finding,compact){
   const excluded=isExcludedId(finding.id);
+  if(compact)return `<label class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><b class="modify-tag">${finding.equipmentId?esc(finding.equipmentId):'<i>Registry-wide</i>'}</b><span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span></label>`;
   return `<label class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span><b class="modify-tag">${finding.equipmentId?esc(finding.equipmentId):'<i>Registry-wide</i>'}</b><span class="modify-why" title="${esc(finding.why)}">${esc(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span></label>`;
 }
+/* Findings with the same explanation are one pattern -- "row on UPN 603, parent
+   on UPN RR" -- so a whole family of matches is kept or set aside with a single
+   box. Explanations unique to one row stay as plain rows. The map lets the
+   delegated handlers find a pattern's findings without re-deriving the groups. */
+let modifyPatternMap=new Map();
+function modifyPatternKey(ruleId,why){return auditFingerprint(ruleId+'|'+(why||''));}
+function modifyPatterns(entry){
+  const byWhy=new Map();
+  for(const finding of entry.matches){const why=finding.why||'';const list=byWhy.get(why)||[];list.push(finding);byWhy.set(why,list);}
+  const groups=[],singles=[];
+  for(const [why,findings] of byWhy){if(findings.length>1)groups.push({why,findings,key:modifyPatternKey(entry.rule.id,why)});else singles.push(findings[0]);}
+  groups.sort((left,right)=>right.findings.length-left.findings.length);
+  return {groups,singles};
+}
+function modifyPatternCountText(findings){
+  const kept=findings.filter(finding=>!isExcludedId(finding.id)).length;
+  return kept===findings.length?`${findings.length.toLocaleString()} kept`:`${kept.toLocaleString()} of ${findings.length.toLocaleString()} kept`;
+}
+function modifyPatternHtml(group){
+  const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
+  const severity=group.findings[0].severity;
+  const rows=group.findings.slice(0,MODIFY_CHUNK).map(finding=>modifyRowHtml(finding,true)).join('');
+  const rest=group.findings.length-MODIFY_CHUNK;
+  return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
+    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${esc(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+    <div class="modify-pattern-rows" hidden>${rows}${rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more-group="${group.key}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>
+  </div>`;
+}
 function modifyListHtml(entry){
-  const rows=entry.matches;
-  const first=rows.slice(0,MODIFY_CHUNK).map(modifyRowHtml).join('');
-  const rest=rows.length-MODIFY_CHUNK;
-  return `<div class="modify-list" data-mod-list="${esc(entry.rule.id)}">${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more="${esc(entry.rule.id)}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`;
+  const {groups,singles}=modifyPatterns(entry);
+  for(const group of groups)modifyPatternMap.set(group.key,group.findings);
+  const groupHtml=groups.map(modifyPatternHtml).join('');
+  const first=singles.slice(0,MODIFY_CHUNK).map(finding=>modifyRowHtml(finding,false)).join('');
+  const rest=singles.length-MODIFY_CHUNK;
+  return `<div class="modify-list" data-mod-list="${esc(entry.rule.id)}">${groupHtml}${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more="${esc(entry.rule.id)}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`;
+}
+/* A pattern's box mirrors its rows: all kept, none kept, or (indeterminate) mixed. */
+function syncModifyPatternBox(key){
+  const findings=modifyPatternMap.get(key);if(!findings)return;
+  const box=$(`input[data-mod-group="${key}"]`);if(!box)return;
+  const kept=findings.filter(finding=>!isExcludedId(finding.id)).length;
+  box.checked=kept===findings.length;box.indeterminate=kept>0&&kept<findings.length;
+  const count=$(`[data-mod-group-count="${key}"]`);if(count)count.textContent=modifyPatternCountText(findings);
+  const wrap=$(`[data-mod-pattern="${key}"]`);if(wrap)wrap.classList.toggle('is-excluded',!kept);
+}
+function syncAllModifyPatternBoxes(){for(const key of modifyPatternMap.keys())syncModifyPatternBox(key);}
+function setExcludedMany(ids,on){
+  if(!S.session.excluded)S.session.excluded=new Set();
+  for(const id of ids){if(on)S.session.excluded.add(id);else S.session.excluded.delete(id);}
+  S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
 }
 function modifyRuleSeverity(entry){
   let top='info';for(const finding of entry.findings)if(severityRank(finding.severity)>severityRank(top))top=finding.severity;
@@ -438,7 +484,7 @@ function updateModifyCounts(navigate){
 export function renderModifications(navigate){
   if(!(S.session&&S.session.rawResult)){navigate('upload');return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='modify';S.homeMode='audit';
-  currentNavigate=navigate;
+  currentNavigate=navigate;modifyPatternMap=new Map();
   const groups=modifyGroups(),query=clean(S.session.modifySearch),aside=excludedInBase(),result=S.session.result;
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
@@ -448,22 +494,50 @@ export function renderModifications(navigate){
   </section>`;
   const body=$('#modifyBody');
   body.onchange=event=>{
+    const groupBox=event.target.closest('[data-mod-group]');
+    if(groupBox){
+      const key=groupBox.dataset.modGroup,findings=modifyPatternMap.get(key);if(!findings)return;
+      setExcludedMany(findings.map(finding=>finding.id),!groupBox.checked);
+      const wrap=$(`[data-mod-pattern="${key}"]`);
+      if(wrap)$$('[data-mod-finding]',wrap).forEach(row=>{row.checked=groupBox.checked;row.closest('.modify-row').classList.toggle('is-excluded',!groupBox.checked);});
+      syncModifyPatternBox(key);updateModifyCounts(navigate);
+      return;
+    }
     const input=event.target.closest('[data-mod-finding]');if(!input)return;
     setExcluded(input.dataset.modFinding,!input.checked);
     input.closest('.modify-row').classList.toggle('is-excluded',!input.checked);
+    const pattern=input.closest('[data-mod-pattern]');if(pattern)syncModifyPatternBox(pattern.dataset.modPattern);
     updateModifyCounts(navigate);
   };
   body.onclick=event=>{
+    const head=event.target.closest('.modify-pattern-head');
+    if(head&&!event.target.closest('input')){
+      const pattern=head.closest('.modify-pattern'),rows=pattern.querySelector('.modify-pattern-rows'),expand=pattern.querySelector('[data-mod-expand]');
+      rows.hidden=!rows.hidden;if(expand){expand.setAttribute('aria-expanded',rows.hidden?'false':'true');expand.classList.toggle('open',!rows.hidden);}
+      return;
+    }
+    const moreGroup=event.target.closest('[data-mod-more-group]');
+    if(moreGroup){
+      const findings=modifyPatternMap.get(moreGroup.dataset.modMoreGroup)||[];
+      const offset=Number(moreGroup.dataset.modOffset)||0,slice=findings.slice(offset,offset+MODIFY_CHUNK);
+      const fragment=document.createElement('div');fragment.innerHTML=slice.map(finding=>modifyRowHtml(finding,true)).join('');
+      const rest=findings.length-offset-slice.length;
+      moreGroup.before(...fragment.children);
+      if(rest>0){moreGroup.dataset.modOffset=String(offset+slice.length);moreGroup.innerHTML=`${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}`;}
+      else moreGroup.remove();
+      return;
+    }
     const more=event.target.closest('[data-mod-more]');
     if(more){
       const groupsNow=modifyGroups();let entry=null;
       for(const group of groupsNow){entry=group.rules.find(item=>item.rule.id===more.dataset.modMore)||entry;}
       if(!entry)return;
-      const offset=Number(more.dataset.modOffset)||0,rows=entry.matches.slice(offset,offset+MODIFY_CHUNK);
-      const fragment=document.createElement('div');fragment.innerHTML=rows.map(modifyRowHtml).join('');
-      const rest=entry.matches.length-offset-rows.length;
+      const singles=modifyPatterns(entry).singles;
+      const offset=Number(more.dataset.modOffset)||0,slice=singles.slice(offset,offset+MODIFY_CHUNK);
+      const fragment=document.createElement('div');fragment.innerHTML=slice.map(finding=>modifyRowHtml(finding,false)).join('');
+      const rest=singles.length-offset-slice.length;
       more.before(...fragment.children);
-      if(rest>0){more.dataset.modOffset=String(offset+rows.length);more.innerHTML=`${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}`;}
+      if(rest>0){more.dataset.modOffset=String(offset+slice.length);more.innerHTML=`${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}`;}
       else more.remove();
       return;
     }
@@ -472,12 +546,11 @@ export function renderModifications(navigate){
       event.preventDefault();
       const ruleId=(keep||asideAll).dataset.modKeep||(keep||asideAll).dataset.modAside;
       const base=modifyBaseResult();if(!base)return;
-      if(!S.session.excluded)S.session.excluded=new Set();
-      for(const finding of base.findings)if(finding.rule.id===ruleId){if(asideAll)S.session.excluded.add(finding.id);else S.session.excluded.delete(finding.id);}
-      S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
+      setExcludedMany(base.findings.filter(finding=>finding.rule.id===ruleId).map(finding=>finding.id),!!asideAll);
       rerenderModifications(navigate);
     }
   };
+  syncAllModifyPatternBoxes();
   $$('.modify-rule',body).forEach(details=>details.addEventListener('toggle',()=>{
     const set=new Set(S.session.modifyOpenRules||[]);
     if(details.open)set.add(details.dataset.modRule);else set.delete(details.dataset.modRule);
