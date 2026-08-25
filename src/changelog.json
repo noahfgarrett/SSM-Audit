@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.26.1",
+    "date": "2026-08-25",
+    "type": "fix",
+    "notes": "- Modifications: Keep all and Set all aside respond instantly on large registries\n- Long lists inside the tab now build only when opened, so the screen stays quick"
+  },
+  {
     "version": "1.26.0",
     "date": "2026-08-25",
     "type": "feature",
