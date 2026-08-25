@@ -2142,3 +2142,6 @@ button.modify-tag{border:0;background:none;padding:0;margin:0;cursor:pointer;tex
 button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .modify-row.is-excluded button.modify-tag{color:var(--ink-3);text-decoration:line-through}
 .modify-row.is-excluded button.modify-tag:hover{color:var(--accent-700)}
+
+/* ---- completed-on-site chip ---- */
+.modify-chip.done{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}

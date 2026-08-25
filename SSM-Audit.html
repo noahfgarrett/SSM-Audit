@@ -2150,6 +2150,9 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .modify-row.is-excluded button.modify-tag{color:var(--ink-3);text-decoration:line-through}
 .modify-row.is-excluded button.modify-tag:hover{color:var(--accent-700)}
 
+/* ---- completed-on-site chip ---- */
+.modify-chip.done{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}
+
 </style>
 </head>
 <body>
@@ -2246,7 +2249,7 @@ var XLSX={};function make_xlsx_lib(a){a.version="0.18.5",a.style_version="1.2.0"
 </script>
 <script>
 "use strict";
-const CHANGELOG=Object.freeze([{"version":"1.30.0","date":"2026-08-25","type":"fix","notes":"- The One UPN, one system check now flags the actual rows that disagree with the rest of their UPN, instead of one confusing note pinned far from the problem\n- A UPN that is broadly split across many systems gets a single review note rather than a flood of errors"},{"version":"1.29.0","date":"2026-08-25","type":"feature","notes":"- Modifications: every count can flip to a % of all tags with the small button beside it\n- Equipment tags open the full finding panel, including for set-aside findings\n- Fixed the Equipment expand/collapse arrows not closing a list once opened"},{"version":"1.28.1","date":"2026-08-25","type":"fix","notes":"- Modifications search accepts spaces properly while typing"},{"version":"1.28.0","date":"2026-08-25","type":"feature","notes":"- Modifications: Expand all and Collapse all in the toolbar, and every group heading collapses on its own\n- Open and closed groups are remembered while moving between tabs"},{"version":"1.27.0","date":"2026-08-25","type":"feature","notes":"- Modifications search reaches every individual finding, with the matched words highlighted in place\n- Keep matches / Set matches aside act on everything the search surfaced in one click\n- With a search active, a check's Keep all and Set all aside touch only the matches shown"},{"version":"1.26.1","date":"2026-08-25","type":"fix","notes":"- Modifications: Keep all and Set all aside respond instantly on large registries\n- Long lists inside the tab now build only when opened, so the screen stays quick"},{"version":"1.26.0","date":"2026-08-25","type":"feature","notes":"- Modifications: findings with the same explanation are grouped under one box, so a whole family can be kept or set aside in one click\n- Each group opens to show its equipment, with every row still individually switchable"},{"version":"1.25.0","date":"2026-08-25","type":"feature","notes":"- New Modifications tab: every finding listed under its check, ready to untick — set-aside findings leave the findings list, the Dashboard, and the Excel report until restored\n- Decisions are remembered for the registry they were made on\n- Findings can also be set aside straight from their detail panel"},{"version":"1.24.0","date":"2026-08-25","type":"feature","notes":"- Filters reworked: one smooth scroll, Select all / Clear all for everything, and All / None buttons on each list\n- Filter views can be saved, loaded, and removed from the top of the filter panel\n- Active filter groups on the findings page jump straight back into the panel"},{"version":"1.23.1","date":"2026-08-19","type":"fix","notes":"- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"},{"version":"1.23.0","date":"2026-08-19","type":"feature","notes":"- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"},{"version":"1.22.0","date":"2026-08-19","type":"feature","notes":"- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"},{"version":"1.21.1","date":"2026-08-19","type":"fix","notes":"- A description-shaped Equipment ID is now Check this rather than Invalid"},{"version":"1.21.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"},{"version":"1.20.3","date":"2026-08-19","type":"fix","notes":"- Excel report: the Progress column is the orange bar only; the number stays in the % column"},{"version":"1.20.2","date":"2026-08-19","type":"fix","notes":"- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"},{"version":"1.20.1","date":"2026-08-19","type":"fix","notes":"- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"},{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
+const CHANGELOG=Object.freeze([{"version":"1.31.0","date":"2026-08-25","type":"feature","notes":"- Exports carrying an Equipment Status Report tab are understood: equipment whose OA/BT step is Completed is treated as finished on site and leaves every metric\n- The registry itself still comes from the Full Export tab, unchanged\n- The Dashboard and Modifications say how many completed equipment were set aside"},{"version":"1.30.0","date":"2026-08-25","type":"fix","notes":"- The One UPN, one system check now flags the actual rows that disagree with the rest of their UPN, instead of one confusing note pinned far from the problem\n- A UPN that is broadly split across many systems gets a single review note rather than a flood of errors"},{"version":"1.29.0","date":"2026-08-25","type":"feature","notes":"- Modifications: every count can flip to a % of all tags with the small button beside it\n- Equipment tags open the full finding panel, including for set-aside findings\n- Fixed the Equipment expand/collapse arrows not closing a list once opened"},{"version":"1.28.1","date":"2026-08-25","type":"fix","notes":"- Modifications search accepts spaces properly while typing"},{"version":"1.28.0","date":"2026-08-25","type":"feature","notes":"- Modifications: Expand all and Collapse all in the toolbar, and every group heading collapses on its own\n- Open and closed groups are remembered while moving between tabs"},{"version":"1.27.0","date":"2026-08-25","type":"feature","notes":"- Modifications search reaches every individual finding, with the matched words highlighted in place\n- Keep matches / Set matches aside act on everything the search surfaced in one click\n- With a search active, a check's Keep all and Set all aside touch only the matches shown"},{"version":"1.26.1","date":"2026-08-25","type":"fix","notes":"- Modifications: Keep all and Set all aside respond instantly on large registries\n- Long lists inside the tab now build only when opened, so the screen stays quick"},{"version":"1.26.0","date":"2026-08-25","type":"feature","notes":"- Modifications: findings with the same explanation are grouped under one box, so a whole family can be kept or set aside in one click\n- Each group opens to show its equipment, with every row still individually switchable"},{"version":"1.25.0","date":"2026-08-25","type":"feature","notes":"- New Modifications tab: every finding listed under its check, ready to untick — set-aside findings leave the findings list, the Dashboard, and the Excel report until restored\n- Decisions are remembered for the registry they were made on\n- Findings can also be set aside straight from their detail panel"},{"version":"1.24.0","date":"2026-08-25","type":"feature","notes":"- Filters reworked: one smooth scroll, Select all / Clear all for everything, and All / None buttons on each list\n- Filter views can be saved, loaded, and removed from the top of the filter panel\n- Active filter groups on the findings page jump straight back into the panel"},{"version":"1.23.1","date":"2026-08-19","type":"fix","notes":"- Milestone matching tightened after checking every milestone name in real registries: voltages and site jargon no longer link to the wrong UPN, and rooms/areas are not held to a milestone's UPN\n- Milestones that cannot be linked still carry a note to double-check"},{"version":"1.23.0","date":"2026-08-19","type":"feature","notes":"- The L2 milestone check now links milestones to their UPN properly: an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system's name or abbreviation — digits inside longer numbers no longer count\n- Findings from this check say how the milestone was matched"},{"version":"1.22.0","date":"2026-08-19","type":"feature","notes":"- Findings can be marked Actioned in the app; marks are remembered for the same registry and arrive pre-ticked in the Excel report\n- Dashboard: a breakdown by check under the level tiles, each entry opening just those findings\n- Dashboard tabs no longer jump the page back to the top"},{"version":"1.21.1","date":"2026-08-19","type":"fix","notes":"- A description-shaped Equipment ID is now Check this rather than Invalid"},{"version":"1.21.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: controls line up in fixed columns and descriptions wrap cleanly\n- The upload template is now called the VF Exto Upload Template throughout"},{"version":"1.20.3","date":"2026-08-19","type":"fix","notes":"- Excel report: the Progress column is the orange bar only; the number stays in the % column"},{"version":"1.20.2","date":"2026-08-19","type":"fix","notes":"- Fixed the level pills and header being squeezed on the Audit Findings page\n- The SSM Audit title now lines up with the workspace below it"},{"version":"1.20.1","date":"2026-08-19","type":"fix","notes":"- Fixed the Audit Findings list stopping halfway down the page\n- Level pills: the first click narrows to that level, further clicks add or remove levels"},{"version":"1.20.0","date":"2026-08-19","type":"feature","notes":"- Rules screen: switch any check off to leave it out of the findings, Dashboard, and Excel report\n- Excel report progress bars now fill their cells\n- Shorter release notes"},{"version":"1.19.0","date":"2026-08-19","type":"feature","notes":"- Relationship checks now recognise links carried by the hierarchy, so fewer control, RIO, and VESDA findings\n- Fire alarm panel recognition improved"},{"version":"1.18.0","date":"2026-08-19","type":"feature","notes":"- Fiber distribution unit check updated to match how FDUs are placed in practice"},{"version":"1.17.4","date":"2026-08-19","type":"fix","notes":"- Loading indicator tracks the percentage accurately"},{"version":"1.17.3","date":"2026-08-19","type":"fix","notes":"- Smoother, step-by-step progress while importing and exporting"},{"version":"1.17.2","date":"2026-08-19","type":"fix","notes":"- Visual fixes across the app: drawer findings, sidebar counts, and table clipping"},{"version":"1.17.1","date":"2026-08-19","type":"fix","notes":"- Show in hierarchy now lands on and highlights the right row"},{"version":"1.17.0","date":"2026-08-19","type":"feature","notes":"- UPN SEC recognised as Security; MISC rows now carry a review note instead of an error"},{"version":"1.16.0","date":"2026-08-19","type":"feature","notes":"- UPN RR recognised as the CSA system"},{"version":"1.15.2","date":"2026-08-19","type":"fix","notes":"- Hierarchy jump highlights its target; menu labels tidied"},{"version":"1.15.1","date":"2026-08-19","type":"fix","notes":"- Fixed a findings-list display gap and dashboard clipping; dashboard sections moved into tabs"},{"version":"1.15.0","date":"2026-08-19","type":"feature","notes":"- Excel report: equipment with several findings is one merged block\n- New report layout: one tab per finding level"},{"version":"1.14.0","date":"2026-08-19","type":"feature","notes":"- Export chooser: include, pre-tick, or leave out findings by level or by check"},{"version":"1.13.2","date":"2026-08-19","type":"fix","notes":"- Much smaller Excel reports that open cleanly on large registries"},{"version":"1.13.1","date":"2026-08-19","type":"fix","notes":"- Fixed the update download"},{"version":"1.13.0","date":"2026-08-19","type":"feature","notes":"- Every check on the Rules screen has a worked example"},{"version":"1.12.0","date":"2026-08-19","type":"feature","notes":"- Redesigned Excel report: bigger progress bars, tick-box Actioned column, clearer nesting colours, highlighted problem cells"},{"version":"1.11.2","date":"2026-08-18","type":"fix","notes":"- Update check shows its result and has a Check again button"},{"version":"1.11.1","date":"2026-08-18","type":"fix","notes":"- Snappier transitions"},{"version":"1.11.0","date":"2026-08-18","type":"feature","notes":"- Smoother motion throughout the app"},{"version":"1.10.1","date":"2026-08-15","type":"fix","notes":"- Fixed the menu on narrow windows"},{"version":"1.10.0","date":"2026-08-15","type":"feature","notes":"- One Filters panel for everything; the Dashboard now follows your filters and shows more"},{"version":"1.9.0","date":"2026-08-15","type":"feature","notes":"- New filters on Audit findings and several new checks from real registries\n- Site-specific classifications and parent-as-dependency are now notes you can filter"},{"version":"1.8.0","date":"2026-08-15","type":"feature","notes":"- New Dashboard screen; finding levels renamed to Invalid, Rule broken, Check this, and Note"},{"version":"1.7.0","date":"2026-08-15","type":"feature","notes":"- Relationship diagrams on parent, dependency, and loop findings; guide refreshed"},{"version":"1.6.1","date":"2026-08-15","type":"fix","notes":"- Item Master checks handle any site prefix; wording fixes"},{"version":"1.6.0","date":"2026-08-14","type":"feature","notes":"- New Excel report with progress tracking; every check rewritten in plain language; aligned with VF Exto Upload Template"},{"version":"1.5.1","date":"2026-08-14","type":"fix","notes":"- Import, comparison, hierarchy, and performance fixes"},{"version":"1.5.0","date":"2026-08-14","type":"feature","notes":"- Fuller Project Comparison with hierarchy, differences, and equipment mapping views"},{"version":"1.4.0","date":"2026-08-14","type":"feature","notes":"- New SSM Hierarchy screen with search, filters, and equipment details"},{"version":"1.3.0","date":"2026-08-14","type":"feature","notes":"- Side-by-side project comparison and a searchable Rules screen"},{"version":"1.2.0","date":"2026-08-09","type":"feature","notes":"- Audit refocused on integrity, SOP conformance, and commissioning logic, with new confidence-rated checks"},{"version":"1.1.1","date":"2026-08-09","type":"fix","notes":"- Header rows are no longer audited as physical equipment"},{"version":"1.1.0","date":"2026-08-09","type":"feature","notes":"- Filters and sorting for findings; new commissioning-path checks"},{"version":"1.0.0","date":"2026-08-08","type":"major","notes":"- First release of SSM Audit"}]);
 
 /* src/core/text.js */
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -2257,7 +2260,7 @@ const NAT_COLLATOR=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}
 const natCmp=(left,right)=>NAT_COLLATOR.compare(String(left),String(right));
 
 /* src/version.js */
-const APP_VERSION='1.30.0';
+const APP_VERSION='1.31.0';
 const UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases';
 
 /* src/state.js */
@@ -2275,7 +2278,7 @@ const S={
 };
 
 function resetSession(){
-  S.session={name:'',snapshot:null,result:null,error:'',auditedAt:0,dimFilters:{discipline:[],milestone:[],upn:[],building:[]},dimOptionCache:null,filterOptionCache:null,hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,panelOpen:false,panelSearch:'',selectedFindingId:'',scrollTop:0,actioned:null,actionedRev:0,hideActioned:false,excluded:null,excludedRev:0,modifySearch:'',modifyOpenRules:[],modifyClosedCats:[],modifyCountMode:'count',modifyScrollTop:0,modifyGroupsKey:'',modifyGroupsVal:null,dashBreakdownOpen:false,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,scopedCacheKey:'',scopedCache:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
+  S.session={name:'',snapshot:null,result:null,error:'',auditedAt:0,status:null,dimFilters:{discipline:[],milestone:[],upn:[],building:[]},dimOptionCache:null,filterOptionCache:null,hiddenSources:[],hiddenSeverities:[],hiddenCategories:[],hiddenRules:[],search:'',sort:'severity-desc',groupBy:'none',collapsedGroups:[],cursor:-1,panelOpen:false,panelSearch:'',selectedFindingId:'',scrollTop:0,actioned:null,actionedRev:0,hideActioned:false,excluded:null,excludedRev:0,modifySearch:'',modifyOpenRules:[],modifyClosedCats:[],modifyCountMode:'count',modifyScrollTop:0,modifyGroupsKey:'',modifyGroupsVal:null,dashBreakdownOpen:false,fullscreen:false,filteredCacheKey:'',filteredCacheRows:null,displayCacheKey:'',displayCacheRows:null,scopedCacheKey:'',scopedCache:null,rowIndex:null,headerIdSet:null,hierarchy:null,hierarchySearch:'',hierarchyBuilding:'all',hierarchyDiscipline:'all',hierarchySystem:'all',hierarchyFindingsOnly:false,hierarchyExpandedKeys:[],hierarchyInitialized:false,hierarchyScrollTop:0,hierarchyFullscreen:false,hierarchyCacheKey:'',hierarchyCacheRows:null,hierarchyFocusKey:'',selectedHierarchyNodeKey:''};
 }
 
 function resetComparison(){
@@ -3036,6 +3039,61 @@ function isLikelyHeaderName(row,children){
   const description=auditDescription(row);
   if(children.length<3)return false;
   return !description||/HEADER|CLUSTER|RING|GROUP|ROLL[- ]?UP|PIPING|DUCTWORK|SKID/.test(description)&&!auditIsInstrument(row)&&!auditIsController(row);
+}
+
+/* src/audit/status-report.js */
+/* ---- Equipment Status Report tab ----
+   Some exports carry a second tab recording where each equipment stands in
+   commissioning. Equipment whose OA/BT step is Completed is finished on site,
+   so its findings are dropped from every metric -- the registry structure is
+   still audited in full (a completed parent still anchors its children).
+   The registry itself lives on the 'Full Export' tab, which the normal
+   sheet scan picks up by its headers; this file only reads the status tab. */
+
+const AUDIT_STATUS_NAME_HEADER='EQUIPMENT NAME';
+const AUDIT_STATUS_COLUMNS=['RR OA/BT','DIST OA/BT','EQ OA/BT','SYS OA/BT'];
+
+function auditStatusNorm(value){return String(value==null?'':value).replace(/\s+/g,' ').trim().toUpperCase();}
+
+function auditStatusSheetName(names){
+  return (names||[]).find(name=>/equipment\s*status\s*report/i.test(String(name)))||'';
+}
+
+/* aoa -> {completed:Set<normalized tag>, completedRows, totalRows} or null when
+   the sheet does not carry the expected headers. Completed means at least one
+   OA/BT column says Completed and none says Not Started -- a row that says both
+   is treated as not started, per the SOP owner's instruction. */
+function auditStatusCompleted(aoa){
+  if(!Array.isArray(aoa))return null;
+  let headerRow=-1,nameCol=-1,statusCols=[];
+  for(let r=0;r<Math.min(aoa.length,25);r++){
+    const cells=aoa[r]||[];const cols=[];let name=-1;
+    for(let c=0;c<cells.length;c++){
+      const value=auditStatusNorm(cells[c]);
+      if(value===AUDIT_STATUS_NAME_HEADER)name=c;
+      if(AUDIT_STATUS_COLUMNS.includes(value))cols.push(c);
+    }
+    if(name>=0&&cols.length){headerRow=r;nameCol=name;statusCols=cols;break;}
+  }
+  if(headerRow<0)return null;
+  const completed=new Set();let completedRows=0,totalRows=0;
+  for(let r=headerRow+1;r<aoa.length;r++){
+    const cells=aoa[r]||[];
+    const name=String(cells[nameCol]==null?'':cells[nameCol]).trim();
+    if(!name)continue;totalRows++;
+    const values=statusCols.map(col=>auditStatusNorm(cells[col]));
+    if(values.some(value=>value==='COMPLETED')&&!values.some(value=>value==='NOT STARTED')){
+      completed.add(auditNormId(name));completedRows++;
+    }
+  }
+  return {completed,completedRows,totalRows};
+}
+
+async function auditStatusFromWorkbook(workbook,checkpoint){
+  const name=auditStatusSheetName(workbook&&workbook.SheetNames);
+  if(!name)return null;
+  const parsed=await sheetAoaAsync(workbook.Sheets[name],async()=>{if(checkpoint)await checkpoint();});
+  return auditStatusCompleted(parsed.aoa);
 }
 
 /* src/audit/examples.js */
@@ -4886,9 +4944,25 @@ function applyFindingExclusions(result,excluded){
   const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
   return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
 }
+/* Equipment the site has finished (per the Equipment Status Report tab) is out
+   of every metric. The registry is still audited whole first, so a completed
+   parent keeps anchoring its children -- only its findings are dropped.
+   Findings that are not about one piece of equipment (registry-wide) stay. */
+function applyCompletedEquipment(result,completed){
+  if(!result||!completed||!completed.size)return result;
+  const findings=result.findings.filter(finding=>!finding.equipmentId||!completed.has(auditNormId(finding.equipmentId)));
+  if(findings.length===result.findings.length)return result;
+  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
+  const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
+  return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
+}
+function sessionEffectiveRaw(){
+  const raw=S.session&&S.session.rawResult;if(!raw)return raw;
+  return applyCompletedEquipment(raw,S.session.status&&S.session.status.completed);
+}
 function refreshSessionResult(){
   if(!S.session||!S.session.rawResult)return;
-  S.session.result=applyFindingExclusions(applyRulePreferences(S.session.rawResult,S.rules.disabled),S.session.excluded);
+  S.session.result=applyFindingExclusions(applyRulePreferences(sessionEffectiveRaw(),S.rules.disabled),S.session.excluded);
   S.session.hierarchy=null;S.session.hierarchyCacheKey='';S.session.hierarchyCacheRows=null;S.session.headerIdSet=null;S.session.rowIndex=null;S.session.exportPlan=null;
   invalidateFindingCaches();
 }
@@ -4940,7 +5014,7 @@ function setExcluded(id,on){
 /* The Modifications screen works from the result BEFORE exclusions (but after
    switched-off checks), so set-aside findings stay visible to restore. */
 function modifyBaseResult(){
-  const raw=S.session&&S.session.rawResult;if(!raw)return null;
+  const raw=sessionEffectiveRaw();if(!raw)return null;
   return applyRulePreferences(raw,S.rules.disabled);
 }
 function excludedInBase(){
@@ -5301,7 +5375,7 @@ function renderModifications(navigate){
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Modifications</h2><p>${esc(S.session.name)} — untick any finding you disagree with and it is set aside: dropped from the findings list, the Dashboard, and the Excel report. Decisions are remembered for this registry, even after a reload.</p></div></div>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!query&&(S.session.modifyClosedCats||[]).includes(group.category);
       return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</div></section>`;
@@ -5529,14 +5603,24 @@ async function addAuditTarget(file,navigate){
       const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.6,label));
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
+      const status=await sessionStatusReport(workbook,snapshot,checkpoint);
       const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,rawResult,result,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();
+      S.session={...S.session,snapshot,rawResult,result,status,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
   }catch(error){
     console.error('SSM Audit failed',error);S.session.error=error&&error.message||'Could not read this registry';S.session.snapshot=null;S.session.result=null;renderUpload(navigate);
   }
+}
+
+/* Reads the status tab (when present) and records how many completed equipment
+   actually match registry tags -- the matched count is what changes the audit. */
+async function sessionStatusReport(workbook,snapshot,checkpoint){
+  const status=await auditStatusFromWorkbook(workbook,checkpoint);
+  if(!status)return null;
+  let matched=0;for(const row of snapshot.rows)if(status.completed.has(auditNormId(row.equipmentId)))matched++;
+  return {...status,matched};
 }
 
 function clearComparisonTarget(){S.comparison.targetName='';S.comparison.targetSnapshot=null;S.comparison.targetError='';S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};}
@@ -5585,13 +5669,13 @@ async function addComparisonFile(file,side,navigate){
   if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook (.xlsx or .xls)');return;}
   const errorKey=side==='target'?'targetError':'referenceError';S.comparison[errorKey]='';
   try{
-    let snapshot,auditResult;
+    let snapshot,auditResult,statusReport=null;
     await runWithProgress(side==='target'?'Loading registry to audit':'Loading finished project',file.name,async(checkpoint,report)=>{
       const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
-      report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
+      report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){statusReport=await sessionStatusReport(workbook,snapshot,checkpoint);auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -6538,7 +6622,7 @@ function dashBlockHtml(title,explainer,body,extra){
 
 function dashScopeLine(scoped){
   const summary=S.session.result.summary;
-  if(!dashIsScoped())return `Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(dashAuditedAt())}`;
+  if(!dashIsScoped())return `Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(dashAuditedAt())}${S.session.status&&S.session.status.matched?` &middot; <span title="Marked Completed on the Equipment Status Report tab — their findings are not counted anywhere">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}`;
   return `Scoped: ${scoped.rows.length.toLocaleString()} of ${summary.rows.toLocaleString()} rows &middot; ${scoped.findings.length.toLocaleString()} of ${summary.findings.toLocaleString()} findings`;
 }
 function dashAuditedAt(){return S.session.auditedAt?new Date(S.session.auditedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'this session';}
