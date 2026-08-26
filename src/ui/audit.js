@@ -6,7 +6,7 @@ import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIE
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
-import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx } from '../audit/export.js'
+import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
@@ -32,7 +32,7 @@ let drawerTrapCleanup=null,searchDebounceTimer=0;
 const NAV_SECTIONS=[
   {id:'dashboard',icon:'layout-dashboard',label:'Dashboard',hint:'Everything this registry turned up, at a glance'},
   {id:'audit',icon:'check-check',label:'Audit Findings',hint:'Every issue found in this registry'},
-  {id:'modify',icon:'sliders-horizontal',label:'Modifications',hint:'Set aside findings you disagree with'},
+  {id:'modify',icon:'sliders-horizontal',label:'Actions',hint:'Action findings in bulk, or set aside ones you disagree with'},
   {id:'completed',icon:'circle-check',label:'Completed Equipment',hint:'Equipment finished on site per the Equipment Status Report'},
   {id:'hierarchy',icon:'list-tree',label:'SSM Hierarchy',hint:'Browse the registry as a tree'},
   {id:'compare',icon:'square-stack',label:'Compare Projects',hint:'Line this registry up beside a finished one'},
@@ -202,9 +202,36 @@ function setActioned(finding,on){
   if(on)S.session.actioned.add(finding.id);else S.session.actioned.delete(finding.id);
   S.session.actionedRev=(S.session.actionedRev||0)+1;saveActioned();
 }
+function setActionedMany(findings,on){
+  if(!S.session.actioned)S.session.actioned=new Set();
+  for(const finding of findings){if(on)S.session.actioned.add(finding.id);else S.session.actioned.delete(finding.id);}
+  S.session.actionedRev=(S.session.actionedRev||0)+1;saveActioned();
+}
 function actionedInResult(){
   const result=S.session&&S.session.result;if(!result||!S.session.actioned||!S.session.actioned.size)return 0;
   let count=0;for(const finding of result.findings)if(S.session.actioned.has(finding.id))count++;return count;
+}
+/* ---- staged metadata changes ----
+   Actioning a set of flags can stage a correction -- tag, field, new value --
+   that the Updated Registry Export writes back into a copy of the original
+   workbook. Stored like actioned marks, keyed by the registry's contents. */
+function loadChanges(){
+  S.session.changes=[];S.session.changesRev=0;
+  try{const raw=localStorage.getItem(registryStoreKey('changes'));if(raw){const list=JSON.parse(raw);if(Array.isArray(list))S.session.changes=list.filter(entry=>entry&&typeof entry.tag==='string'&&typeof entry.field==='string'&&typeof entry.value==='string');}}catch(_){}
+}
+function saveChanges(){try{const key=registryStoreKey('changes');if(key)localStorage.setItem(key,JSON.stringify(S.session.changes||[]));}catch(_){/* private mode: kept for this session */}}
+function stageChanges(list){
+  if(!S.session.changes)S.session.changes=[];
+  for(const entry of list){
+    const at=S.session.changes.findIndex(existing=>auditNormId(existing.tag)===auditNormId(entry.tag)&&existing.field===entry.field);
+    if(at>=0)S.session.changes[at]=entry;else S.session.changes.push(entry);
+  }
+  S.session.changesRev=(S.session.changesRev||0)+1;saveChanges();
+}
+function removeChange(index){
+  if(!S.session.changes)return;
+  S.session.changes.splice(index,1);
+  S.session.changesRev=(S.session.changesRev||0)+1;saveChanges();
 }
 /* ---- modifications: findings set aside ----
    The user's per-finding overrides. A set-aside finding disappears from every
@@ -292,7 +319,24 @@ function renderExportOptions(){
     </section>`;
   }).join('');
   const layout=plan.layout==='level'?'level':'milestone';
-  $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>
+  const kind=S.session.exportKind||'actionable';
+  const changesCount=(S.session.changes||[]).length;
+  const kindTabs=`<div class="export-kinds" role="tablist">
+      <button class="export-kind ${kind==='actionable'?'on':''}" type="button" data-export-kind="actionable"><b>Actionable Export</b><small>Findings beside the equipment tree — the working report.</small></button>
+      <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>The original workbook with your ${changesCount.toLocaleString()} staged fix${changesCount===1?'':'es'} written in — ready for Exto.</small></button>
+      <button class="export-kind ${kind==='tracker'?'on':''}" type="button" data-export-kind="tracker"><b>Tracker</b><small>One shareable tab — progress by milestone and discipline.</small></button>
+    </div>`;
+  if(kind!=='actionable'){
+    $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose the export</h3>${kindTabs}
+      ${kind==='updated'
+        ?`<p class="export-intro">Writes each staged correction into a copy of the original workbook — every other cell, tab, and value stays exactly as uploaded, so the file can be reimported into Exto. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
+        :`<p class="export-intro">A single tab to share: a big progress bar driven by the "Milestone actioned?" ticks, one row per L2 milestone with the actioned share prefilled from this app, and a column per discipline showing its progress inside each milestone.</p>`}
+      <footer class="export-foot"><span></span><div><button class="btn primary" type="button" id="exportGo" ${kind==='updated'&&(!changesCount||!S.session.sourceBytes)?'disabled':''}>${ic('file-down')}Export</button></div></footer>`;
+    $$('[data-export-kind]').forEach(button=>button.onclick=()=>{S.session.exportKind=button.dataset.exportKind;renderExportOptions();});
+    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='updated')await exportUpdatedRegistryXlsx();else await exportTrackerXlsx();};
+    return;
+  }
+  $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>${kindTabs}
     <div class="export-layout"><b>Report layout</b>
       <label class="export-layout-choice ${layout==='milestone'?'on':''}"><input type="radio" name="export-layout" value="milestone" ${layout==='milestone'?'checked':''}><span><b>One tab per L2 milestone</b><small>The full equipment tree of each phase, findings beside it — work phase by phase.</small></span></label>
       <label class="export-layout-choice ${layout==='level'?'on':''}"><input type="radio" name="export-layout" value="level" ${layout==='level'?'checked':''}><span><b>One tab per finding level</b><small>Invalid, Rule broken, Check this, Note — flagged equipment only, ordered by milestone.</small></span></label>
@@ -318,6 +362,7 @@ function renderExportOptions(){
       refreshSummary();
     }
   });
+  $$('[data-export-kind]').forEach(button=>button.onclick=()=>{S.session.exportKind=button.dataset.exportKind;renderExportOptions();});
   $('#exportReset').onclick=()=>{S.session.exportPlan={levels:{},rules:{}};renderExportOptions();};
   $('#exportGo').onclick=async()=>{const plan=JSON.parse(JSON.stringify(exportPlan()));closeExportOptions();await exportSsmAuditXlsx(plan);};
 }
@@ -429,11 +474,23 @@ function modifyHighlight(text){
    on -- the search, the exclusion set, and the switched-off checks. Count
    updates and expand-all then reuse one pass instead of one per card. */
 function modifyGroups(){
-  const key=modifyQueryNorm()+''+(S.session&&S.session.excludedRev||0)+''+(S.rules.disabled||[]).join(',');
+  const key=modifyQueryNorm()+''+(S.session&&S.session.excludedRev||0)+''+(S.rules.disabled||[]).join(',')+''+(S.session&&S.session.modifyMilestone||'all')+''+(S.session&&S.session.modifyDiscipline||'all');
   if(S.session&&S.session.modifyGroupsVal&&S.session.modifyGroupsKey===key)return S.session.modifyGroupsVal;
   const groups=modifyGroupsBuild();
   if(S.session){S.session.modifyGroupsKey=key;S.session.modifyGroupsVal=groups;}
   return groups;
+}
+/* Slice filters: matches narrow to one L2 milestone or discipline (of the
+   finding's registry row) so a crew can action everything in their lane. */
+const MODIFY_DIM_NONE='none';
+function modifyDimActive(){return (S.session.modifyMilestone||'all')!=='all'||(S.session.modifyDiscipline||'all')!=='all';}
+function modifyDimMatch(finding){
+  const milestone=S.session.modifyMilestone||'all',discipline=S.session.modifyDiscipline||'all';
+  if(milestone==='all'&&discipline==='all')return true;
+  const row=registryRowFor(finding);
+  if(milestone!=='all'){const value=clean(row&&row.milestone);if(milestone===MODIFY_DIM_NONE?value!=='':value!==milestone)return false;}
+  if(discipline!=='all'){const value=clean(row&&row.discipline);if(discipline===MODIFY_DIM_NONE?value!=='':value!==discipline)return false;}
+  return true;
 }
 function modifyGroupsBuild(){
   const base=modifyBaseResult();if(!base)return [];
@@ -444,10 +501,10 @@ function modifyGroupsBuild(){
     if(!entry){entry={rule:finding.rule,findings:[],matches:[],kept:0};byRule.set(finding.rule.id,entry);}
     entry.findings.push(finding);
     if(!isExcludedId(finding.id))entry.kept++;
-    if(!query||finding.searchKey.includes(query))entry.matches.push(finding);
+    if((!query||finding.searchKey.includes(query))&&modifyDimMatch(finding))entry.matches.push(finding);
   }
   return Object.keys(RULE_CATEGORY_LABELS).map(category=>{
-    const rules=[...byRule.values()].filter(entry=>entry.rule.category===category&&(!query||entry.matches.length)).sort((left,right)=>right.findings.length-left.findings.length);
+    const rules=[...byRule.values()].filter(entry=>entry.rule.category===category&&(!(query||modifyDimActive())||entry.matches.length)).sort((left,right)=>right.findings.length-left.findings.length);
     const total=rules.reduce((sum,entry)=>sum+entry.findings.length,0),kept=rules.reduce((sum,entry)=>sum+entry.kept,0);
     return {category,label:RULE_CATEGORY_LABELS[category]||category,rules,total,kept};
   }).filter(group=>group.rules.length);
@@ -482,7 +539,7 @@ function modifyPatternHtml(group){
   const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
   const severity=group.findings[0].severity;
   return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
-    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action every finding of this pattern">${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
     <div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
@@ -501,6 +558,113 @@ function modifyListHtml(entry){
   const rest=singles.length-MODIFY_CHUNK;
   return `<div class="modify-list" data-mod-list="${esc(entry.rule.id)}">${groupHtml}${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" data-mod-more="${esc(entry.rule.id)}" data-mod-offset="${MODIFY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`;
 }
+/* ---- actioning a set of flags ----
+   The dialog offers each row's suggested fix (where a check has a deterministic
+   one), a single typed value for every row, or marking actioned with no data
+   change. Applied fixes are staged for the Updated Registry Export. */
+const MODIFY_ACTIONABLE_FIELDS={
+  'UPN':{prop:'upn',header:'UPN'},
+  'Discipline':{prop:'discipline',header:'Discipline'},
+  'System Name':{prop:'systemName',header:'System Name'},
+  'Closest Parent':{prop:'closestParent',header:'Closest Parent'},
+  'Dependencies':{prop:'dependencies',header:'Dependencies'},
+  'L2 Milestone':{prop:'milestone',header:'Milestone'},
+  'L1 Milestone Parent':{prop:'milestoneParent',header:'Milestone Parent'},
+  'Milestone Parent':{prop:'milestoneParent',header:'Milestone Parent'},
+  'Item Master Unique Identifier':{prop:'itemMaster',header:'Item Master Unique Identifier'},
+  'Equipment Classification':{prop:'equipmentClassification',header:'Equipment Classification'},
+};
+let modifyMajorityCache=null;
+function modifyUpnMajorities(upn){
+  if(!modifyMajorityCache)modifyMajorityCache=new Map();
+  const key=auditNormId(upn);if(!key)return null;
+  if(modifyMajorityCache.has(key))return modifyMajorityCache.get(key);
+  const systems=new Map(),disciplines=new Map(),milestones=new Map();
+  for(const row of S.session.snapshot.rows){
+    if(auditNormId(row.upn)!==key)continue;
+    for(const [map,value] of [[systems,row.systemName],[disciplines,row.discipline],[milestones,row.milestone]]){
+      const cleaned=clean(value);if(!cleaned)continue;
+      const norm=auditNormId(cleaned),entry=map.get(norm)||{count:0,display:cleaned};entry.count++;map.set(norm,entry);
+    }
+  }
+  const top=map=>{let best=null;for(const entry of map.values())if(!best||entry.count>best.count)best=entry;return best?best.display:'';};
+  const result={system:top(systems),discipline:top(disciplines),milestone:top(milestones)};
+  modifyMajorityCache.set(key,result);return result;
+}
+function modifySuggestedFix(finding){
+  const row=registryRowFor(finding);if(!row)return '';
+  if(finding.rule.id===SSM_AUDIT_RULES.upnInconsistent.id){
+    const majorities=modifyUpnMajorities(row.upn);if(!majorities)return '';
+    if(finding.field==='System Name')return majorities.system&&auditNormId(majorities.system)!==auditNormId(row.systemName)?majorities.system:'';
+    if(finding.field==='Discipline')return majorities.discipline&&auditNormId(majorities.discipline)!==auditNormId(row.discipline)?majorities.discipline:'';
+    return '';
+  }
+  if(finding.rule.id===SSM_AUDIT_RULES.milestoneUpn.id){
+    const majorities=modifyUpnMajorities(row.upn);
+    return majorities&&majorities.milestone&&auditNormId(majorities.milestone)!==auditNormId(row.milestone)?majorities.milestone:'';
+  }
+  return '';
+}
+let actionTrapCleanup=null,actionOpener=null,actionScope=null;
+function closeActionDialog(){
+  const modal=$('#actionModal');if(!modal||!modal.classList.contains('show'))return;
+  actionTrapCleanup?.();actionTrapCleanup=null;actionScope=null;modal.setAttribute('aria-hidden','true');animateClose(modal);
+  const opener=actionOpener;actionOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
+}
+function openActionDialog(label,findings,navigate){
+  const withTags=findings.filter(finding=>finding.equipmentId);
+  const fields=[...new Set(withTags.map(finding=>finding.field).filter(field=>MODIFY_ACTIONABLE_FIELDS[field]))];
+  const field=fields.length===1?fields[0]:'';
+  const suggestions=field?withTags.map(finding=>({finding,value:modifySuggestedFix(finding)})).filter(entry=>entry.value):[];
+  const sample=suggestions.length?suggestions[0].value:'';
+  const allSame=suggestions.length&&suggestions.every(entry=>auditNormId(entry.value)===auditNormId(sample));
+  actionScope={findings,field,suggestions};
+  $('#actionModalBody').innerHTML=`<span class="eyebrow">Action this set</span><h3 id="actionTitle">${esc(label)}</h3>
+    <p class="action-intro">${findings.length.toLocaleString()} finding${findings.length===1?'':'s'} selected${field?` &middot; the check points at the <b>${esc(field)}</b> column`:fields.length>1?' &middot; these findings point at different columns, so only marking actioned is offered':''}. Actioning marks every one as actioned; staging a fix also queues the metadata correction for the Updated Registry Export.</p>
+    <div class="action-modes">
+      ${field&&suggestions.length?`<label class="action-mode"><input type="radio" name="action-mode" value="suggested" checked><span><b>Use each row's suggested fix</b><small>${suggestions.length.toLocaleString()} of ${withTags.length.toLocaleString()} rows have one${allSame?` — all "${esc(sample)}"`:' (values differ per row)'}. Rows without a suggestion are only marked actioned.</small></span></label>`:''}
+      ${field?`<label class="action-mode"><input type="radio" name="action-mode" value="custom" ${suggestions.length?'':'checked'}><span><b>Write one value on every row</b><small>The same ${esc(field)} for all ${withTags.length.toLocaleString()} rows.</small><input type="text" id="actionValue" placeholder="${esc(field)}" value="${esc(allSame?sample:'')}"></span></label>`:''}
+      <label class="action-mode"><input type="radio" name="action-mode" value="mark" ${field?'':'checked'}><span><b>Only mark actioned</b><small>No data change — the flags are recorded as handled.</small></span></label>
+    </div>
+    <footer class="export-foot"><span></span><div><button class="btn ghost" type="button" id="actionCancel">Cancel</button><button class="btn primary" type="button" id="actionApply">${ic('zap')}Apply</button></div></footer>`;
+  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+  actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
+  $('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;
+  modal.onclick=event=>{if(event.target===modal)closeActionDialog();};
+  $('#actionApply').onclick=()=>{
+    const mode=(modal.querySelector('input[name="action-mode"]:checked')||{}).value||'mark';
+    const scope=actionScope;if(!scope)return;
+    let staged=0;
+    if(mode==='suggested'){
+      const list=scope.suggestions.map(entry=>({tag:entry.finding.equipmentId,field:entry.finding.field,header:(MODIFY_ACTIONABLE_FIELDS[entry.finding.field]||{}).header||entry.finding.field,value:entry.value,ruleId:entry.finding.rule.id}));
+      stageChanges(list);staged=list.length;
+    }else if(mode==='custom'){
+      const value=clean($('#actionValue')&&$('#actionValue').value);
+      if(!value){toast('Enter the value to write, or choose another option');return;}
+      const list=scope.findings.filter(finding=>finding.equipmentId&&MODIFY_ACTIONABLE_FIELDS[finding.field]).map(finding=>({tag:finding.equipmentId,field:finding.field,header:MODIFY_ACTIONABLE_FIELDS[finding.field].header,value,ruleId:finding.rule.id}));
+      stageChanges(list);staged=list.length;
+    }
+    setActionedMany(scope.findings,true);
+    closeActionDialog();
+    toast(`${scope.findings.length.toLocaleString()} actioned${staged?` · ${staged.toLocaleString()} fix${staged===1?'':'es'} staged`:''}`);
+    rerenderModifications(navigate||currentNavigate);
+  };
+  $('#actionApply').focus();
+}
+function openChangesDialog(navigate){
+  const changes=S.session.changes||[];
+  $('#actionModalBody').innerHTML=`<span class="eyebrow">Updated Registry Export</span><h3 id="actionTitle">Staged changes</h3>
+    <p class="action-intro">These corrections are written into a copy of the original workbook when you export the Updated Registry. Everything else in the file stays as it was.</p>
+    <div class="action-changes">${changes.length?changes.map((entry,index)=>`<div class="action-change"><b>${esc(entry.tag)}</b><span>${esc(entry.field)} &rarr; ${esc(entry.value)}</span><button class="xbtn icon-btn" type="button" data-change-remove="${index}" title="Drop this change">${ic('x')}</button></div>`).join(''):'<p class="action-intro">Nothing staged yet.</p>'}</div>
+    <footer class="export-foot"><span>${changes.length.toLocaleString()} change${changes.length===1?'':'s'}</span><div><button class="btn ghost" type="button" id="changesClear" ${changes.length?'':'disabled'}>${ic('trash-2')}Drop all</button><button class="btn primary" type="button" id="changesDone">Done</button></div></footer>`;
+  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+  actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
+  $('#actionModalClose').onclick=closeActionDialog;$('#changesDone').onclick=closeActionDialog;
+  modal.onclick=event=>{if(event.target===modal)closeActionDialog();};
+  $$('[data-change-remove]',modal).forEach(button=>button.onclick=()=>{removeChange(Number(button.dataset.changeRemove));openChangesDialog(navigate);});
+  $('#changesClear').onclick=()=>{S.session.changes=[];S.session.changesRev=(S.session.changesRev||0)+1;saveChanges();closeActionDialog();rerenderModifications(navigate||currentNavigate);};
+}
+
 /* A pattern's box mirrors its rows: all kept, none kept, or (indeterminate) mixed. */
 function syncModifyPatternBox(key){
   const findings=modifyPatternMap.get(key);if(!findings)return;
@@ -552,7 +716,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
+    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm modify-action-btn" type="button" data-mod-action="${esc(entry.rule.id)}" title="Action every match shown for this check">${ic('zap')}Action</button><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -580,17 +744,21 @@ function updateModifyCounts(navigate){
 export function renderModifications(navigate){
   if(!(S.session&&S.session.rawResult)){navigate('upload');return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='modify';S.homeMode='audit';
-  currentNavigate=navigate;modifyPatternMap=new Map();
+  currentNavigate=navigate;modifyPatternMap=new Map();modifyMajorityCache=null;
   const groups=modifyGroups(),query=clean(S.session.modifySearch),aside=excludedInBase(),result=S.session.result;
-  const matchTotal=query?groups.reduce((sum,group)=>sum+group.rules.reduce((inner,entry)=>inner+entry.matches.length,0),0):0;
+  const filtered=!!query||modifyDimActive();
+  const matchTotal=filtered?groups.reduce((sum,group)=>sum+group.rules.reduce((inner,entry)=>inner+entry.matches.length,0),0):0;
+  const milestones=[...new Set((S.session.snapshot.rows||[]).map(row=>clean(row.milestone)).filter(Boolean))].sort(natCmp);
+  const disciplines=[...new Set((S.session.snapshot.rows||[]).map(row=>clean(row.discipline)).filter(Boolean))].sort(natCmp);
+  const changesCount=(S.session.changes||[]).length;
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Modifications</h2><p>${esc(S.session.name)} — untick any finding you disagree with and it is set aside: dropped from the findings list, the Dashboard, and the Excel report. Decisions are remembered for this registry, even after a reload.</p></div></div>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${query?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}<span class="spacer"></span>${query&&matchTotal?`<button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding the search surfaced">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding the search surfaced aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)} — action a whole set of flags at once (staging the metadata fix for the Updated Registry Export), or untick any finding you disagree with to set it aside. Decisions are remembered for this registry, even after a reload.</p></div></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding shown aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
-      const closed=!query&&(S.session.modifyClosedCats||[]).includes(group.category);
-      return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,!!query)).join('')}</div></section>`;
-    }).join(''):`<div class="rule-reference-empty">${ic(query?'search':'check-check')}<b>${query?'No findings match that search':'Nothing to modify'}</b><span>${query?'Try a shorter word or a different tag.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
+      const closed=!filtered&&(S.session.modifyClosedCats||[]).includes(group.category);
+      return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,filtered)).join('')}</div></section>`;
+    }).join(''):`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No findings match those filters':'Nothing to action'}</b><span>${filtered?'Try a different search, milestone, or discipline.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
   const body=$('#modifyBody');
   body.onchange=event=>{
@@ -663,6 +831,21 @@ export function renderModifications(navigate){
       else more.remove();
       return;
     }
+    const actionRule=event.target.closest('[data-mod-action]');
+    if(actionRule){
+      event.preventDefault();
+      const groupsNow=modifyGroups();let entry=null;
+      for(const group of groupsNow){entry=group.rules.find(item=>item.rule.id===actionRule.dataset.modAction)||entry;}
+      if(entry&&entry.matches.length)openActionDialog(entry.rule.title,entry.matches,navigate);
+      return;
+    }
+    const actionGroup=event.target.closest('[data-mod-action-group]');
+    if(actionGroup){
+      event.preventDefault();
+      const findings=modifyPatternMap.get(actionGroup.dataset.modActionGroup)||[];
+      if(findings.length)openActionDialog(findings[0].why,findings,navigate);
+      return;
+    }
     const keep=event.target.closest('[data-mod-keep]'),asideAll=event.target.closest('[data-mod-aside]');
     if(keep||asideAll){
       event.preventDefault();
@@ -713,6 +896,20 @@ export function renderModifications(navigate){
     const cats=[];
     $$('.modify-category',body).forEach(section=>{section.classList.add('is-closed');const catBody=section.querySelector('.modify-cat-body');if(catBody)catBody.hidden=true;cats.push(section.dataset.modCat);});
     S.session.modifyClosedCats=cats;
+  };
+  const milestoneSelect=$('#modifyMilestone');
+  if(milestoneSelect)milestoneSelect.onchange=event=>{S.session.modifyMilestone=event.target.value;rerenderModifications(navigate,true);};
+  const disciplineSelect=$('#modifyDiscipline');
+  if(disciplineSelect)disciplineSelect.onchange=event=>{S.session.modifyDiscipline=event.target.value;rerenderModifications(navigate,true);};
+  const changesChip=$('#modifyChanges');
+  if(changesChip)changesChip.onclick=()=>openChangesDialog(navigate);
+  const collectMatches=()=>{const list=[];for(const group of modifyGroups())for(const entry of group.rules)for(const finding of entry.matches)list.push(finding);return list;};
+  const actionMatches=$('#modifyActionMatches');
+  if(actionMatches)actionMatches.onclick=()=>{
+    const matches=collectMatches();if(!matches.length)return;
+    const milestone=S.session.modifyMilestone,discipline=S.session.modifyDiscipline;
+    const label=[milestone&&milestone!=='all'?(milestone==='none'?'No L2 milestone':milestone):'',discipline&&discipline!=='all'?(discipline==='none'?'No discipline':discipline):'',clean(S.session.modifySearch)].filter(Boolean).join(' · ')||'Everything shown';
+    openActionDialog(label,matches,navigate);
   };
   const collectMatchIds=()=>{const ids=[];for(const group of modifyGroups())for(const entry of group.rules)for(const finding of entry.matches)ids.push(finding.id);return ids;};
   const keepMatches=$('#modifyKeepMatches');
@@ -858,7 +1055,7 @@ export async function addAuditTarget(file,navigate){
       report(.8,'Running every check');await checkpoint();
       const status=await sessionStatusReport(workbook,snapshot,checkpoint);
       const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,rawResult,result,status,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();
+      S.session={...S.session,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -922,13 +1119,13 @@ async function addComparisonFile(file,side,navigate){
   if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook (.xlsx or .xls)');return;}
   const errorKey=side==='target'?'targetError':'referenceError';S.comparison[errorKey]='';
   try{
-    let snapshot,auditResult,statusReport=null;
+    let snapshot,auditResult,statusReport=null,targetBytes=null;
     await runWithProgress(side==='target'?'Loading registry to audit':'Loading finished project',file.name,async(checkpoint,report)=>{
-      const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
+      const bytes=new Uint8Array(await readArrayBuffer(file));targetBytes=bytes;await checkpoint();const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){statusReport=await sessionStatusReport(workbook,snapshot,checkpoint);auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}

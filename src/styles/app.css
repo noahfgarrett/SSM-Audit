@@ -2163,3 +2163,34 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .completed-row.is-unmatched .completed-where i{color:var(--warn);font-style:normal}
 .completed-count{color:var(--ink-3);font:10px var(--mono)}
 @media(max-width:800px){.completed-row{grid-template-columns:minmax(0,1fr) auto}.completed-where{display:none}}
+
+/* ---- actions tab: dialog, filters, staged changes ---- */
+.modify-dim{height:38px;min-width:0;max-width:210px;padding:0 26px 0 9px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);color:var(--ink-2);font:12px var(--sans)}
+.modify-chip.changes{border-color:#cbd8e9;background:#eff5fb;color:#315b8a;cursor:pointer}
+.modify-chip.changes:hover{border-color:#315b8a}
+.modify-action-btn .ic{color:var(--accent-700)}
+.action-modal{max-width:640px}
+.action-intro{margin:8px 0 14px;color:var(--ink-2);font-size:12px;line-height:1.55}
+.action-modes{display:grid;gap:8px}
+.action-mode{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid var(--border);background:var(--surface);cursor:pointer}
+.action-mode:has(input:checked){border-color:var(--accent-400);background:var(--tint)}
+.action-mode input[type=radio]{margin-top:2px;accent-color:var(--accent-600,#d97a26)}
+.action-mode span{min-width:0;flex:1}
+.action-mode b{display:block;color:var(--ink);font-size:12px}
+.action-mode small{display:block;margin-top:2px;color:var(--ink-2);font-size:10.5px;line-height:1.45}
+.action-mode input[type=text]{margin-top:7px;width:100%;height:34px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink);font:12px var(--mono)}
+.action-changes{display:grid;gap:0;max-height:320px;overflow:auto;border:1px solid var(--border);background:var(--surface)}
+.action-change{display:grid;grid-template-columns:minmax(140px,auto) minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 11px;border-bottom:1px dashed var(--border)}
+.action-change:last-child{border-bottom:0}
+.action-change b{color:var(--ink);font:650 11px var(--mono);overflow-wrap:anywhere}
+.action-change span{color:var(--ink-2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.action-change .xbtn .ic{width:13px;height:13px}
+
+/* ---- export kind selector ---- */
+.export-kinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 14px}
+.export-kind{display:block;text-align:left;padding:10px 12px;border:1px solid var(--border);background:var(--surface);cursor:pointer}
+.export-kind b{display:block;color:var(--ink);font-size:12px}
+.export-kind small{display:block;margin-top:2px;color:var(--ink-2);font-size:10px;line-height:1.4}
+.export-kind.on{border-color:var(--accent-400);background:var(--tint)}
+.export-kind.on b{color:var(--accent-700)}
+@media(max-width:800px){.export-kinds{grid-template-columns:1fr}}

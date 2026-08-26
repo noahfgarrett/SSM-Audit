@@ -620,3 +620,146 @@ export function exportSsmComparisonXlsx(){
   const base=clean(comparison.targetName).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   downloadBlob(`${base}-Project-Comparison.xlsx`,workbookBlob(workbook));toast('Project comparison exported');
 }
+
+/* ---- Updated Registry Export ----
+   The original workbook is re-opened from the bytes kept at load time and the
+   staged corrections are written into their cells -- every other cell, tab, and
+   value stays as uploaded, so the file can go straight back into Exto. */
+export function applyChangesToWorkbook(workbook,snapshot,changes){
+  const byId=new Map();
+  for(const row of snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byId.has(key))byId.set(key,row);}
+  const headerCache=new Map();
+  const columnFor=(sheetName,header)=>{
+    let map=headerCache.get(sheetName);
+    if(!map){
+      map=new Map();
+      const sheet=workbook.Sheets[sheetName];
+      if(sheet&&sheet['!ref']){
+        const range=XLSX.utils.decode_range(sheet['!ref']);
+        for(let r=range.s.r;r<=Math.min(range.e.r,range.s.r+24);r++){
+          for(let c=range.s.c;c<=range.e.c;c++){
+            const cell=sheet[XLSX.utils.encode_cell({r,c})];
+            const value=auditNormId(cell&&cell.v);
+            if(value&&!map.has(value))map.set(value,c);
+          }
+        }
+      }
+      headerCache.set(sheetName,map);
+    }
+    const column=map.get(auditNormId(header));
+    return column==null?-1:column;
+  };
+  let applied=0;
+  for(const change of changes){
+    const row=byId.get(auditNormId(change.tag));if(!row||!row._source)continue;
+    const sheetName=row._source.sheet,sheet=workbook.Sheets[sheetName];if(!sheet)continue;
+    const column=columnFor(sheetName,change.header||change.field);if(column<0)continue;
+    const address=XLSX.utils.encode_cell({r:(row._source.row||1)-1,c:column});
+    const cell=sheet[address]||{};
+    cell.t='s';cell.v=change.value;delete cell.w;delete cell.f;
+    sheet[address]=cell;applied++;
+  }
+  return applied;
+}
+export async function exportUpdatedRegistryXlsx(){
+  const bytes=S.session&&S.session.sourceBytes,changes=S.session&&S.session.changes||[];
+  if(!bytes){toast('The original workbook is not in memory — load the registry again first');return;}
+  if(!changes.length){toast('Nothing staged — action findings with a fix first');return;}
+  const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  try{
+    let applied=0;
+    await runWithProgress('Building the updated registry',S.session.name,async(checkpoint,report)=>{
+      report(.05,'Re-opening the original workbook');await checkpoint();
+      const workbook=XLSX.read(bytes,{type:'array',cellStyles:false});
+      report(.35,`Applying ${changes.length.toLocaleString()} staged change${changes.length===1?'':'s'}`);await checkpoint();
+      applied=applyChangesToWorkbook(workbook,S.session.snapshot,changes);
+      report(.5,'Writing the workbook');await checkpoint();
+      const blob=await workbookBlobCompact(workbook,{onProgress:async(fraction,name)=>{report(.55+fraction*.42,`Compressing ${name.replace(/^xl\//,'').replace(/\.xml$/,'')}`);await checkpoint();}});
+      report(1,`${applied.toLocaleString()} change${applied===1?'':'s'} written`);downloadBlob(`${base}-Updated-Registry.xlsx`,blob);
+    });
+    toast(`Updated registry exported — ${applied.toLocaleString()} change${applied===1?'':'s'} written`);
+  }catch(error){console.error('Updated registry export failed',error);toast('The updated registry could not be built');}
+}
+
+/* ---- Tracker Export ----
+   A single shareable tab: one big bar at the top driven by the manual
+   "Milestone actioned?" ticks, one row per L2 milestone (progress prefilled
+   from in-app actioning), and one column per discipline showing that
+   discipline's actioned share within the milestone. */
+export async function exportTrackerXlsx(){
+  const result=S.session&&S.session.result;if(!result){toast('Run an SSM Audit first');return;}
+  const actioned=S.session.actioned||new Set();
+  const byId=new Map();
+  for(const row of S.session.snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byId.has(key))byId.set(key,row);}
+  const groups=new Map(),discSet=new Set();
+  for(const finding of result.findings){
+    const row=byId.get(auditNormId(finding.equipmentId));
+    const milestone=clean(row&&row.milestone)||'No L2 milestone';
+    const discipline=clean(row&&row.discipline)||'No discipline';
+    discSet.add(discipline);
+    const group=groups.get(milestone)||{total:0,done:0,disc:new Map()};
+    group.total++;if(actioned.has(finding.id))group.done++;
+    const cell=group.disc.get(discipline)||{total:0,done:0};cell.total++;if(actioned.has(finding.id))cell.done++;group.disc.set(discipline,cell);
+    groups.set(milestone,group);
+  }
+  const disciplines=[...discSet].sort(natCmp),milestones=[...groups.keys()].sort(natCmp);
+  const headerSheetRow=8,firstRow=9,lastRow=8+milestones.length;
+  const fixedHeaders=['L2 Milestone','Findings','Actioned in app','%','Progress','Milestone actioned?'];
+  const aoa=[
+    ['SSM Audit — Tracker','','','','',''],
+    [`${clean(S.session.name)} — generated ${new Date().toLocaleDateString()}`,'','','','',''],
+    [`Action findings in the SSM Audit app, then tick "Milestone actioned?" (${AUDIT_EXPORT_TICK}) here when a whole milestone is closed out. The big bar follows the ticks.`,'','','','',''],
+    ['','','','','',''],
+    ['MILESTONES ACTIONED','','','','',''],
+    [auditExportEmptyBar(),'','','','',''],
+    ['','','','','',''],
+    [...fixedHeaders,...disciplines],
+  ];
+  for(const milestone of milestones){
+    const group=groups.get(milestone);
+    const discCells=disciplines.map(discipline=>{const cell=group.disc.get(discipline);return cell?cell.done/cell.total:'';});
+    aoa.push([milestone,group.total,group.done,0,auditExportEmptyBar(),group.total&&group.done===group.total?AUDIT_EXPORT_TICK:AUDIT_EXPORT_UNTICKED,...discCells]);
+  }
+  const sheet=XLSX.utils.aoa_to_sheet(aoa);
+  sheet['!cols']=[{wch:42},{wch:10},{wch:13},{wch:8},{wch:18},{wch:17},...disciplines.map(()=>({wch:14}))];
+  sheet['!rows']=[{hpt:28},{hpt:16},{hpt:16},{hpt:8},{hpt:14},{hpt:34},{hpt:8},{hpt:30}];
+  sheetStyleCell(sheet,'A1',AUDIT_EXPORT_STYLES.title);
+  sheetStyleCell(sheet,'A2',AUDIT_EXPORT_STYLES.subtitle);
+  sheetStyleCell(sheet,'A3',AUDIT_EXPORT_STYLES.note);
+  sheetStyleCell(sheet,'A5',AUDIT_EXPORT_STYLES.overallLabel);
+  const tickRange=milestones.length?`F${firstRow}:F${lastRow}`:'';
+  const overallFormula=milestones.length?`COUNTIF(${tickRange},"${AUDIT_EXPORT_TICK}")/${milestones.length}`:'';
+  if(overallFormula)sheetSetCell(sheet,'E6',sheetFormulaCell(overallFormula,0,AUDIT_EXPORT_STYLES.overallPercent));else sheetStyleCell(sheet,'E6',AUDIT_EXPORT_STYLES.overallPercent);
+  if(overallFormula)sheetSetCell(sheet,'A6',auditExportBarCell('E6',AUDIT_EXPORT_STYLES.overallBar));else sheetStyleCell(sheet,'A6',AUDIT_EXPORT_STYLES.overallBar);
+  for(const column of ['B','C','D'])sheetStyleCell(sheet,`${column}6`,AUDIT_EXPORT_STYLES.overallBar);
+  auditExportHeaderRow(sheet,headerSheetRow,[...fixedHeaders,...disciplines],['left','right','right','right','left','center',...disciplines.map(()=>'right')]);
+  milestones.forEach((milestone,offset)=>{
+    const rowIndex=firstRow+offset,band=offset%2===1;
+    sheet['!rows'][rowIndex-1]={hpt:22};
+    sheetStyleCell(sheet,`A${rowIndex}`,band?AUDIT_EXPORT_STYLES.labelBand:AUDIT_EXPORT_STYLES.label);
+    sheetStyleCell(sheet,`B${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
+    sheetStyleCell(sheet,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
+    sheetSetCell(sheet,`D${rowIndex}`,auditExportPercentCell(`B${rowIndex}`,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.percentBand:AUDIT_EXPORT_STYLES.percent));
+    sheetSetCell(sheet,`E${rowIndex}`,auditExportBarCell(`D${rowIndex}`,band?AUDIT_EXPORT_STYLES.barBand:AUDIT_EXPORT_STYLES.bar));
+    sheetStyleCell(sheet,`F${rowIndex}`,AUDIT_EXPORT_STYLES.actioned);
+    disciplines.forEach((discipline,at)=>{
+      const address=`${auditColumnName(6+at)}${rowIndex}`;
+      sheetStyleCell(sheet,address,band?AUDIT_EXPORT_STYLES.percentBand:AUDIT_EXPORT_STYLES.percent);
+    });
+  });
+  const extras={conditionalFormatting:[auditExportDataBar('A6:A6',1)]};
+  if(milestones.length){
+    extras.conditionalFormatting.push(auditExportDataBar(`E${firstRow}:E${lastRow}`,2));
+    extras.dataValidations=[auditExportTickValidation(tickRange)];
+  }
+  sheetXmlExtras(sheet,extras);
+  sheetFreezeRows(sheet,headerSheetRow);
+  const workbook=XLSX.utils.book_new();
+  addSheet(workbook,sheet,'Tracker');
+  const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  try{
+    const blob=await workbookBlobCompact(workbook,{});
+    downloadBlob(`${base}-Tracker.xlsx`,blob);
+    toast('Tracker exported');
+  }catch(error){console.error('Tracker export failed',error);toast('The tracker could not be built');}
+}

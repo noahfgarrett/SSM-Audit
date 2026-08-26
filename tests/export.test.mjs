@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { AUDIT_EXPORT_TICK, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook } from '../src/audit/export.js'
+import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook } from '../src/audit/export.js'
 
 /* The application loads SheetJS as a plain browser script into one shared realm.
    Tests evaluate the vendored copy the same way so the modules find the global
@@ -552,4 +552,25 @@ test('findings actioned in the app arrive pre-ticked in the report', () => {
   /* an equipment with none of its findings actioned stays unticked */
   const other = tags.find((candidate, at) => candidate !== tag && String(lines[at][2] || '').trim())
   assert.equal(lines[tags.indexOf(other)][0], '☐')
+})
+
+test('staged changes are written into the original workbook cells and nothing else moves', () => {
+  const aoa = [
+    headers,
+    row({ equipmentId: 'B1-PMP-1', closestParent: '111  Chilled Water (R/S)', closestParentStatus: 'NEW', upn: '111', discipline: 'MECHANICAL WET', systemName: '279  CCW', equipmentDescription: 'Pump' }),
+    row({ equipmentId: 'B1-PMP-2', closestParent: 'B1-PMP-1', closestParentStatus: 'NEW', upn: '111', discipline: 'MECHANICAL WET', systemName: '111  Chilled Water (R/S)', equipmentDescription: 'Pump two' }),
+  ]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), 'Full Export')
+  const snapshot = auditSnapshotFromAoa(aoa, { file: 'reg.xlsx', sheet: 'Full Export' })
+  const applied = applyChangesToWorkbook(workbook, snapshot, [
+    { tag: 'B1-PMP-1', field: 'System Name', header: 'System Name', value: '111  Chilled Water (R/S)' },
+    { tag: 'NOT-A-TAG', field: 'System Name', header: 'System Name', value: 'x' },
+  ])
+  assert.equal(applied, 1, 'unknown tags are skipped, real ones written')
+  const sheet = workbook.Sheets['Full Export']
+  const col = index.systemName
+  assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: col })].v, '111  Chilled Water (R/S)', 'the staged value landed in the right cell')
+  assert.equal(sheet[XLSX.utils.encode_cell({ r: 2, c: col })].v, '111  Chilled Water (R/S)', 'the untouched row keeps its value')
+  assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: index.equipmentDescription })].v, 'Pump', 'other columns stay as they were')
 })
