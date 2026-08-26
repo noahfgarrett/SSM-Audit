@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.34.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Completed Equipment: filter by step or registry presence, sort by tag, UPN, or step\n- Click any completed equipment for its full registry record, with a jump into the hierarchy"
+  },
+  {
     "version": "1.33.0",
     "date": "2026-08-25",
     "type": "feature",

@@ -929,12 +929,32 @@ export function renderModifications(navigate){
    the loaded registry (or a note that it is not in it at all). */
 const COMPLETED_CHUNK=500;
 const COMPLETED_STEP_SHORT={'RR OA/BT':'RR','DIST OA/BT':'DIST','EQ OA/BT':'EQ','SYS OA/BT':'SYS'};
+const COMPLETED_STEP_ORDER=['RR OA/BT','DIST OA/BT','EQ OA/BT','SYS OA/BT'];
+let completedEntryMap=new Map();
+function completedStepChips(entry){return entry.steps.map(step=>`<span class="completed-step" title="${esc(step)} step completed">${esc(COMPLETED_STEP_SHORT[step]||step)}</span>`).join('');}
 function completedRowHtml(entry,registryRow){
-  const steps=entry.steps.map(step=>`<span class="completed-step" title="${esc(step)} step completed">${esc(COMPLETED_STEP_SHORT[step]||step)}</span>`).join('');
   const where=registryRow
     ?`UPN ${esc(registryRow.upn||'—')}${registryRow.systemName?` &middot; ${esc(registryRow.systemName)}`:''} &middot; row ${registryRow._source&&registryRow._source.row||'—'}`
     :'<i>Not in this registry</i>';
-  return `<div class="completed-row ${registryRow?'':'is-unmatched'}"><b class="completed-tag">${esc(entry.name)}</b><span class="completed-steps">${steps}</span><span class="completed-where">${where}</span></div>`;
+  return `<div class="completed-row ${registryRow?'':'is-unmatched'}" data-completed-open="${esc(auditNormId(entry.name))}" role="button" tabindex="0" title="Open this equipment's details"><b class="completed-tag">${esc(entry.name)}</b><span class="completed-steps">${completedStepChips(entry)}</span><span class="completed-where">${where}</span></div>`;
+}
+function openCompletedEquipment(entry,opener){
+  const index=sessionRowIndex(),row=index.byId.get(auditNormId(entry.name))||null;
+  S.session.opener=opener;
+  const stepNames=entry.steps.map(step=>`${COMPLETED_STEP_SHORT[step]||step} (${step})`).join(', ');
+  $('#drawerTitle').textContent='Completed equipment';
+  $('#drawerBody').innerHTML=`<div class="audit-drawer">
+    <div class="audit-drawer-top"><span class="completed-steps">${completedStepChips(entry)}</span><span class="audit-drawer-tag">${copyTagHtml(entry.name)}</span></div>
+    <section class="finding-section"><h4>Finished on site</h4><p class="finding-why">The Equipment Status Report marks the ${esc(stepNames)} step${entry.steps.length===1?'':'s'} as Completed, so this equipment's findings are left out of the findings list, the Dashboard, and the exports.${row?'':' The tag does not match any row in the loaded registry, so nothing in the audit changed because of it.'}</p></section>
+    ${registryContextHtml(row)}
+    ${row?`<div class="finding-evidence">${ic('file-spreadsheet')}${esc(row._source&&row._source.sheet||'Registry')} &middot; row ${row._source&&row._source.row||'—'}</div>`:''}
+    ${row?`<div class="finding-action-row"><button class="btn" type="button" id="completedInHierarchy">${ic('list-tree')}Show in hierarchy</button></div>`:''}
+  </div>`;
+  wireCopyTags($('#drawerBody'));
+  const inTree=$('#completedInHierarchy');
+  if(inTree)inTree.onclick=()=>{closeDrawer();focusHierarchyOnEquipment(entry.name);};
+  const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');
+  drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
 }
 export function renderCompletedEquipment(navigate){
   const status=S.session&&S.session.status;
@@ -942,20 +962,55 @@ export function renderCompletedEquipment(navigate){
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='completed';S.homeMode='audit';
   currentNavigate=navigate;
   const query=clean(S.session.completedSearch||'').toUpperCase();
+  const stepFilter=S.session.completedStep||'all',matchFilter=S.session.completedMatch||'all',sort=S.session.completedSort||'tag';
   const byTag=new Map();
   for(const row of S.session.snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byTag.has(key))byTag.set(key,row);}
-  const all=[...status.equipment].sort((left,right)=>natCmp(left.name,right.name));
-  const list=query?all.filter(entry=>entry.name.toUpperCase().includes(query)||entry.steps.some(step=>step.toUpperCase().includes(query))):all;
+  completedEntryMap=new Map();
+  for(const entry of status.equipment)completedEntryMap.set(auditNormId(entry.name),entry);
+  const all=[...status.equipment];
+  const stepRank=entry=>Math.min(...entry.steps.map(step=>{const at=COMPLETED_STEP_ORDER.indexOf(step);return at<0?99:at;}));
+  if(sort==='upn')all.sort((left,right)=>natCmp(clean((byTag.get(auditNormId(left.name))||{}).upn)||'￿',clean((byTag.get(auditNormId(right.name))||{}).upn)||'￿')||natCmp(left.name,right.name));
+  else if(sort==='step')all.sort((left,right)=>stepRank(left)-stepRank(right)||natCmp(left.name,right.name));
+  else all.sort((left,right)=>natCmp(left.name,right.name));
+  const list=all.filter(entry=>{
+    if(query&&!(entry.name.toUpperCase().includes(query)||entry.steps.some(step=>step.toUpperCase().includes(query))))return false;
+    if(stepFilter!=='all'&&!entry.steps.includes(stepFilter))return false;
+    const matched=byTag.has(auditNormId(entry.name));
+    if(matchFilter==='matched'&&!matched)return false;
+    if(matchFilter==='unmatched'&&matched)return false;
+    return true;
+  });
+  const filtered=!!query||stepFilter!=='all'||matchFilter!=='all';
   const first=list.slice(0,COMPLETED_CHUNK).map(entry=>completedRowHtml(entry,byTag.get(auditNormId(entry.name)))).join('');
   const rest=list.length-COMPLETED_CHUNK;
   $('#view').innerHTML=`<section class="completed-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Finished on site</span><h2>Completed Equipment</h2><p>${esc(S.session.name)} — equipment the Equipment Status Report marks as Completed. Their findings are left out of the findings list, the Dashboard, and the Excel report. The chips show which OA/BT step said Completed.</p></div></div>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="completedSearch" aria-label="Search completed equipment" placeholder="Search tags and steps" value="${esc(S.session.completedSearch||'')}"></div><span class="modify-chip done">${status.equipment.length.toLocaleString()} completed on the report</span><span class="modify-chip" title="Completed equipment whose tag matches a row in this registry — the count that changes the audit">${(status.matched||0).toLocaleString()} matched in this registry</span><span class="spacer"></span><span class="completed-count">${query?`${list.length.toLocaleString()} of ${all.length.toLocaleString()} shown`:''}</span></div>
-    <div class="completed-body" id="completedBody">${list.length?`<div class="completed-list"><div class="completed-row completed-head"><b>Equipment</b><span>Step completed</span><span>In this registry</span></div>${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" id="completedMore" data-offset="${COMPLETED_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,COMPLETED_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`:`<div class="rule-reference-empty">${ic('search')}<b>${query?'No completed equipment matches that search':'Nothing is marked Completed'}</b><span>${query?'Try a shorter word or a different tag.':'The Equipment Status Report tab has no rows whose OA/BT step says Completed.'}</span></div>`}</div>
+    <div class="screen-heading"><div><span class="eyebrow">Finished on site</span><h2>Completed Equipment</h2><p>${esc(S.session.name)} — equipment the Equipment Status Report marks as Completed. Their findings are left out of the findings list, the Dashboard, and the Excel report. Click any row for the full registry record.</p></div></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="completedSearch" aria-label="Search completed equipment" placeholder="Search tags and steps" value="${esc(S.session.completedSearch||'')}"></div>
+      <span class="completed-step-filters" role="group" aria-label="Filter by completed step">${COMPLETED_STEP_ORDER.map(step=>`<button class="completed-step-filter ${stepFilter===step?'on':''}" type="button" data-completed-step="${esc(step)}" title="${esc(step)} — click to ${stepFilter===step?'clear the filter':'show only this step'}">${esc(COMPLETED_STEP_SHORT[step])}</button>`).join('')}</span>
+      <select id="completedMatch" class="modify-dim" aria-label="Filter by registry presence"><option value="all">In registry &amp; not</option><option value="matched" ${matchFilter==='matched'?'selected':''}>In this registry</option><option value="unmatched" ${matchFilter==='unmatched'?'selected':''}>Not in this registry</option></select>
+      <select id="completedSort" class="modify-dim" aria-label="Sort"><option value="tag">Tag A to Z</option><option value="upn" ${sort==='upn'?'selected':''}>By UPN</option><option value="step" ${sort==='step'?'selected':''}>By step</option></select>
+      <span class="modify-chip done">${status.equipment.length.toLocaleString()} completed on the report</span><span class="modify-chip" title="Completed equipment whose tag matches a row in this registry — the count that changes the audit">${(status.matched||0).toLocaleString()} matched in this registry</span><span class="spacer"></span><span class="completed-count">${filtered?`${list.length.toLocaleString()} of ${all.length.toLocaleString()} shown`:''}</span></div>
+    <div class="completed-body" id="completedBody">${list.length?`<div class="completed-list"><div class="completed-row completed-head"><b>Equipment</b><span>Step completed</span><span>In this registry</span></div>${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" id="completedMore" data-offset="${COMPLETED_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,COMPLETED_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`:`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No completed equipment matches those filters':'Nothing is marked Completed'}</b><span>${filtered?'Try a different search, step, or registry filter.':'The Equipment Status Report tab has no rows whose OA/BT step says Completed.'}</span></div>`}</div>
   </section>`;
   $('#completedSearch').oninput=event=>{S.session.completedSearch=event.target.value;debounceSearch(()=>{const focused=document.activeElement&&document.activeElement.id==='completedSearch';renderCompletedEquipment(navigate);if(focused){const input=$('#completedSearch');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}});};
+  $$('[data-completed-step]').forEach(button=>button.onclick=()=>{S.session.completedStep=S.session.completedStep===button.dataset.completedStep?'all':button.dataset.completedStep;renderCompletedEquipment(navigate);});
+  $('#completedMatch').onchange=event=>{S.session.completedMatch=event.target.value;renderCompletedEquipment(navigate);};
+  $('#completedSort').onchange=event=>{S.session.completedSort=event.target.value;renderCompletedEquipment(navigate);};
+  const body=$('#completedBody');
+  body.onclick=event=>{
+    const row=event.target.closest('[data-completed-open]');if(!row)return;
+    if(event.target.closest('.copy-tag'))return;
+    const entry=completedEntryMap.get(row.dataset.completedOpen);if(entry)openCompletedEquipment(entry,row);
+  };
+  body.onkeydown=event=>{
+    if(event.key!=='Enter'&&event.key!==' ')return;
+    const row=event.target.closest('[data-completed-open]');if(!row)return;
+    event.preventDefault();
+    const entry=completedEntryMap.get(row.dataset.completedOpen);if(entry)openCompletedEquipment(entry,row);
+  };
   const more=$('#completedMore');
-  if(more)more.onclick=()=>{
+  if(more)more.onclick=event=>{
+    event.stopPropagation();
     const offset=Number(more.dataset.offset)||0,slice=list.slice(offset,offset+COMPLETED_CHUNK);
     const fragment=document.createElement('div');fragment.innerHTML=slice.map(entry=>completedRowHtml(entry,byTag.get(auditNormId(entry.name)))).join('');
     const remaining=list.length-offset-slice.length;
