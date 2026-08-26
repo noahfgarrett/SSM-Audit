@@ -571,6 +571,8 @@ test('staged changes are written into the original workbook cells and nothing el
   const sheet = workbook.Sheets['Full Export']
   const col = index.systemName
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: col })].v, '111  Chilled Water (R/S)', 'the staged value landed in the right cell')
+  assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: col })].s?.fill?.fgColor?.rgb, 'FFF2C2', 'the changed cell is shaded light yellow')
+  assert.equal(sheet[XLSX.utils.encode_cell({ r: 2, c: col })].s, undefined, 'untouched cells keep no highlight')
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 2, c: col })].v, '111  Chilled Water (R/S)', 'the untouched row keeps its value')
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: index.equipmentDescription })].v, 'Pump', 'other columns stay as they were')
 })

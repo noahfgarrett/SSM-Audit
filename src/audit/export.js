@@ -71,6 +71,7 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   muted:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.muted,vertical:'top'}),
   repeat:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.repeat,vertical:'top'}),
   flag:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,fill:AUDIT_EXPORT_PALETTE.flag,vertical:'top'}),
+  changedCell:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.black,fill:'FFF2C2'}),
   linkText:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.link,underline:true,vertical:'top'}),
   linkBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.link,underline:true,fill:AUDIT_EXPORT_PALETTE.band,vertical:'top'}),
   label:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.body,vertical:'center'}),
@@ -657,6 +658,9 @@ export function applyChangesToWorkbook(workbook,snapshot,changes){
     const address=XLSX.utils.encode_cell({r:(row._source.row||1)-1,c:column});
     const cell=sheet[address]||{};
     cell.t='s';cell.v=change.value;delete cell.w;delete cell.f;
+    /* Light yellow marks every cell the export changed, so a reviewer can scan
+       the file and see exactly what the staged actions touched. */
+    cell.s=AUDIT_EXPORT_STYLES.changedCell;
     sheet[address]=cell;applied++;
   }
   return applied;

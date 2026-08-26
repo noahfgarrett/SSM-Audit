@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.37.0",
+    "date": "2026-08-26",
+    "type": "feature",
+    "notes": "- Updated Registry Export shades every changed cell light yellow, so the actioned corrections are easy to spot and verify"
+  },
+  {
     "version": "1.36.1",
     "date": "2026-08-26",
     "type": "fix",
