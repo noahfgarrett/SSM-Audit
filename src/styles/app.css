@@ -2194,3 +2194,12 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .export-kind.on{border-color:var(--accent-400);background:var(--tint)}
 .export-kind.on b{color:var(--accent-700)}
 @media(max-width:800px){.export-kinds{grid-template-columns:1fr}}
+
+/* ---- completed equipment: filters + clickable rows ---- */
+.completed-step-filters{display:inline-flex;gap:4px}
+.completed-step-filter{display:inline-flex;align-items:center;min-height:30px;padding:3px 9px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--ink-2);font:700 10px var(--mono);cursor:pointer}
+.completed-step-filter:hover{border-color:var(--accent-400);color:var(--accent-700)}
+.completed-step-filter.on{border-color:#bddccc;background:var(--ok-bg);color:var(--ok)}
+.completed-row[data-completed-open]{cursor:pointer}
+.completed-row[data-completed-open]:focus-visible{outline:2px solid var(--accent-400);outline-offset:-2px}
+.completed-row[data-completed-open]:hover .completed-tag{color:var(--accent-700)}
