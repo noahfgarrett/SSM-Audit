@@ -963,6 +963,7 @@ export function renderCompletedEquipment(navigate){
   currentNavigate=navigate;
   const query=clean(S.session.completedSearch||'').toUpperCase();
   const stepFilter=S.session.completedStep||'all',matchFilter=S.session.completedMatch||'all',sort=S.session.completedSort||'tag';
+  const disciplineFilter=S.session.completedDiscipline||'all',milestoneFilter=S.session.completedMilestone||'all';
   const byTag=new Map();
   for(const row of S.session.snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byTag.has(key))byTag.set(key,row);}
   completedEntryMap=new Map();
@@ -975,29 +976,37 @@ export function renderCompletedEquipment(navigate){
   else if(sort==='milestone')all.sort((left,right)=>natCmp(rowField(left,'milestone'),rowField(right,'milestone'))||natCmp(left.name,right.name));
   else if(sort==='step')all.sort((left,right)=>stepRank(left)-stepRank(right)||natCmp(left.name,right.name));
   else all.sort((left,right)=>natCmp(left.name,right.name));
+  const disciplineOptions=new Set(),milestoneOptions=new Set();
+  for(const entry of all){const row=byTag.get(auditNormId(entry.name));if(!row)continue;if(clean(row.discipline))disciplineOptions.add(clean(row.discipline));if(clean(row.milestone))milestoneOptions.add(clean(row.milestone));}
   const list=all.filter(entry=>{
     if(query&&!(entry.name.toUpperCase().includes(query)||entry.steps.some(step=>step.toUpperCase().includes(query))))return false;
     if(stepFilter!=='all'&&!entry.steps.includes(stepFilter))return false;
-    const matched=byTag.has(auditNormId(entry.name));
+    const row=byTag.get(auditNormId(entry.name)),matched=!!row;
     if(matchFilter==='matched'&&!matched)return false;
     if(matchFilter==='unmatched'&&matched)return false;
+    if(disciplineFilter!=='all'){const value=clean(row&&row.discipline);if(disciplineFilter==='none'?value!=='':value!==disciplineFilter)return false;}
+    if(milestoneFilter!=='all'){const value=clean(row&&row.milestone);if(milestoneFilter==='none'?value!=='':value!==milestoneFilter)return false;}
     return true;
   });
-  const filtered=!!query||stepFilter!=='all'||matchFilter!=='all';
+  const filtered=!!query||stepFilter!=='all'||matchFilter!=='all'||disciplineFilter!=='all'||milestoneFilter!=='all';
   const first=list.slice(0,COMPLETED_CHUNK).map(entry=>completedRowHtml(entry,byTag.get(auditNormId(entry.name)))).join('');
   const rest=list.length-COMPLETED_CHUNK;
   $('#view').innerHTML=`<section class="completed-shell">
     <div class="screen-heading"><div><span class="eyebrow">Finished on site</span><h2>Completed Equipment</h2><p>${esc(S.session.name)} — equipment the Equipment Status Report marks as Completed. Their findings are left out of the findings list, the Dashboard, and the Excel report. Click any row for the full registry record.</p></div></div>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="completedSearch" aria-label="Search completed equipment" placeholder="Search tags and steps" value="${esc(S.session.completedSearch||'')}"></div>
       <span class="completed-step-filters" role="group" aria-label="Filter by completed step">${COMPLETED_STEP_ORDER.map(step=>`<button class="completed-step-filter ${stepFilter===step?'on':''}" type="button" data-completed-step="${esc(step)}" title="${esc(step)} — click to ${stepFilter===step?'clear the filter':'show only this step'}">${esc(COMPLETED_STEP_SHORT[step])}</button>`).join('')}</span>
+      <select id="completedDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${disciplineFilter==='none'?'selected':''}>No discipline</option>${[...disciplineOptions].sort(natCmp).map(name=>`<option value="${esc(name)}" ${disciplineFilter===name?'selected':''}>${esc(name)}</option>`).join('')}</select>
+      <select id="completedMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${milestoneFilter==='none'?'selected':''}>No L2 milestone</option>${[...milestoneOptions].sort(natCmp).map(name=>`<option value="${esc(name)}" ${milestoneFilter===name?'selected':''}>${esc(name)}</option>`).join('')}</select>
       <select id="completedMatch" class="modify-dim" aria-label="Filter by whether the name matched a registry tag" title="The status report's names do not have to match this registry's Equipment IDs — only names that match a row actually remove findings from the audit"><option value="all">Matched &amp; unmatched</option><option value="matched" ${matchFilter==='matched'?'selected':''}>Matched a registry tag</option><option value="unmatched" ${matchFilter==='unmatched'?'selected':''}>No matching tag</option></select>
       <select id="completedSort" class="modify-dim" aria-label="Sort"><option value="tag">Tag A to Z</option><option value="upn" ${sort==='upn'?'selected':''}>By UPN</option><option value="discipline" ${sort==='discipline'?'selected':''}>By discipline</option><option value="milestone" ${sort==='milestone'?'selected':''}>By L2 milestone</option><option value="step" ${sort==='step'?'selected':''}>By step</option></select>
       <span class="modify-chip done">${status.equipment.length.toLocaleString()} completed on the report</span><span class="modify-chip" title="Completed equipment whose tag matches a row in this registry — the count that changes the audit">${(status.matched||0).toLocaleString()} matched in this registry</span><span class="spacer"></span><span class="completed-count">${filtered?`${list.length.toLocaleString()} of ${all.length.toLocaleString()} shown`:''}</span></div>
-    <div class="completed-body" id="completedBody">${list.length?`<div class="completed-list"><div class="completed-row completed-head"><b>Equipment</b><span>Step completed</span><span>Where it sits in this registry</span></div>${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" id="completedMore" data-offset="${COMPLETED_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,COMPLETED_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`:`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No completed equipment matches those filters':'Nothing is marked Completed'}</b><span>${filtered?'Try a different search, step, or registry filter.':'The Equipment Status Report tab has no rows whose OA/BT step says Completed.'}</span></div>`}</div>
+    <div class="completed-body" id="completedBody">${list.length?`<div class="completed-list"><div class="completed-row completed-head"><b>Equipment</b><span>Step completed</span><span>Where it sits in this registry</span></div>${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" id="completedMore" data-offset="${COMPLETED_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,COMPLETED_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`:`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No completed equipment matches those filters':'Nothing is marked Completed'}</b><span>${filtered?'Try a different search, step, discipline, milestone, or registry filter.':'The Equipment Status Report tab has no rows whose OA/BT step says Completed.'}</span></div>`}</div>
   </section>`;
   $('#completedSearch').oninput=event=>{S.session.completedSearch=event.target.value;debounceSearch(()=>{const focused=document.activeElement&&document.activeElement.id==='completedSearch';renderCompletedEquipment(navigate);if(focused){const input=$('#completedSearch');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}});};
   $$('[data-completed-step]').forEach(button=>button.onclick=()=>{S.session.completedStep=S.session.completedStep===button.dataset.completedStep?'all':button.dataset.completedStep;renderCompletedEquipment(navigate);});
   $('#completedMatch').onchange=event=>{S.session.completedMatch=event.target.value;renderCompletedEquipment(navigate);};
+  $('#completedDiscipline').onchange=event=>{S.session.completedDiscipline=event.target.value;renderCompletedEquipment(navigate);};
+  $('#completedMilestone').onchange=event=>{S.session.completedMilestone=event.target.value;renderCompletedEquipment(navigate);};
   $('#completedSort').onchange=event=>{S.session.completedSort=event.target.value;renderCompletedEquipment(navigate);};
   const body=$('#completedBody');
   body.onclick=event=>{
