@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.38.3",
+    "date": "2026-08-26",
+    "type": "fix",
+    "notes": "- Action buttons on finding patterns work again, and the action dialog is no longer transparent\n- The per-check Action button is gone \u2014 actioning happens on a pattern or a filtered set, where the findings are alike"
+  },
+  {
     "version": "1.38.2",
     "date": "2026-08-26",
     "type": "fix",
