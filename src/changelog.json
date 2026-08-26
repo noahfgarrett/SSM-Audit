@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.38.2",
+    "date": "2026-08-26",
+    "type": "fix",
+    "notes": "- Wording: the fiber unit check is now \"FDU is not placed correctly\""
+  },
+  {
     "version": "1.38.1",
     "date": "2026-08-26",
     "type": "fix",
