@@ -720,7 +720,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm modify-action-btn" type="button" data-mod-action="${esc(entry.rule.id)}" title="Action every match shown for this check">${ic('zap')}Action</button><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
+    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -803,6 +803,13 @@ export function renderModifications(navigate){
       S.session.modifyClosedCats=[...set];
       return;
     }
+    const actionGroup=event.target.closest('[data-mod-action-group]');
+    if(actionGroup){
+      event.preventDefault();
+      const findings=modifyPatternMap.get(actionGroup.dataset.modActionGroup)||[];
+      if(findings.length)openActionDialog(findings[0].why,findings,navigate);
+      return;
+    }
     const head=event.target.closest('.modify-pattern-head');
     if(head&&!event.target.closest('input')){
       const pattern=head.closest('.modify-pattern'),rows=pattern.querySelector('.modify-pattern-rows'),expand=pattern.querySelector('[data-mod-expand]');
@@ -833,21 +840,6 @@ export function renderModifications(navigate){
       more.before(...fragment.children);
       if(rest>0){more.dataset.modOffset=String(offset+slice.length);more.innerHTML=`${ic('chevrons-down')}Show ${Math.min(rest,MODIFY_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}`;}
       else more.remove();
-      return;
-    }
-    const actionRule=event.target.closest('[data-mod-action]');
-    if(actionRule){
-      event.preventDefault();
-      const groupsNow=modifyGroups();let entry=null;
-      for(const group of groupsNow){entry=group.rules.find(item=>item.rule.id===actionRule.dataset.modAction)||entry;}
-      if(entry&&entry.matches.length)openActionDialog(entry.rule.title,entry.matches,navigate);
-      return;
-    }
-    const actionGroup=event.target.closest('[data-mod-action-group]');
-    if(actionGroup){
-      event.preventDefault();
-      const findings=modifyPatternMap.get(actionGroup.dataset.modActionGroup)||[];
-      if(findings.length)openActionDialog(findings[0].why,findings,navigate);
       return;
     }
     const keep=event.target.closest('[data-mod-keep]'),asideAll=event.target.closest('[data-mod-aside]');
