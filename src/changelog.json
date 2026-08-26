@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.36.1",
+    "date": "2026-08-26",
+    "type": "fix",
+    "notes": "- Bulk actioning no longer touches set-aside findings \u2014 only kept findings are actioned or given staged fixes\n- The in-app guide now covers the Actions and Completed Equipment views"
+  },
+  {
     "version": "1.36.0",
     "date": "2026-08-26",
     "type": "feature",

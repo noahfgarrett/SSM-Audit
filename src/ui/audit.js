@@ -612,6 +612,10 @@ function closeActionDialog(){
   const opener=actionOpener;actionOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
 }
 function openActionDialog(label,findings,navigate){
+  /* Set-aside findings are the reviewer's explicit "no" -- bulk actioning must
+     never stage a fix or an actioned mark for them. */
+  findings=findings.filter(finding=>!isExcludedId(finding.id));
+  if(!findings.length){toast('Everything in this set is set aside — restore findings first to action them');return;}
   const withTags=findings.filter(finding=>finding.equipmentId);
   const fields=[...new Set(withTags.map(finding=>finding.field).filter(field=>MODIFY_ACTIONABLE_FIELDS[field]))];
   const field=fields.length===1?fields[0]:'';
