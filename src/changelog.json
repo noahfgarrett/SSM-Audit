@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.33.0",
+    "date": "2026-08-25",
+    "type": "feature",
+    "notes": "- Modifications is now Actions: whole sets of flags can be actioned at once, staging a metadata fix \u2014 suggested where the check knows one, or typed\n- Filters for L2 milestone and discipline, so a crew can action everything in their lane\n- Three exports: the Actionable Export, an Updated Registry (the original workbook with staged fixes written in, ready for Exto), and a shareable Tracker tab with milestone and discipline progress"
+  },
+  {
     "version": "1.32.0",
     "date": "2026-08-25",
     "type": "feature",
