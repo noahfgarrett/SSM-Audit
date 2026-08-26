@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.38.0",
+    "date": "2026-08-26",
+    "type": "feature",
+    "notes": "- Every check is renamed to say what is wrong on its face \u2014 \"Parent is in a different UPN\" instead of \"Parent shares the UPN\""
+  },
+  {
     "version": "1.37.0",
     "date": "2026-08-26",
     "type": "feature",
