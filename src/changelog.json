@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.38.1",
+    "date": "2026-08-26",
+    "type": "fix",
+    "notes": "- Wording: the I&C discipline check is now \"I&C is not an available Discipline option\""
+  },
+  {
     "version": "1.38.0",
     "date": "2026-08-26",
     "type": "feature",
