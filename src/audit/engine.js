@@ -46,13 +46,15 @@ export const SSM_AUDIT_RULES=Object.freeze({
   /* milestones — enabled as review-grade checks; engineers decide */
   milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','L1 or L2 milestone missing','When a project uses milestones, each row carries both an L1 Milestone Parent and an L2 Milestone.',{confidence:'strong'}),
   milestoneUpn:auditRule('milestone.l2-upn-mismatch','sop','milestones','L2 milestone points at another UPN','An L2 milestone points at its UPN — an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system\u2019s name or abbreviation. When it points at a different UPN the assignment needs review.',{confidence:'strong'}),
+  milestoneUpnUnknown:auditRule('milestone.l2-upn-unknown','sop','milestones','L2 milestone UPN cannot be verified','When an L2 milestone name identifies no UPN or system, its assignment needs confirmation; this is not evidence that it belongs to another UPN.',{confidence:'strong'}),
   milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','L1 and L2 describe different phases','L1 and L2 milestones on one row should describe the same phase — not, for example, 30% capacity on one and 100% on the other.',{confidence:'strong'}),
   milestoneInconsistent:auditRule('milestone.parent-inconsistent','sop','milestones','Same L2, different L1 meanings','The same L2 milestone should roll up to one consistent L1 meaning across the registry.',{confidence:'strong'}),
   milestoneCohort:auditRule('milestone.local-cohort-outlier','sop','milestones','Milestone differs from comparable equipment','Equipment of the same kind, in the same building and system, normally shares one milestone pair.',{confidence:'strong'}),
   milestoneLevel:auditRule('milestone.level-field-mismatch','sop','milestones','Milestone in the wrong field','An identifier written for L1 belongs in L1 Milestone Parent; one written for L2 belongs in L2 Milestone.',{confidence:'strong'}),
   milestoneBranch:auditRule('milestone.branch-outlier','sop','milestones','Milestone differs from its branch','A child normally shares the milestone pair of its parent and siblings unless there is a documented reason.',{confidence:'strong'}),
   /* item masters */
-  itemMasterStandard:auditRule('item-master.standardized-assignment','registry','item-masters','Item Master is not the VF standard','Item Masters use the approved VF names. Legacy project-prefixed names (CA_…) should be replaced with their VF equivalent.',{confidence:'strong'}),
+  itemMasterStandard:auditRule('item-master.standardized-assignment','registry','item-masters','VF Item Master is not on the approved list','A name presented as a VF Item Master should appear in the approved VF list. A site or legacy prefix alone does not make an assignment wrong.',{confidence:'strong'}),
+  itemMasterMigration:auditRule('item-master.migration-advisory','registry','item-masters','Optional VF Item Master migration','A legacy or site Item Master with one clear VF equivalent may be considered for migration. Confirm checklist equivalence and project approval before changing it; replacement is not mandatory.',{confidence:'strong'}),
   /* headers */
   headerItemMaster:auditRule('header.item-master-not-blank','sop','headers','Header without a Blank Item Master','A row that other equipment nests under as an organizational header should carry a Blank Item Master (VF_Blank) so no checklists are applied to it.'),
   headerDependency:auditRule('header.has-dependency','sop','headers','Header carries dependencies','An organizational header only groups equipment. It should not carry dependencies of its own.'),
@@ -70,6 +72,7 @@ export const SSM_AUDIT_RULES=Object.freeze({
   drivenElectricalPath:auditRule('logic.driven-electrical-path-missing','logic','dependencies','No power path for driven equipment','Pumps, fans, air handlers, chillers, and similar equipment should trace back to the electrical gear that powers them.',{confidence:'strong'}),
   controlElectricalPath:auditRule('logic.control-electrical-path-missing','logic','dependencies','No power path for control equipment','Control panels and RIOs should trace back to the electrical supply that powers them.',{confidence:'strong'}),
   rioControlPath:auditRule('logic.rio-control-path-missing','logic','dependencies','RIO has no controller link','An RIO should link to the PLC, I/O cluster, or upstream RIO that runs it.',{confidence:'strong'}),
+  externalPathReview:auditRule('logic.external-path-unverified','logic','dependencies','External power or control path needs review','An Existing parent or dependency in another project is a valid external reference, but this registry cannot verify the power or control relationship it provides.',{confidence:'strong'}),
   driveParent:auditRule('logic.drive-parent-unexpected','logic','structure','Drive is not under its equipment','A VFD or motor starter nests under the equipment it drives (the pump, fan, or air handler), with its power feed kept as a dependency.',{confidence:'strong'}),
   vfdDependencies:auditRule('sop.vfd-dependencies','sop','dependencies','VFD missing panel or PLC dependency','Per the SOP a VFD lists its electrical panel and its PLC as dependencies.',{confidence:'strong'}),
   heatTraceChain:auditRule('logic.heat-trace-chain-missing','logic','structure','Heat trace chain is broken','Heat-trace panels sit under their transformer; heat-trace connection boxes sit under their panel or the upstream connection box.',{confidence:'strong'}),
@@ -124,6 +127,30 @@ function auditIsRoomSensor(row){return /ROOM (?:TEMPERATURE|HUMIDITY|PRESSURE|SE
 function auditIsLcp(row){return /LOCAL CONTROL PANEL|\bLCP\b/.test(auditDescription(row));}
 function auditIsFmsIo(row){return /FMS (?:HARDWIRED |)I\/?O|HARDWIRED I\/?O/.test(auditDescription(row));}
 function auditIsPipingRollup(row){return /PIPING|DUCTWORK|\bDUCT\b|PIPE ROLL|DISTRIBUTION PIPING/.test(auditDescription(row));}
+/* Shared semantic vocabulary for both the auditor and the compiler. The role
+   names are deliberately stable profile data; detection uses the approved
+   Equipment Description first and only then a precise classification code. */
+export function auditCommissioningRole(row){
+  const classification=auditNormId(row&&row.equipmentClassification);
+  if(auditIsFmsIo(row))return 'fms-io';
+  if(auditIsHeatTraceConnection(row))return 'heat-trace-connection';
+  if(auditIsHeatTracePanel(row))return 'heat-trace-panel';
+  if(auditIsVesda(row))return 'vesda';
+  if(auditIsFireAlarmPanel(row)||['FAP','FACP'].includes(classification))return 'fire-alarm-panel';
+  if(auditIsFdu(row)||classification==='FDU')return 'fdu';
+  if(auditIsControlValve(row))return 'control-valve';
+  if(auditIsRoomSensor(row))return 'room-sensor';
+  if(auditIsLcp(row)||classification==='LCP')return 'lcp';
+  if(auditIsVfd(row)||['VFD','AFD-VFD','AFD-VFD-CLN','AFD-VFD-DRTY'].includes(classification))return 'drive';
+  if(auditIsPlc(row)||classification==='PLC')return 'plc';
+  if(auditIsRio(row)||classification==='RIO')return 'rio';
+  if(auditIsTransformer(row)||['XFM','XFMR'].includes(classification))return 'transformer';
+  if(auditIsDrivenEquipment(row))return 'driven-equipment';
+  if(auditIsPanel(row))return 'panel';
+  if(auditIsInstrument(row))return 'instrument';
+  if(auditIsControlEquipment(row))return 'controller';
+  return '';
+}
 function auditControlExpectation(row){
   if(auditIsElectrical(row))return '';
   const description=auditDescription(row);
@@ -237,14 +264,12 @@ export function runSsmAudit(snapshot,options={}){
   const upnGroups=new Map(),milestoneGroups=new Map();
   const projectUsesMilestones=SSM_AUDIT_RULES.milestonePair.enabled&&rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
   const rowUpn=row=>auditNormId(row&&row.upn);
-  const populatedItemMasters=rows.filter(row=>clean(row.itemMaster)&&!auditIsBlankItemMaster(row));
-  const legacyItemMasterRegistry=populatedItemMasters.length>=50&&populatedItemMasters.filter(row=>!/^VF/.test(auditNormId(row.itemMaster))).length/populatedItemMasters.length>0.5;
   const isHeaderRow=row=>headerIds.has(auditNormId(row&&row.equipmentId));
   for(const row of rows){
     const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),status=extoRev21Canonical('closestParentStatus',row.closestParentStatus)||clean(row.closestParentStatus).toUpperCase();
     const upn=rowUpn(row);
     /* --- identity hygiene --- */
-    if(id&&SSM_AUDIT_RULES.tagLooksLikeText.enabled&&/[a-z]/.test(clean(row.equipmentId))&&/[a-z]{3,}/.test(clean(row.equipmentId))){checks++;
+    if(id&&!auditIsBlankItemMaster(row)&&SSM_AUDIT_RULES.tagLooksLikeText.enabled&&/[a-z]/.test(clean(row.equipmentId))&&/[a-z]{3,}/.test(clean(row.equipmentId))){checks++;
       add(SSM_AUDIT_RULES.tagLooksLikeText,'warning',row,{field:'Equipment ID',why:'This Equipment ID contains lowercase words — it reads like a description or header name, not a tag.',actual:row.equipmentId,expected:'An equipment tag code (or a header row with a Blank Item Master)',recommendation:'Replace with the real tag. If this is a grouping, keep it as a header row with a Blank Item Master and a code-style ID.'});}
     if(clean(row.equipmentClassification)&&SSM_AUDIT_RULES.siteClassification.enabled&&!extoRev21Canonical('equipmentClassification',row.equipmentClassification)){checks++;
       add(SSM_AUDIT_RULES.siteClassification,'info',row,{field:'Equipment Classification',why:`"${row.equipmentClassification}" is not in the VF Exto Upload Template classification dropdown. It may be a site-specific code.`,actual:row.equipmentClassification,expected:'A VF Exto Upload Template classification, or a site code that should be added to the list',recommendation:'Decide whether this code belongs on the approved list; if so, request it be added.'});}
@@ -273,10 +298,11 @@ export function runSsmAudit(snapshot,options={}){
     /* Letter-code rows (RR / SEC / MISC) are cross-cutting -- rooms and areas
        ride the milestone of the system they serve -- so only numeric-UPN rows
        are held to the milestone's UPN. */
-    if(clean(row.milestone)&&upn&&/^[0-9]+$/.test(upn)&&SSM_AUDIT_RULES.milestoneUpn.enabled){checks++;
+    const l2FieldHasL1=auditMilestoneLevelIssues(row).some(issue=>issue.field==='L2 Milestone');
+    if(clean(row.milestone)&&upn&&/^[0-9]+$/.test(upn)&&!isHeaderRow(row)&&!l2FieldHasL1&&(SSM_AUDIT_RULES.milestoneUpn.enabled||SSM_AUDIT_RULES.milestoneUpnUnknown.enabled)){checks++;
       const linked=extoRev21MilestoneUpns(row.milestone);
       if(linked.upns.length&&!linked.upns.includes(upn))add(SSM_AUDIT_RULES.milestoneUpn,'warning',row,{field:'L2 Milestone',why:`The L2 milestone belongs to UPN ${linked.upns.join('/')} (matched by ${linked.via}), but this row is on UPN ${row.upn}.`,actual:row.milestone,expected:`An L2 milestone for UPN ${row.upn}`,recommendation:'Confirm the row belongs to this L2 milestone; if not, assign the L2 milestone for its own UPN.'});
-      else if(!linked.upns.length&&/^[0-9]+$/.test(upn))add(SSM_AUDIT_RULES.milestoneUpn,'info',row,{field:'L2 Milestone',why:'The L2 milestone name does not point at any UPN or system, so it cannot be checked against this row.',actual:row.milestone,expected:`An L2 milestone naming UPN ${row.upn} or its system`,recommendation:'Confirm the milestone applies to this system.'});
+      else if(!linked.upns.length)add(SSM_AUDIT_RULES.milestoneUpnUnknown,'info',row,{field:'L2 Milestone',why:'The L2 milestone name does not point at any UPN or system, so it cannot be checked against this row.',actual:row.milestone,expected:`Confirmation that the L2 milestone applies to UPN ${row.upn}`,recommendation:'Confirm the milestone applies to this system; the name alone does not establish a mismatch.'});
     }
     if(row.milestone&&row.milestoneParent){
       if(SSM_AUDIT_RULES.milestoneIntent.enabled){const conflict=auditMilestoneConflict(row.milestoneParent,row.milestone);checks++;
@@ -328,24 +354,16 @@ export function runSsmAudit(snapshot,options={}){
       add(SSM_AUDIT_RULES.dependencyOnHeader,'warning',row,{field:'Dependencies',why:`${dependency} is an organizational header, not equipment.`,actual:dependency,expected:'The equipment inside the header that this row actually depends on',recommendation:'Point the dependency at the specific equipment instead of the header.',relatedEquipmentId:dependency});}
     if(SSM_AUDIT_RULES.staleDependencyProject.enabled&&clean(row.dependencyProject)&&dependencies.length&&dependencies.every(dependency=>rowsById.has(auditNormId(dependency)))){checks++;
       add(SSM_AUDIT_RULES.staleDependencyProject,'info',row,{field:'Dependency Project',why:'Dependency Project is filled in, but every dependency is a tag in this registry.',actual:row.dependencyProject,expected:'Blank unless a dependency lives in another project',recommendation:'Clear Dependency Project, or add the external dependency it refers to.'});}
-    /* --- item masters ---
-       Any site-prefixed name (CA_NB_…, SP_NB_…, EL_…) is a legacy assignment the
-       VF standard replaces; the VF equivalent is proposed by matching the name's
-       tail. When a registry is wholesale non-VF this is a migration, not 20,000
-       separate mistakes, so the per-row note drops to info — the count is the
-       signal, and the structural findings stay on top. */
-    if(SSM_AUDIT_RULES.itemMasterStandard.enabled&&clean(row.itemMaster)){checks++;
+    /* Site names are not invalid solely because of their prefix. A unique
+       catalog match is an optional migration lead, not a replacement mandate. */
+    if((SSM_AUDIT_RULES.itemMasterStandard.enabled||SSM_AUDIT_RULES.itemMasterMigration.enabled)&&clean(row.itemMaster)){checks++;
       const im=auditNormId(row.itemMaster),known=itemMasterVocabulary.some(value=>auditNormId(value)===im);
-      const legacy=/^[A-Z]{1,4}_/.test(im)&&!/^VF/.test(im);
-      /* A legacy site prefix is always reportable. A VF-looking name that is
-         merely absent from the list is only judged when a vocabulary is in
-         force — an explicit empty list means "do not judge unknown names". */
-      if(!known&&!auditIsBlankItemMaster(row)&&(legacy||itemMasterVocabulary.length)){
+      if(!known&&!auditIsBlankItemMaster(row)&&itemMasterVocabulary.length){
         const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,itemMasterVocabulary);
-        add(SSM_AUDIT_RULES.itemMasterStandard,legacyItemMasterRegistry?'info':'warning',row,{field:'Item Master Unique Identifier',
-          why:legacy?`This is a site-prefixed Item Master (${im.split('_')[0]}_). The VF standard name should be used.`:'This Item Master is not one of the approved VF names in the Standardized Item Master Template.',
-          actual:row.itemMaster,expected:candidates.length===1?candidates[0]:candidates.length?`One of: ${candidates.join(' | ')}`:'The matching VF_ Item Master',
-          recommendation:candidates.length===1?`Replace with ${candidates[0]}.`:'Replace with the VF Item Master that matches this equipment.'});
+        if(/^VF\d*(?:_|$)/.test(im))add(SSM_AUDIT_RULES.itemMasterStandard,'warning',row,{field:'Item Master Unique Identifier',
+          why:'This VF Item Master name is absent from the approved list available to this audit.',actual:row.itemMaster,expected:'An approved VF Item Master name',recommendation:'Confirm whether this name belongs to a newer approved list, or correct the assignment.'});
+        else if(candidates.length===1)add(SSM_AUDIT_RULES.itemMasterMigration,'info',row,{field:'Item Master Unique Identifier',
+          why:'This site or legacy Item Master has one matching VF name. The prefix alone does not make the current assignment wrong.',actual:row.itemMaster,expected:candidates[0],recommendation:`Optional migration: consider ${candidates[0]} only after confirming checklist equivalence and project approval.`});
       }
     }
   }
@@ -407,32 +425,46 @@ export function runSsmAudit(snapshot,options={}){
     }else if(blank&&!referenced){checks++;add(SSM_AUDIT_RULES.unusedHeader,'info',row,{field:'Equipment ID',why:'This row has a Blank Item Master (a header) but nothing nests under it.',actual:row.equipmentId,expected:'At least one piece of equipment nested under it',recommendation:'Attach the intended equipment, or remove the header if it is not needed.'});}
   }
   /* --- commissioning logic + SOP nesting --- */
-  const electricalSeeds=new Set(rows.filter(auditIsElectrical).map(row=>auditNormId(row.equipmentId)).filter(Boolean));
-  /* Power reaches a child through its parent's feed as well as its own: a fan
-     filter unit under an air handler that lists its panel is powered. So the
-     path walks precedence edges AND descends the parent tree from any reached row. */
-  const parentDown=new Map();for(const [child,list] of children)parentDown.set(child,new Set(list.map(row=>auditNormId(row.equipmentId))));
-  const pathEdges=new Map(precedenceEdges);for(const [from,set] of parentDown){const merged=new Set(pathEdges.get(from)||[]);for(const to of set)merged.add(to);pathEdges.set(from,merged);}
-  const electricalPath=auditReachableFrom(electricalSeeds,pathEdges);
+  const hasExternalReferences=row=>{
+    const parentId=auditNormId(row.closestParent);
+    return !!(parentId&&parentId!==auditNormId(row.systemName)&&!rowsById.has(parentId)&&extoRev21Canonical('closestParentStatus',row.closestParentStatus)==='EXISTING')||
+      !!clean(row.dependencyProject)&&auditReferences(row.dependencies).some(value=>!rowsById.has(auditNormId(value)));
+  };
+  const equipmentRows=rows.filter(row=>!auditIsBlankItemMaster(row)),supplyEdges=new Map();
+  /* Supply is independent of commissioning order. Real equipment may pass its
+     feed to children, but headers are barriers. Only a drive/starter has the
+     explicit reverse relationship of supplying the equipment it nests under. */
+  for(const row of equipmentRows){
+    const id=auditNormId(row.equipmentId),parentId=auditNormId(row.closestParent),parent=rowsById.get(parentId);
+    if(parent&&!auditIsBlankItemMaster(parent)&&parentId!==id){
+      addEdge(supplyEdges,parentId,id);
+      if(auditIsDriveOrStarter(row)&&auditIsDrivenEquipment(parent))addEdge(supplyEdges,id,parentId);
+    }
+    for(const reference of auditReferences(row.dependencies)){
+      const depId=auditNormId(reference),target=rowsById.get(depId);
+      if(target&&!auditIsBlankItemMaster(target)&&depId!==id&&(auditIsElectrical(target)||auditIsDriveOrStarter(target)||auditIsTransformer(target)||auditIsPanel(target)&&!auditIsController(target)))addEdge(supplyEdges,depId,id);
+    }
+  }
+  const electricalPath=auditReachableFrom(new Set(equipmentRows.filter(auditIsElectrical).map(row=>auditNormId(row.equipmentId)).filter(Boolean)),supplyEdges);
+  const externalSupplyPath=auditReachableFrom(new Set(equipmentRows.filter(hasExternalReferences).map(row=>auditNormId(row.equipmentId)).filter(Boolean)),supplyEdges);
   for(const row of rows){
-    const id=auditNormId(row.equipmentId);if(!id||isHeaderRow(row))continue;
-    const parent=rowsById.get(auditNormId(row.closestParent)),dependencyReferences=auditReferences(row.dependencies),dependencies=dependencyReferences.map(value=>rowsById.get(auditNormId(value))).filter(Boolean),hasExternalDependency=!!clean(row.dependencyProject)&&dependencyReferences.some(value=>!rowsById.has(auditNormId(value))),hasExternalParent=!parent&&extoRev21Canonical('closestParentStatus',row.closestParentStatus)==='EXISTING',related=[parent,...dependencies].filter(Boolean);
-    /* Nesting carries a relationship: what an ancestor is, or depends on, is
-       inherited by everything beneath it. A transmitter under the AHU that lists
-       the RIO, or an RIO inside a panel under the PLC, needs no dependency of
-       its own. `inherited` = every ancestor plus every ancestor's dependency. */
-    const ancestors=[];{const seen=new Set();let cursor=parent,guard=0;while(cursor&&guard++<64){const key=auditNormId(cursor.equipmentId);if(seen.has(key))break;seen.add(key);ancestors.push(cursor);cursor=rowsById.get(auditNormId(cursor.closestParent));}}
-    const inherited=ancestors.length?[...ancestors,...ancestors.flatMap(ancestor=>auditReferences(ancestor.dependencies).map(value=>rowsById.get(auditNormId(value))).filter(Boolean))]:[];
+    const id=auditNormId(row.equipmentId);if(!id||auditIsBlankItemMaster(row))continue;
+    const parent=rowsById.get(auditNormId(row.closestParent)),dependencyReferences=auditReferences(row.dependencies),dependencies=dependencyReferences.map(value=>rowsById.get(auditNormId(value))).filter(target=>target&&!auditIsBlankItemMaster(target)),hasExternalDependency=!!clean(row.dependencyProject)&&dependencyReferences.some(value=>!rowsById.has(auditNormId(value))),hasExternalParent=!!clean(row.closestParent)&&auditNormId(row.closestParent)!==auditNormId(row.systemName)&&!parent&&extoRev21Canonical('closestParentStatus',row.closestParentStatus)==='EXISTING',related=[parent,...dependencies].filter(target=>target&&!auditIsBlankItemMaster(target));
+    /* Real ancestors and their dependencies carry control relationships, but
+       an organizational header cannot supply or relay that evidence. */
+    const ancestors=[];{const seen=new Set([id]);let cursor=parent,guard=0;while(cursor&&!auditIsBlankItemMaster(cursor)&&guard++<64){const key=auditNormId(cursor.equipmentId);if(seen.has(key))break;seen.add(key);ancestors.push(cursor);cursor=rowsById.get(auditNormId(cursor.closestParent));}}
+    const inherited=ancestors.length?[...ancestors,...ancestors.flatMap(ancestor=>auditReferences(ancestor.dependencies).map(value=>rowsById.get(auditNormId(value))).filter(target=>target&&!auditIsBlankItemMaster(target)))]:[];
     const linkedTo=predicate=>related.some(predicate)||inherited.some(predicate);
+    const externalControlPath=hasExternalReferences(row)||ancestors.some(hasExternalReferences),unverified=new Set();
     const upn=rowUpn(row),parentIsSystem=!parent&&auditNormId(row.closestParent)===auditNormId(row.systemName);
     const controlExpectation=auditControlExpectation(row);
-    if(controlExpectation){checks++;if(!hasExternalDependency&&!hasExternalParent&&!linkedTo(auditIsController))add(SSM_AUDIT_RULES.controlLink,controlExpectation==='strong'?'warning':'info',row,{field:'Dependencies',why:'Nothing above this control device or in its dependencies points to what controls it (an RIO, PLC, VFD, or control panel).',actual:row.dependencies||'Blank',expected:'The control source as parent or dependency',recommendation:'Add the RIO, PLC, VFD, or control panel that runs this device.'});}
-    if(auditIsDrivenEquipment(row)){checks++;if(!hasExternalDependency&&!hasExternalParent&&!electricalPath.has(id))add(SSM_AUDIT_RULES.drivenElectricalPath,'warning',row,{field:'Dependencies',why:'There is no path from this equipment back to the electrical gear that powers it.',actual:row.dependencies||'Blank',expected:'A parent or dependency chain reaching its panel, starter, or VFD',recommendation:'Add the supplying panel, starter, or VFD as a dependency.'});}
-    if(!auditIsElectrical(row)&&auditIsControlEquipment(row)){checks++;if(!hasExternalDependency&&!hasExternalParent&&!electricalPath.has(id))add(SSM_AUDIT_RULES.controlElectricalPath,auditIsRio(row)?'warning':'info',row,{field:'Dependencies',why:'There is no path from this control equipment back to its power supply.',actual:row.dependencies||'Blank',expected:'A chain reaching its supplying panel, circuit, or transformer',recommendation:'Add the electrical equipment that powers it as a dependency.'});}
-    if(auditRequiresRioController(row)){checks++;if(!hasExternalDependency&&!hasExternalParent&&!linkedTo(auditIsController))add(SSM_AUDIT_RULES.rioControlPath,'warning',row,{field:'Dependencies',why:'Neither this RIO, nor anything above it in the tree, names the controller or upstream I/O that runs it.',actual:row.dependencies||'Blank',expected:'PLC, I/O cluster, or upstream RIO',recommendation:'Add the PLC or upstream I/O as a dependency.'});}
+    if(controlExpectation){checks++;if(!linkedTo(auditIsController)){if(externalControlPath)unverified.add('control source');else add(SSM_AUDIT_RULES.controlLink,controlExpectation==='strong'?'warning':'info',row,{field:'Dependencies',why:'Nothing above this control device or in its dependencies points to what controls it (an RIO, PLC, VFD, or control panel).',actual:row.dependencies||'Blank',expected:'The control source as parent or dependency',recommendation:'Add the RIO, PLC, VFD, or control panel that runs this device.'});}}
+    if(auditIsDrivenEquipment(row)){checks++;if(!electricalPath.has(id)){if(externalSupplyPath.has(id))unverified.add('power supply');else add(SSM_AUDIT_RULES.drivenElectricalPath,'warning',row,{field:'Dependencies',why:'There is no path from this equipment back to the electrical gear that powers it.',actual:row.dependencies||'Blank',expected:'A parent or dependency chain reaching its panel, starter, or VFD',recommendation:'Add the supplying panel, starter, or VFD as a dependency.'});}}
+    if(!auditIsElectrical(row)&&auditIsControlEquipment(row)){checks++;if(!electricalPath.has(id)){if(externalSupplyPath.has(id))unverified.add('power supply');else add(SSM_AUDIT_RULES.controlElectricalPath,auditIsRio(row)?'warning':'info',row,{field:'Dependencies',why:'There is no path from this control equipment back to its power supply.',actual:row.dependencies||'Blank',expected:'A chain reaching its supplying panel, circuit, or transformer',recommendation:'Add the electrical equipment that powers it as a dependency.'});}}
+    if(auditRequiresRioController(row)){checks++;if(!linkedTo(auditIsController)){if(externalControlPath)unverified.add('controller link');else add(SSM_AUDIT_RULES.rioControlPath,'warning',row,{field:'Dependencies',why:'Neither this RIO, nor anything above it in the tree, names the controller or upstream I/O that runs it.',actual:row.dependencies||'Blank',expected:'PLC, I/O cluster, or upstream RIO',recommendation:'Add the PLC or upstream I/O as a dependency.'});}}
     if(auditIsDriveOrStarter(row)){checks++;if(!parent||!auditIsDrivenEquipment(parent))add(SSM_AUDIT_RULES.driveParent,'warning',row,{field:'Closest Parent',why:'This drive or starter is not nested under the equipment it runs.',actual:parent?`${row.closestParent} (${parent.equipmentDescription||'no description'})`:(row.closestParent||'Blank'),expected:'The pump, fan, air handler, chiller, or similar equipment it drives',recommendation:'Move it under the equipment it drives and keep its power feed as a dependency.'});
-      if(auditIsVfd(row)&&SSM_AUDIT_RULES.vfdDependencies.enabled&&!hasExternalDependency){checks++;const hasPanel=dependencies.some(d=>auditIsPanel(d)&&!auditIsController(d))||dependencies.some(auditIsElectrical),hasPlc=dependencies.some(auditIsPlc)||dependencies.some(auditIsController);
-        if(!hasPanel||!hasPlc)add(SSM_AUDIT_RULES.vfdDependencies,'warning',row,{field:'Dependencies',why:`Per the SOP a VFD lists both its electrical panel and its PLC as dependencies. ${!hasPanel&&!hasPlc?'Neither is listed.':!hasPanel?'No electrical panel is listed.':'No PLC is listed.'}`,actual:row.dependencies||'Blank',expected:'The supplying panel and the controlling PLC',recommendation:'Add the missing panel or PLC as a dependency.'});}
+      if(auditIsVfd(row)&&SSM_AUDIT_RULES.vfdDependencies.enabled){checks++;const hasPanel=dependencies.some(d=>auditIsPanel(d)&&!auditIsController(d))||dependencies.some(auditIsElectrical),hasPlc=dependencies.some(auditIsPlc)||dependencies.some(auditIsController);
+        if(!hasPanel||!hasPlc){if(hasExternalDependency)unverified.add('VFD panel or PLC dependency');else add(SSM_AUDIT_RULES.vfdDependencies,'warning',row,{field:'Dependencies',why:`Per the SOP a VFD lists both its electrical panel and its PLC as dependencies. ${!hasPanel&&!hasPlc?'Neither is listed.':!hasPanel?'No electrical panel is listed.':'No PLC is listed.'}`,actual:row.dependencies||'Blank',expected:'The supplying panel and the controlling PLC',recommendation:'Add the missing panel or PLC as a dependency.'});}}
     }
     if(auditIsHeatTracePanel(row)){checks++;if(!parent||!auditIsTransformer(parent))add(SSM_AUDIT_RULES.heatTraceChain,'warning',row,{field:'Closest Parent',why:'This heat-trace panel is not nested under a transformer.',actual:parent?`${row.closestParent} (${parent.equipmentDescription||'no description'})`:(row.closestParent||'Blank'),expected:'The transformer that supplies it',recommendation:'Nest the panel under its supplying transformer.'});}
     if(auditIsHeatTraceConnection(row)){checks++;if(!parent||(!auditIsHeatTracePanel(parent)&&!auditIsHeatTraceConnection(parent)))add(SSM_AUDIT_RULES.heatTraceChain,'warning',row,{field:'Closest Parent',why:'This heat-trace connection box is not under its panel or the upstream connection box.',actual:parent?`${row.closestParent} (${parent.equipmentDescription||'no description'})`:(row.closestParent||'Blank'),expected:'A heat-trace panel or upstream connection box',recommendation:'Nest it in the correct heat-trace branch.'});}
@@ -442,7 +474,7 @@ export function runSsmAudit(snapshot,options={}){
          hangs off headers or the system root with nothing listed is unplaced. */
       let anchor=parent,guard=0;while(anchor&&isHeaderRow(anchor)&&guard++<64)anchor=rowsById.get(auditNormId(anchor.closestParent));
       if(!anchor&&!hasExternalParent&&!dependencyReferences.length)add(SSM_AUDIT_RULES.fduDependency,'warning',row,{field:'Dependencies',why:'This fiber distribution unit hangs off a header with nothing to say what it connects to.',actual:`Parent: ${row.closestParent||'blank'}; Dependencies: blank`,expected:'Nested under the PLC, RIO, or patch panel it belongs to, or that equipment named as a dependency',recommendation:'Nest the FDU under the PLC, RIO, or patch panel it belongs to in the same UPN, or add that equipment as a dependency.'});}
-    if(auditIsVesda(row)){checks++;if(!hasExternalDependency&&!dependencies.some(auditIsFireAlarmPanel)&&!inherited.some(auditIsFireAlarmPanel))add(SSM_AUDIT_RULES.vesdaFireAlarm,'error',row,{field:'Dependencies',why:'Per the SOP a VESDA system depends on its fire alarm panel; none is listed here or above it in the tree.',actual:row.dependencies||'Blank',expected:'The associated fire alarm panel',recommendation:'Add the fire alarm panel as a dependency.'});}
+    if(auditIsVesda(row)){checks++;if(!linkedTo(auditIsFireAlarmPanel)){if(externalControlPath)unverified.add('fire alarm panel');else add(SSM_AUDIT_RULES.vesdaFireAlarm,'error',row,{field:'Dependencies',why:'Per the SOP a VESDA system depends on its fire alarm panel; none is listed here or above it in the tree.',actual:row.dependencies||'Blank',expected:'The associated fire alarm panel',recommendation:'Add the fire alarm panel as a dependency.'});}}
     /* SOP nesting conventions — the tag's UPN is the guiderail */
     const tagUpns=extoRev21UpnCandidates(row.equipmentId),tagUpn=tagUpns.length===1?tagUpns[0]:'';
     if(auditIsInstrument(row)&&SSM_AUDIT_RULES.instrumentUpn.enabled&&tagUpn){checks++;
@@ -463,14 +495,16 @@ export function runSsmAudit(snapshot,options={}){
     if(auditIsRoomSensor(row)&&SSM_AUDIT_RULES.roomSensorParent.enabled&&(parentIsSystem||(parent&&auditNormId(parent.discipline)==='ROOM/AREA/BAY-READY'))){checks++;add(SSM_AUDIT_RULES.roomSensorParent,'warning',row,{field:'Closest Parent',why:'This room sensor is placed under the room or area rather than the equipment it controls.',actual:row.closestParent,expected:'The equipment this sensor controls (for example the air handler serving the room)',recommendation:'Nest the sensor under the equipment it controls.'});}
     if(auditIsLcp(row)&&SSM_AUDIT_RULES.lcpPlacement.enabled&&parent&&rowUpn(parent)&&upn&&rowUpn(parent)!==upn){checks++;add(SSM_AUDIT_RULES.lcpPlacement,'error',row,{field:'Closest Parent',why:`This local control panel is nested under equipment on UPN ${parent.upn}, but it is on UPN ${row.upn}.`,actual:`${row.closestParent} (UPN ${parent.upn})`,expected:`Its own equipment or skid in UPN ${row.upn}, or the System Name`,recommendation:'Nest the LCP under the equipment or skid it serves in its own UPN.',relatedEquipmentId:parent.equipmentId,relationship:{kind:'parent',nodes:[auditRelNode(row,'this'),auditRelNode(parent,'parent')]}});}
     if(auditIsFmsIo(row)&&SSM_AUDIT_RULES.fmsIoUnderVfd.enabled){checks++;const underVfd=parent&&auditIsVfd(parent),hasPlc=dependencies.some(auditIsPlc)||dependencies.some(auditIsController);
-      if(!underVfd||!hasPlc)add(SSM_AUDIT_RULES.fmsIoUnderVfd,'warning',row,{field:underVfd?'Dependencies':'Closest Parent',why:!underVfd?'This FMS hardwired I/O is not nested under a VFD.':'This FMS hardwired I/O does not list its PLC as a dependency.',actual:!underVfd?(row.closestParent||'Blank'):(row.dependencies||'Blank'),expected:!underVfd?'The VFD it is wired to':'The controlling PLC as a dependency',recommendation:!underVfd?'Nest it under its VFD, with the PLC as a dependency.':'Add the PLC as a dependency.'});}
+      if(!underVfd||!hasPlc){if((underVfd||hasExternalParent)&&(hasPlc||hasExternalDependency))unverified.add('FMS I/O VFD or PLC link');else add(SSM_AUDIT_RULES.fmsIoUnderVfd,'warning',row,{field:underVfd?'Dependencies':'Closest Parent',why:!underVfd?'This FMS hardwired I/O is not nested under a VFD.':'This FMS hardwired I/O does not list its PLC as a dependency.',actual:!underVfd?(row.closestParent||'Blank'):(row.dependencies||'Blank'),expected:!underVfd?'The VFD it is wired to':'The controlling PLC as a dependency',recommendation:!underVfd?'Nest it under its VFD, with the PLC as a dependency.':'Add the PLC as a dependency.'});}}
+    if(unverified.size)add(SSM_AUDIT_RULES.externalPathReview,'info',row,{field:hasExternalParent&&!hasExternalDependency?'Closest Parent':'Dependencies',why:`An external reference on this equipment or its supply/parent chain leaves these relationships unverified: ${[...unverified].join(', ')}.`,actual:`Parent: ${row.closestParent||'blank'}; Dependencies: ${row.dependencies||'blank'}`,expected:'Confirmed power and control relationships with the equipment in the other project',recommendation:'Review the external equipment and document which power or control links it supplies; an external reference alone does not prove these links.'});
   }
   findings.sort((a,b)=>(SSM_AUDIT_SEVERITY_RANK[a.severity]-SSM_AUDIT_SEVERITY_RANK[b.severity])||natCmp(a.category,b.category)||natCmp(a.equipmentId,b.equipmentId)||a.row-b.row||natCmp(a.rule.id,b.rule.id));
   const severity=Object.fromEntries(SSM_AUDIT_SEVERITIES.map(level=>[level,findings.filter(finding=>finding.severity===level).length]));
   const category=Object.fromEntries(SSM_AUDIT_CATEGORIES.map(name=>[name,findings.filter(finding=>finding.category===name).length]));
   const source=Object.fromEntries(SSM_AUDIT_SOURCES.map(item=>[item.id,findings.filter(finding=>finding.rule.source===item.id).length]));
+  const unverified=findings.filter(finding=>finding.rule.id===SSM_AUDIT_RULES.externalPathReview.id).length;
   return Object.freeze({schemaVersion:1,standard:SSM_AUDIT_STANDARD,rows:Object.freeze([...rows]),findings:Object.freeze(findings),headerIds:Object.freeze([...headerIds]),
-    summary:Object.freeze({rows:rows.length,checks,findings:findings.length,severity:Object.freeze(severity),category:Object.freeze(category),source:Object.freeze(source),status:severity.blocker?'blocked':severity.error||severity.warning?'review':'ready'})});
+    summary:Object.freeze({rows:rows.length,checks,findings:findings.length,severity:Object.freeze(severity),category:Object.freeze(category),source:Object.freeze(source),unverified,status:severity.blocker?'blocked':severity.error||severity.warning||unverified?'review':'ready'})});
 }
 /* A parented row without a Blank Item Master is only called out as a probable
    header when it reads like one: no description of its own equipment kind and

@@ -158,3 +158,11 @@ test('setting individual findings aside removes exactly those findings and recou
     assert.notEqual(unblocked.summary.status, 'blocked', 'status recomputes once every blocker is set aside')
   }
 })
+test('hiding blockers never calls remaining errors ready and all summary dimensions recount',()=>{
+  const raw=loadFixture(),blockerRules=[...new Set(raw.findings.filter(f=>f.severity==='blocker').map(f=>f.rule.id))];
+  const filtered=applyRulePreferences(raw,blockerRules);
+  if(filtered.summary.severity.error||filtered.summary.severity.warning)assert.equal(filtered.summary.status,'review');
+  for(const field of ['severity','category','source'])assert.equal(Object.values(filtered.summary[field]).reduce((a,b)=>a+b,0),filtered.findings.length);
+  const excluded=applyFindingExclusions(filtered,new Set(filtered.findings.slice(0,3).map(f=>f.id)));
+  for(const field of ['severity','category','source'])assert.equal(Object.values(excluded.summary[field]).reduce((a,b)=>a+b,0),excluded.findings.length);
+});

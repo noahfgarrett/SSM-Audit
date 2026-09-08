@@ -4,6 +4,7 @@ import { EXTO_REV21_COLUMNS, extoRev21Norm } from '../exto/rev21-contract.js'
 
 export const SSM_AUDIT_SCHEMA_VERSION=1;
 export function auditNormId(value){return clean(value).replace(/\s+/g,' ').toUpperCase();}
+export function auditSourceKey(row){return JSON.stringify([row._source?.sheet||'',row._source?.row||0]);}
 export function auditSplitReferences(value){return clean(value).split(/\s*;\s*/).map(clean).filter(Boolean);}
 export function auditColumnName(index){return XLSX.utils.encode_col(index);}
 
@@ -45,12 +46,24 @@ export function auditSnapshotFromAoa(aoa,source={}){
 }
 
 export function auditMergeSnapshots(snapshots,fileName){
-  const rows=[],seenRows=new Set();let ignoredDuplicateRows=0;
+  const rows=[],groups=new Map(),retainedRows=new Map();let ignoredDuplicateRows=0;
   for(const snapshot of snapshots)for(const row of snapshot.rows){
-    const signature=EXTO_REV21_COLUMNS.map(column=>auditNormId(row[column.field])).join('\u001f');
-    if(seenRows.has(signature)){ignoredDuplicateRows++;continue;}
-    seenRows.add(signature);rows.push(row);
+    const signature=JSON.stringify(EXTO_REV21_COLUMNS.map(column=>clean(row[column.field])));
+    const sheets=groups.get(signature)||new Map(),sheet=row._source?.sheet||snapshot.source?.sheet||'';
+    const occurrences=sheets.get(sheet)||[];occurrences.push(row);sheets.set(sheet,occurrences);groups.set(signature,sheets);
   }
+  /* Match copies by occurrence, not just by value. Keep a complete source sheet's
+     largest duplicate group so summary tabs cannot erase duplicate-ID evidence. */
+  for(const sheets of groups.values()){
+    const copies=[...sheets.values()];let primary=copies[0];
+    for(const occurrences of copies)if(occurrences.length>primary.length)primary=occurrences;
+    ignoredDuplicateRows+=copies.reduce((count,occurrences)=>count+occurrences.length,0)-primary.length;
+    for(let index=0;index<primary.length;index++){
+      const row=primary[index],sources=[row._source,...copies.filter(occurrences=>occurrences!==primary&&occurrences[index]).map(occurrences=>occurrences[index]._source)].filter(Boolean);
+      retainedRows.set(row,Object.freeze({...row,_sources:Object.freeze(sources)}));
+    }
+  }
+  for(const snapshot of snapshots)for(const row of snapshot.rows)if(retainedRows.has(row))rows.push(retainedRows.get(row));
   const missingHeaders=[...new Set(snapshots.flatMap(snapshot=>snapshot.missingHeaders))],missingHeaderEntries=snapshots.flatMap(snapshot=>snapshot.missingHeaderEntries);
   return Object.freeze({schemaVersion:SSM_AUDIT_SCHEMA_VERSION,source:Object.freeze({file:clean(fileName),sheets:Object.freeze(snapshots.map(snapshot=>snapshot.source.sheet)),ignoredDuplicateRows}),
     snapshots:Object.freeze(snapshots),rows:Object.freeze(rows),missingHeaders:Object.freeze(missingHeaders),missingHeaderEntries:Object.freeze(missingHeaderEntries)});

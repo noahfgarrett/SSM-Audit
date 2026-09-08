@@ -4,9 +4,19 @@ import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
-import { auditSnapshotFromAoa } from '../src/audit/model.js'
+import { auditMergeSnapshots, auditSnapshotFromAoa, auditSnapshotFromWorkbook } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook } from '../src/audit/export.js'
+import { auditMakeCorrection } from '../src/audit/actions.js'
+import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx } from '../src/audit/export.js'
+import { S, resetSession } from '../src/state.js'
+
+// Package tests use the browser's XML DOM, or @xmldom/xmldom supplied by this
+// optional test-only module path. The offline application has no new dependency.
+if (process.env.SSM_EXPORT_XML_DOM) {
+  const { DOMParser, XMLSerializer } = await import(process.env.SSM_EXPORT_XML_DOM)
+  Object.assign(globalThis, { DOMParser, XMLSerializer })
+}
+const packageTest = (name, fn) => test(name, { skip: typeof DOMParser !== 'function' && 'Set SSM_EXPORT_XML_DOM to an XML DOM module to run package-preservation tests' }, fn)
 
 /* The application loads SheetJS as a plain browser script into one shared realm.
    Tests evaluate the vendored copy the same way so the modules find the global
@@ -554,7 +564,7 @@ test('findings actioned in the app arrive pre-ticked in the report', () => {
   assert.equal(lines[tags.indexOf(other)][0], '☐')
 })
 
-test('staged changes are written into the original workbook cells and nothing else moves', () => {
+test('a unique legacy tag is accepted and original cell formatting is retained', () => {
   const aoa = [
     headers,
     row({ equipmentId: 'B1-PMP-1', closestParent: '111  Chilled Water (R/S)', closestParentStatus: 'NEW', upn: '111', discipline: 'MECHANICAL WET', systemName: '279  CCW', equipmentDescription: 'Pump' }),
@@ -562,17 +572,538 @@ test('staged changes are written into the original workbook cells and nothing el
   ]
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(aoa), 'Full Export')
-  const snapshot = auditSnapshotFromAoa(aoa, { file: 'reg.xlsx', sheet: 'Full Export' })
+  const snapshot = auditSnapshotFromAoa(aoa, { sheet: 'Full Export' })
+  const originalStyle = { font: { bold: true }, fill: { fgColor: { rgb: 'ABCDEF' } } }
+  workbook.Sheets['Full Export'][XLSX.utils.encode_cell({ r: 1, c: index.systemName })].s = originalStyle
   const applied = applyChangesToWorkbook(workbook, snapshot, [
     { tag: 'B1-PMP-1', field: 'System Name', header: 'System Name', value: '111  Chilled Water (R/S)' },
-    { tag: 'NOT-A-TAG', field: 'System Name', header: 'System Name', value: 'x' },
   ])
-  assert.equal(applied, 1, 'unknown tags are skipped, real ones written')
+  assert.equal(applied, 1)
   const sheet = workbook.Sheets['Full Export']
   const col = index.systemName
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: col })].v, '111  Chilled Water (R/S)', 'the staged value landed in the right cell')
-  assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: col })].s?.fill?.fgColor?.rgb, 'FFF2C2', 'the changed cell is shaded light yellow')
+  assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: col })].s, originalStyle, 'corrections do not replace original formatting')
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 2, c: col })].s, undefined, 'untouched cells keep no highlight')
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 2, c: col })].v, '111  Chilled Water (R/S)', 'the untouched row keeps its value')
   assert.equal(sheet[XLSX.utils.encode_cell({ r: 1, c: index.equipmentDescription })].v, 'Pump', 'other columns stay as they were')
+})
+
+function correctionFixture(tags = ['EQ-1', 'EQ-2']) {
+  const aoa = [headers, ...tags.map((equipmentId, at) => row({ equipmentId, closestParent: 'ROOT', upn: '100', systemName: `Before ${at + 1}`, discipline: at ? 'Electrical' : 'Mechanical', milestone: at ? 'Phase B' : 'Phase A' }))]
+  const book = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(aoa), 'Registry')
+  const snapshot = auditSnapshotFromAoa(aoa, { sheet: 'Registry' })
+  return { book, snapshot, aoa }
+}
+function correction(snapshot, at = 0, value = 'After', prop = 'systemName') {
+  const row = snapshot.rows[at], column = EXTO_REV21_COLUMNS.find(column => column.field === prop)
+  return { tag: row.equipmentId, field: column.header, header: column.header, prop, before: row[prop], value, source: { sheet: row._source.sheet, row: row._source.row, columns: { ...row._source.columns } }, ruleId: 'synthetic-rule', findingId: `finding-${at}` }
+}
+function addressOf(change) { return XLSX.utils.encode_cell({ r: change.source.row - 1, c: change.source.columns[change.prop] }) }
+function failsAtomically(book, snapshot, changes, code) {
+  const before = structuredClone(book)
+  assert.throws(() => validateAuditCorrections(book, snapshot, changes), error => error.code === code)
+  assert.deepEqual(book, before, 'preview preflight must not modify any cell or worksheet metadata')
+  assert.throws(() => applyChangesToWorkbook(book, snapshot, changes), error => error.code === code)
+  assert.deepEqual(book, before, 'failed preflight must not modify any cell or worksheet metadata')
+}
+
+function mirroredCorrectionFixture(count = 1) {
+  const values = row({ equipmentId: 'EQ-1', closestParent: 'ROOT', upn: '100', systemName: 'Before', equipmentDescription: 'Synthetic equipment' })
+  const registry = [headers, ...Array.from({ length: count }, () => [...values])]
+  const summary = [[...headers].reverse(), ...Array.from({ length: count }, () => [...values].reverse())]
+  const rowNums = [3, ...Array.from({ length: count }, (_, at) => 6 + at * 3)], physicalSummary = []
+  summary.forEach((row, at) => { physicalSummary[rowNums[at]] = row })
+  const primary = auditSnapshotFromAoa(registry, { sheet: 'Registry' }), mirror = auditSnapshotFromAoa(summary, { sheet: 'Summary', rowNums })
+  const book = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(registry), 'Registry')
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(physicalSummary), 'Summary')
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Unchanged note']]), 'Notes')
+  return { book, primary, mirror, snapshot: auditMergeSnapshots([primary, mirror], '') }
+}
+
+test('correction preview reports logical corrections and unique mirrored cells without mutating any input', () => {
+  const { book, snapshot } = mirroredCorrectionFixture(2), change = correction(snapshot, 1)
+  const changes = [change, structuredClone(change)], before = structuredClone({ book, snapshot, changes })
+  assert.deepEqual(validateAuditCorrections(book, snapshot, changes), { correctionCount: 2, cellCount: 2, sheetCount: 2 })
+  assert.deepEqual(validateAuditCorrections(book, snapshot, changes), { correctionCount: 2, cellCount: 2, sheetCount: 2 })
+  assert.deepEqual({ book, snapshot, changes }, before)
+})
+
+test('correction preview returns zero for an empty batch and counts distinct cells on one sheet', () => {
+  const { book, snapshot } = correctionFixture()
+  assert.deepEqual(validateAuditCorrections(book, snapshot, []), { correctionCount: 0, cellCount: 0, sheetCount: 0 })
+  assert.deepEqual(validateAuditCorrections(book, snapshot, [correction(snapshot), correction(snapshot, 1)]), { correctionCount: 2, cellCount: 2, sheetCount: 1 })
+})
+
+test('canonical corrections update proven mirrored rows using each physical column and row mapping', () => {
+  const { book, snapshot, mirror } = mirroredCorrectionFixture(), change = correction(snapshot), before = JSON.stringify(snapshot)
+  assert.equal(snapshot.rows[0]._sources.length, 2)
+  assert.equal(applyChangesToWorkbook(book, snapshot, [change]), 1, 'return count remains logical corrections')
+  assert.equal(book.Sheets.Registry[addressOf(change)].v, 'After')
+  assert.equal(book.Sheets.Summary[addressOf(correction(mirror))].v, 'After')
+  assert.notEqual(change.source.columns.systemName, mirror.rows[0]._source.columns.systemName)
+  assert.equal(mirror.rows[0]._source.row, 7)
+  assert.equal(JSON.stringify(snapshot), before, 'the canonical and leaf baselines remain immutable')
+})
+
+test('same-sheet identical duplicates remain distinct and only the selected occurrence and its mirror change', () => {
+  const { book, snapshot, primary, mirror } = mirroredCorrectionFixture(2), change = correction(snapshot, 1)
+  assert.equal(snapshot.rows.length, 2)
+  applyChangesToWorkbook(book, snapshot, [change])
+  for (const source of [primary, mirror]) {
+    assert.equal(book.Sheets[source.source.sheet][addressOf(correction(source))].v, 'Before')
+    assert.equal(book.Sheets[source.source.sheet][addressOf(correction(source, 1))].v, 'After')
+  }
+})
+
+test('a stale mirrored row aborts all corrections even when only an untargeted field differs', () => {
+  const { book, snapshot, mirror } = mirroredCorrectionFixture(2)
+  book.Sheets.Summary[addressOf(correction(mirror, 1, '', 'equipmentDescription'))].v = 'Different equipment'
+  failsAtomically(book, snapshot, [correction(snapshot), correction(snapshot, 1)], 'CONFLICT')
+})
+
+test('mirrored target conflicts, missing sheets, and formulas never produce a partial correction', () => {
+  for (const kind of ['conflict', 'missing', 'formula']) {
+    const { book, snapshot, mirror } = mirroredCorrectionFixture(2), target = book.Sheets.Summary[addressOf(correction(mirror, 1))]
+    if (kind === 'conflict') target.v = 'Different original value'
+    if (kind === 'missing') delete book.Sheets.Summary
+    if (kind === 'formula') target.f = '"Before"'
+    failsAtomically(book, snapshot, [correction(snapshot), correction(snapshot, 1)], { conflict: 'CONFLICT', missing: 'SHEET', formula: 'FORMULA' }[kind])
+  }
+})
+
+test('unproven or same-sheet mirror claims are rejected instead of expanding by tag', () => {
+  const { book, snapshot, primary, mirror } = mirroredCorrectionFixture(2)
+  const altered = sources => ({ ...snapshot, rows: [{ ...snapshot.rows[0], _sources: sources }] })
+  failsAtomically(book, altered([primary.rows[0]._source, primary.rows[1]._source]), [correction(snapshot)], 'AMBIGUOUS')
+  const wrongColumns = { ...mirror.rows[0]._source, columns: { ...mirror.rows[0]._source.columns, systemName: 0 } }
+  failsAtomically(book, altered([primary.rows[0]._source, wrongColumns]), [correction(snapshot)], 'COLUMN')
+  const withoutProof = { rows: snapshot.rows }
+  failsAtomically(book, withoutProof, [correction(snapshot)], 'SOURCE')
+  const different = { ...mirror.rows[0], equipmentDescription: 'Not identical' }
+  const falseProof = { ...snapshot, snapshots: [primary, { ...mirror, rows: [different, mirror.rows[1]] }] }
+  failsAtomically(book, falseProof, [correction(snapshot)], 'BASELINE')
+})
+
+test('explicit writes that conflict with a canonical mirror correction fail atomically', () => {
+  const { book, snapshot, mirror } = mirroredCorrectionFixture()
+  failsAtomically(book, snapshot, [correction(snapshot), correction(mirror, 0, 'Conflicting after')], 'CONFLICT')
+})
+
+test('an unknown correction rejects the whole batch without silently skipping it', () => {
+  const { book, snapshot } = correctionFixture()
+  failsAtomically(book, snapshot, [correction(snapshot), { tag: 'MISSING', header: 'System Name', value: 'After' }], 'SOURCE')
+})
+
+test('duplicate tags require exact physical source identity', () => {
+  const { book, snapshot } = correctionFixture(['DUPLICATE', 'DUPLICATE'])
+  failsAtomically(book, snapshot, [{ tag: 'duplicate', header: 'System Name', value: 'After' }], 'AMBIGUOUS')
+  const change = correction(snapshot, 1)
+  assert.equal(applyChangesToWorkbook(book, snapshot, [change]), 1)
+  assert.equal(book.Sheets.Registry[addressOf(change)].v, 'After')
+  assert.equal(book.Sheets.Registry[addressOf(correction(snapshot))].v, 'Before 1')
+})
+
+test('source targeting distinguishes duplicate tags on different sheets, including deduplicated imports', () => {
+  const first = correctionFixture(['DUPLICATE']), second = correctionFixture(['DUPLICATE'])
+  XLSX.utils.book_append_sheet(first.book, second.book.Sheets.Registry, 'Other')
+  const secondSnapshot = auditSnapshotFromAoa(second.aoa, { sheet: 'Other' })
+  const merged = { rows: first.snapshot.rows, snapshots: [first.snapshot, secondSnapshot] }
+  failsAtomically(first.book, merged, [{ tag: 'DUPLICATE', header: 'System Name', value: 'After' }], 'AMBIGUOUS')
+  applyChangesToWorkbook(first.book, merged, [correction(secondSnapshot)])
+  assert.equal(first.book.Sheets.Other[addressOf(correction(secondSnapshot))].v, 'After')
+  assert.equal(first.book.Sheets.Registry[addressOf(correction(first.snapshot))].v, 'Before 1')
+})
+
+test('physical row numbers and imported column mappings override decoy headers and contract positions', () => {
+  const values = row({ equipmentId: 'EQ-1', closestParent: 'ROOT', upn: '100', systemName: 'Before' }).reverse()
+  const compressed = [[...headers].reverse(), values], snapshot = auditSnapshotFromAoa(compressed, { sheet: 'Registry', rowNums: [39, 72] })
+  const physical = [headers]
+  physical[39] = compressed[0]; physical[72] = values
+  const book = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(physical), 'Registry')
+  const change = correction(snapshot)
+  applyChangesToWorkbook(book, snapshot, [change])
+  assert.equal(book.Sheets.Registry[addressOf(change)].v, 'After')
+  assert.equal(change.source.row, 73)
+  assert.notEqual(change.source.columns.systemName, index.systemName)
+  assert.deepEqual(grid(book.Sheets.Registry)[0], headers)
+})
+
+test('source-targeted corrections never fall back to tags or guessed columns', () => {
+  const { book, snapshot } = correctionFixture()
+  const wrongSheet = correction(snapshot); wrongSheet.source.sheet = 'Missing'
+  failsAtomically(book, snapshot, [wrongSheet], 'SOURCE')
+  const wrongRow = correction(snapshot); wrongRow.source.row++
+  failsAtomically(book, snapshot, [wrongRow], 'SOURCE')
+  const wrongColumns = correction(snapshot); wrongColumns.source.columns.systemName++
+  failsAtomically(book, snapshot, [wrongColumns], 'COLUMN')
+  const missingColumns = correction(snapshot); delete missingColumns.source.columns
+  failsAtomically(book, snapshot, [missingColumns], 'COLUMN')
+  const missingBefore = correction(snapshot); delete missingBefore.before
+  failsAtomically(book, snapshot, [missingBefore], 'BEFORE')
+  const mismatchedField = correction(snapshot); mismatchedField.header = 'Discipline'
+  failsAtomically(book, snapshot, [mismatchedField], 'FIELD')
+})
+
+test('a changed baseline or old workbook cell stops the entire correction batch', () => {
+  const { book, snapshot } = correctionFixture(), first = correction(snapshot), second = correction(snapshot, 1)
+  failsAtomically(book, snapshot, [first, { ...second, before: 'Not original' }], 'BASELINE')
+  book.Sheets.Registry[addressOf(second)].v = 'Changed outside baseline'
+  failsAtomically(book, snapshot, [first, second], 'CONFLICT')
+  const draft = { ...snapshot, rows: snapshot.rows.map(row => ({ ...row, systemName: 'After' })) }
+  failsAtomically(book, draft, [first], 'BASELINE')
+})
+
+test('conflicting writes to a cell fail while repeated identical corrections are accounted for', () => {
+  const { book, snapshot } = correctionFixture(), change = correction(snapshot)
+  failsAtomically(book, snapshot, [change, { ...change, value: 'Other after' }], 'CONFLICT')
+  assert.equal(applyChangesToWorkbook(book, snapshot, [change, { ...change }]), 2)
+})
+
+test('formula, merged, unsupported, and missing-sheet targets reject before mutation', () => {
+  const { book, snapshot } = correctionFixture(), first = correction(snapshot), second = correction(snapshot, 1)
+  book.Sheets.Registry[addressOf(second)].f = '"Before 2"'
+  failsAtomically(book, snapshot, [first, second], 'FORMULA')
+  delete book.Sheets.Registry[addressOf(second)].f
+  const cell = XLSX.utils.decode_cell(addressOf(second))
+  book.Sheets.Registry['!merges'] = [{ s: cell, e: { r: cell.r, c: cell.c + 1 } }]
+  failsAtomically(book, snapshot, [first, second], 'MERGED')
+  delete book.Sheets.Registry['!merges']
+  for (const value of [undefined, NaN, Infinity, {}, '\u0000', '\uD800', 'x'.repeat(32768)]) failsAtomically(book, snapshot, [first, { ...second, value }], 'VALUE')
+  delete book.Sheets.Registry
+  failsAtomically(book, snapshot, [first], 'SHEET')
+})
+
+test('blank cells and typed replacement values are written without mutating the baseline', () => {
+  const { book, snapshot } = correctionFixture(), before = JSON.stringify(snapshot)
+  const change = correction(snapshot, 0, 0, 'dependencies')
+  delete book.Sheets.Registry[addressOf(change)]
+  applyChangesToWorkbook(book, snapshot, [change, correction(snapshot, 1, false, 'dependencies')])
+  assert.equal(book.Sheets.Registry[addressOf(change)].v, 0)
+  assert.equal(book.Sheets.Registry[addressOf(change)].t, 'n')
+  assert.equal(book.Sheets.Registry[addressOf(correction(snapshot, 1, '', 'dependencies'))].t, 'b')
+  assert.equal(JSON.stringify(snapshot), before)
+})
+
+test('action corrections use the imported trim contract for both targeted and untargeted whitespace', () => {
+  for (const field of ['UPN', 'System Name']) {
+    const aoa = [headers, row({ equipmentId: 'EQ-1', closestParent: 'ROOT', upn: '602', systemName: '602  Medium Voltage ' })]
+    const book = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(aoa), 'Registry')
+    const snapshot = auditSnapshotFromAoa(aoa, { sheet: 'Registry' }), change = auditMakeCorrection(snapshot.rows[0], field, field === 'UPN' ? '603' : '603  Low Voltage')
+    assert.deepEqual(validateAuditCorrections(book, snapshot, [change]), { correctionCount: 1, cellCount: 1, sheetCount: 1 })
+    assert.equal(applyChangesToWorkbook(book, snapshot, [change]), 1)
+    assert.equal(book.Sheets.Registry[addressOf(change)].v, change.value)
+    if (field === 'UPN') assert.equal(book.Sheets.Registry[XLSX.utils.encode_cell({ r: 1, c: index.systemName })].v, '602  Medium Voltage ', 'untargeted original whitespace remains intact')
+  }
+})
+
+test('formatted numeric before values match import without trusting cached display text or mutating cells', async () => {
+  const { book } = correctionFixture(), address = XLSX.utils.encode_cell({ r: 1, c: index.upn })
+  book.Sheets.Registry[address] = { t: 'n', v: 602, z: '0000', w: '0602' }
+  const snapshot = await auditSnapshotFromWorkbook(book, ''), change = auditMakeCorrection(snapshot.rows[0], 'UPN', '603'), before = structuredClone(book)
+  assert.equal(change.before, '0602')
+  assert.deepEqual(validateAuditCorrections(book, snapshot, [change]), { correctionCount: 1, cellCount: 1, sheetCount: 1 })
+  assert.deepEqual(book, before)
+  book.Sheets.Registry[address].v = 604
+  failsAtomically(book, snapshot, [change], 'CONFLICT')
+})
+
+test('normalized before comparison still rejects internal whitespace and meaningful value changes', () => {
+  const { book, snapshot } = correctionFixture(), change = correction(snapshot)
+  for (const value of ['Before  1', 'Before 2', 'before 1']) {
+    book.Sheets.Registry[addressOf(change)].v = value
+    failsAtomically(book, snapshot, [change], 'CONFLICT')
+  }
+})
+
+test('proven mirrors may have different surrounding whitespace without blocking canonical corrections', () => {
+  const { book, snapshot, mirror } = mirroredCorrectionFixture()
+  book.Sheets.Summary[addressOf(correction(mirror))].v = ' Before '
+  assert.deepEqual(validateAuditCorrections(book, snapshot, [correction(snapshot)]), { correctionCount: 1, cellCount: 2, sheetCount: 2 })
+  applyChangesToWorkbook(book, snapshot, [correction(snapshot)])
+  assert.equal(book.Sheets.Summary[addressOf(correction(mirror))].v, 'After')
+})
+
+test('read-only target sheets fail before another sheet can be changed', () => {
+  const first = correctionFixture(), second = correctionFixture()
+  XLSX.utils.book_append_sheet(first.book, Object.freeze(second.book.Sheets.Registry), 'Other')
+  const otherSnapshot = auditSnapshotFromAoa(second.aoa, { sheet: 'Other' })
+  const baseline = { rows: [...first.snapshot.rows, ...otherSnapshot.rows] }
+  failsAtomically(first.book, baseline, [correction(first.snapshot), correction(otherSnapshot)], 'WORKBOOK')
+})
+
+test('correction log and review actions retain before, after, reason, owner, physical source and distinct statuses', () => {
+  const { snapshot } = correctionFixture(), change = correction(snapshot, 0, '=literal text')
+  const history = [
+    { id: 'review-1', at: '2026-01-05T09:00:00Z', owner: 'Reviewer', reason: 'Confirmed original metadata', disposition: 'corrected-draft', findingIds: [change.findingId], changes: [change] },
+    { id: 'review-2', at: '2026-01-05T09:10:00Z', owner: 'Reviewer', reason: 'Checked without editing', disposition: 'reviewed', findingIds: ['review-only'], changes: [] },
+    { id: 'review-3', at: '2026-01-05T09:20:00Z', owner: 'Reviewer', reason: 'Approved exception', disposition: 'exception', findingIds: ['exception-only'], changes: [] },
+  ]
+  const book = buildAuditCorrectionsWorkbook([change], history), log = grid(book.Sheets['Correction Log']), actions = grid(book.Sheets.Actions)
+  assert.deepEqual(book.SheetNames, ['Correction Log', 'Actions'])
+  assert.deepEqual(log[1].slice(0, 10), ['EQ-1', 'System Name', 'Before 1', '=literal text', 'Confirmed original metadata', 'Registry', 2, 'J', 'J2', 'Staged in draft'])
+  assert.equal(book.Sheets['Correction Log'].D2.f, undefined, 'formula-like review data stays literal text')
+  assert.equal(log[1][10], 'Reviewer')
+  assert.equal(actions.length, 4)
+  assert.deepEqual(actions.slice(1).map(row => row[3]), ['Corrected in draft', 'Reviewed', 'Exception'])
+  assert.deepEqual(actions.slice(1).map(row => row[4]), history.map(entry => entry.reason))
+  assert.equal(book.Sheets.Actions['!freeze'], 'A2')
+  assert.ok(book.Sheets['Correction Log']['!autofilter'])
+})
+
+test('tracker retains resolved and reviewed baseline findings and adds new draft findings without before-after duplicates', () => {
+  const { snapshot } = correctionFixture(['DUPLICATE', 'DUPLICATE'])
+  const finding = (id, at, ruleId) => ({ id, equipmentId: 'DUPLICATE', sheet: 'Registry', row: at + 2, rule: { id: ruleId } })
+  const baseline = { rows: snapshot.rows, findings: [finding('resolved', 0, 'rule-a'), finding('reviewed', 1, 'rule-b'), finding('open', 1, 'rule-c')] }
+  const current = { rows: snapshot.rows.map(row => ({ ...row, milestone: 'Changed draft milestone' })), findings: [finding('after-review', 1, 'rule-b'), finding('open', 1, 'rule-c'), finding('new', 0, 'rule-new')] }
+  const sheet = buildAuditTrackerWorkbook(current, '', { baselineResult: baseline, actionedIds: new Set(['reviewed']), draftResolvedIds: new Set(['resolved']) }).Sheets.Tracker
+  const lines = grid(sheet).slice(8)
+  assert.deepEqual(lines.map(row => row.slice(0, 3)), [['Phase A', 2, 1], ['Phase B', 2, 1]])
+  assert.equal(sheet.E6.f, `COUNTIF(F9:F10,"${AUDIT_EXPORT_TICK}")/2`, 'the overall bar still follows manual milestone ticks')
+  assert.match(sheet['!xmlExtras'].dataValidations[0], /sqref="F9:F10"/)
+  assert.deepEqual(grid(sheet)[7].slice(6), ['Electrical', 'Mechanical'])
+  const completed = buildAuditTrackerWorkbook({ rows: snapshot.rows, findings: [] }, '', { baselineResult: baseline, actionedIds: ['reviewed', 'open'], draftResolvedIds: ['resolved'] }).Sheets.Tracker
+  assert.deepEqual(grid(completed).slice(8).map(row => [row[1], row[2], row[5]]), [[1, 1, AUDIT_EXPORT_TICK], [2, 2, AUDIT_EXPORT_TICK]])
+})
+
+test('tracker honors rule and completed-equipment scope while retaining explicitly reviewed exceptions', () => {
+  const { snapshot } = correctionFixture()
+  const finding = (id, at, rule) => ({ id, equipmentId: snapshot.rows[at].equipmentId, sheet: 'Registry', row: at + 2, rule: { id: rule } })
+  const baseline = { rows: snapshot.rows, findings: [finding('exception', 0, 'rule-a'), finding('excluded', 0, 'rule-b'), finding('disabled', 0, 'rule-c'), finding('site-complete', 1, 'rule-a')] }
+  const sheet = buildAuditTrackerWorkbook(baseline, '', { baselineResult: baseline, actionedIds: ['exception'], excludedIds: ['exception', 'excluded'], disabledRules: ['rule-c'], completedEquipmentIds: ['eq-2'] }).Sheets.Tracker
+  assert.deepEqual(grid(sheet).slice(8).map(row => row.slice(0, 3)), [['Phase A', 1, 1]])
+})
+
+test('tracker does not complete sibling baseline findings of the same rule when only one was reviewed', () => {
+  const { snapshot } = correctionFixture()
+  const baseline = { rows: snapshot.rows, findings: ['one', 'two'].map(id => ({ id, equipmentId: 'EQ-1', sheet: 'Registry', row: 2, rule: { id: 'shared-rule' } })) }
+  const sheet = buildAuditTrackerWorkbook(baseline, '', { baselineResult: baseline, actionedIds: ['one'] }).Sheets.Tracker
+  assert.deepEqual(grid(sheet)[8].slice(0, 3), ['Phase A', 2, 1])
+})
+
+test('large review batches use separate finding rows instead of overflowing a joined-ID cell', () => {
+  const findingIds = Array.from({ length: 1200 }, (_, index) => `synthetic-finding-with-a-long-identifier-${index}`)
+  const history = [{ id: 'large-review', at: '', owner: '', reason: 'Reviewed batch', disposition: 'reviewed', findingIds, changes: [] }]
+  const sheet = buildAuditCorrectionsWorkbook([], history).Sheets.Actions, rows = grid(sheet)
+  assert.equal(rows.length, findingIds.length + 1)
+  assert.deepEqual(rows.slice(1).map(row => row[5]), findingIds)
+  assert.ok(rows.every(row => row.every(cell => typeof cell !== 'string' || cell.length <= 32767)))
+})
+
+function captureExportDownloads(t) {
+  const priorDocument = globalThis.document, priorSession = S.session, downloads = [], blobs = new Map(), elements = new Map()
+  const element = () => ({ style: {}, classList: { add() {}, remove() {}, contains() { return false } }, setAttribute() {}, removeEventListener() {}, addEventListener() {} })
+  globalThis.document = {
+    querySelector(selector) { if (!elements.has(selector)) elements.set(selector, element()); return elements.get(selector) },
+    body: { appendChild() {} },
+    createElement() { return { remove() {}, click() { downloads.push(blobs.get(this.href)) } } },
+  }
+  t.mock.method(URL, 'createObjectURL', blob => { const url = `blob:synthetic-${blobs.size}`; blobs.set(url, blob); return url })
+  t.mock.method(URL, 'revokeObjectURL', () => {})
+  t.mock.method(globalThis, 'setTimeout', callback => { queueMicrotask(callback); return 0 })
+  t.mock.method(globalThis, 'clearTimeout', () => {})
+  t.after(() => { if (priorDocument === undefined) delete globalThis.document; else globalThis.document = priorDocument; S.session = priorSession })
+  resetSession()
+  return { downloads, elements }
+}
+
+test('correction export reads session reviewHistory, including review-only physical source', async t => {
+  const { downloads } = captureExportDownloads(t), { snapshot } = correctionFixture(), change = correction(snapshot)
+  S.session.baselineResult = { rows: snapshot.rows, findings: [{ id: 'review-only', equipmentId: 'EQ-2', sheet: 'Registry', row: 3, field: 'System Name', actual: 'Before 2', rule: { id: 'review-rule' } }] }
+  S.session.changes = [change]
+  S.session.reviewHistory = [{ id: 'review', at: '2026-01-05T09:00:00Z', owner: 'Reviewer', reason: 'Checked in place', disposition: 'reviewed', findingIds: ['review-only'], changes: [] }]
+  assert.equal(await exportAuditCorrectionsXlsx(), true)
+  assert.equal(downloads.length, 1)
+  const book = XLSX.read(await downloads[0].arrayBuffer(), { type: 'array' }), actions = grid(book.Sheets.Actions)
+  assert.deepEqual(actions[1].slice(6, 15), ['EQ-2', 'System Name', 'Before 2', '', 'Registry', 3, 'J', 'J3', 'review-rule'])
+})
+
+function packageEntries(bytes) {
+  const container = XLSX.CFB.read(new Uint8Array(bytes), { type: 'array' }), entries = new Map()
+  container.FullPaths.forEach((path, at) => {
+    const name = path.slice(container.FullPaths[0].length), file = container.FileIndex[at]
+    if (name && !name.endsWith('/') && !name.startsWith('\u0001') && file.type === 2) entries.set(name, new Uint8Array(file.content))
+  })
+  return entries
+}
+function packageBytes(entries) {
+  const container = XLSX.CFB.utils.cfb_new()
+  for (const [path, data] of entries) XLSX.CFB.utils.cfb_add(container, path, data)
+  return new Uint8Array(XLSX.CFB.write(container, { fileType: 'zip', type: 'array', compression: true }))
+}
+const utf8 = value => new TextEncoder().encode(value)
+const xmlDocument = bytes => new DOMParser().parseFromString(new TextDecoder().decode(bytes), 'application/xml')
+const xmlBytes = document => utf8(new XMLSerializer().serializeToString(document))
+function syntheticPackage() {
+  const { book, snapshot } = correctionFixture(), change = correction(snapshot)
+  book.Sheets.Registry[addressOf(change)].s = { font: { bold: true, color: { rgb: '006633' } }, fill: { patternType: 'solid', fgColor: { rgb: 'EEEEEE' } } }
+  book.Sheets.Registry.A6 = { t: 'n', v: 2, f: '1+1' }; book.Sheets.Registry['!ref'] = 'A1:AR6'
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Unchanged'], [12]]), 'Other')
+  const entries = packageEntries(XLSX.write(book, { bookType: 'xlsx', type: 'array', cellStyles: true, bookSST: true }))
+  const document = xmlDocument(entries.get('xl/worksheets/sheet1.xml')), root = document.documentElement
+  const extras = new DOMParser().parseFromString(`<extras xmlns="${root.namespaceURI}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><mergeCells count="1"><mergeCell ref="B6:C6"/></mergeCells><conditionalFormatting sqref="J2:J3"><cfRule type="expression" priority="1"><formula>J2="After"</formula></cfRule></conditionalFormatting><dataValidations count="1"><dataValidation type="list" sqref="J2:J3"><formula1>"Before 1,After"</formula1></dataValidation></dataValidations><legacyDrawing r:id="rForm"/><controls><control shapeId="1025" r:id="rControl" name="Completion"/></controls></extras>`, 'application/xml')
+  for (const node of Array.from(extras.documentElement.childNodes)) root.appendChild(document.importNode(node, true))
+  const target = 'xl/worksheets/physical.xml'
+  entries.delete('xl/worksheets/sheet1.xml'); entries.set(target, xmlBytes(document))
+  const rels = xmlDocument(entries.get('xl/_rels/workbook.xml.rels'))
+  for (const relation of Array.from(rels.getElementsByTagNameNS('*', 'Relationship'))) if (relation.getAttribute('Target') === 'worksheets/sheet1.xml') relation.setAttribute('Target', 'worksheets/physical.xml')
+  entries.set('xl/_rels/workbook.xml.rels', xmlBytes(rels))
+  const types = xmlDocument(entries.get('[Content_Types].xml'))
+  for (const type of Array.from(types.getElementsByTagNameNS('*', 'Override'))) if (type.getAttribute('PartName') === '/xl/worksheets/sheet1.xml') type.setAttribute('PartName', `/${target}`)
+  entries.set('[Content_Types].xml', xmlBytes(types))
+  entries.set('xl/worksheets/_rels/physical.xml.rels', utf8('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rForm" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing" Target="../drawings/form.vml"/><Relationship Id="rControl" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp" Target="../ctrlProps/control.xml"/></Relationships>'))
+  entries.set('xl/drawings/form.vml', utf8('<xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:x="urn:schemas-microsoft-com:office:excel"><v:shape id="_x0000_s1025" type="#_x0000_t201"><x:ClientData ObjectType="Checkbox"><x:Checked>1</x:Checked></x:ClientData></v:shape></xml>'))
+  entries.set('xl/ctrlProps/control.xml', utf8('<formControlPr xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" objectType="CheckBox" checked="Checked"/>'))
+  entries.set('customXml/item.xml', utf8('<synthetic><retained>yes</retained></synthetic>'))
+  entries.set('xl/media/image.bin', new Uint8Array([0, 1, 2, 200, 255]))
+  return { bytes: packageBytes(entries), entries, snapshot, change, target }
+}
+
+packageTest('package export preserves forms, styles, relationships, formulas and every untargeted part payload', async () => {
+  const { bytes, entries, snapshot, change, target } = syntheticPackage(), original = bytes.slice()
+  change.value = ' After <&> "literal" _x0041_ \r\nSecond line '
+  const output = await buildUpdatedRegistryBytes(bytes, snapshot, [change]), after = packageEntries(output)
+  assert.deepEqual(bytes, original, 'the original imported bytes never change')
+  assert.deepEqual([...after.keys()].sort(), [...entries.keys()].sort())
+  for (const [path, data] of entries) if (path !== target) assert.deepEqual(after.get(path), data, `untargeted package part changed: ${path}`)
+  const beforeXml = xmlDocument(entries.get(target)), afterXml = xmlDocument(after.get(target))
+  const at = document => Array.from(document.getElementsByTagNameNS('*', 'c')).find(cell => cell.getAttribute('r') === addressOf(change))
+  assert.equal(at(beforeXml).getAttribute('s'), at(afterXml).getAttribute('s'))
+  for (const document of [beforeXml, afterXml]) { const cell = at(document); cell.parentNode.removeChild(cell) }
+  assert.equal(new XMLSerializer().serializeToString(afterXml), new XMLSerializer().serializeToString(beforeXml), 'all other worksheet XML survives semantically, including form references and validation')
+  const restored = XLSX.read(output, { type: 'array', cellStyles: true })
+  assert.equal(restored.Sheets.Registry[addressOf(change)].v, change.value)
+  assert.equal(restored.Sheets.Registry.A6.f, '1+1')
+})
+
+packageTest('package conflicts are atomic and compression never starts for rejected corrections', async () => {
+  const { bytes, snapshot, change } = syntheticPackage(), before = bytes.slice()
+  let progress = false
+  await assert.rejects(buildUpdatedRegistryBytes(bytes, snapshot, [change, { ...correction(snapshot, 1), before: 'Changed' }], { onProgress: () => { progress = true } }), error => error.code === 'BASELINE')
+  assert.equal(progress, false)
+  assert.deepEqual(bytes, before)
+})
+
+packageTest('export and reimport preserve logical row counts after correcting occurrence-paired summary copies', async () => {
+  const { book, snapshot } = mirroredCorrectionFixture(2), changes = [correction(snapshot, 1)]
+  const bytes = new Uint8Array(XLSX.write(book, { type: 'array', bookType: 'xlsx' })), before = bytes.slice(), originalParts = packageEntries(bytes)
+  const output = await buildUpdatedRegistryBytes(bytes, snapshot, changes), reimported = XLSX.read(output, { type: 'array' })
+  const after = await auditSnapshotFromWorkbook(reimported, '')
+  assert.equal(after.rows.length, snapshot.rows.length, 'no stale summary copy becomes an extra conflicting equipment row')
+  assert.deepEqual(after.rows.map(row => row.systemName), ['Before', 'After'])
+  assert.deepEqual(after.rows.map(row => row._sources.length), [2, 2])
+  const resultParts = packageEntries(output)
+  for (const [path, data] of originalParts) if (!['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'].includes(path)) assert.deepEqual(resultParts.get(path), data)
+  assert.deepEqual(bytes, before)
+})
+
+packageTest('package preflight and preview agree for formatted numbers and whitespace in mirrored originals', async () => {
+  const { book, primary, mirror } = mirroredCorrectionFixture()
+  for (const source of [primary, mirror]) book.Sheets[source.source.sheet][addressOf(correction(source, 0, '', 'upn'))] = { t: 'n', v: 602, z: '0000' }
+  book.Sheets.Summary[addressOf(correction(mirror))].v = ' Before '
+  const entries = packageEntries(XLSX.write(book, { type: 'array', bookType: 'xlsx', cellStyles: true }))
+  // The vendored writer drops custom number formats, so supply real OOXML proof.
+  const styles = xmlDocument(entries.get('xl/styles.xml')), root = styles.documentElement, ns = root.namespaceURI
+  let formats = styles.getElementsByTagNameNS(ns, 'numFmts')[0]
+  if (!formats) { formats = styles.createElementNS(ns, 'numFmts'); root.insertBefore(formats, root.firstChild) }
+  const format = styles.createElementNS(ns, 'numFmt'); format.setAttribute('numFmtId', '164'); format.setAttribute('formatCode', '0000'); formats.appendChild(format)
+  formats.setAttribute('count', String(formats.getElementsByTagNameNS(ns, 'numFmt').length))
+  const xfs = styles.getElementsByTagNameNS(ns, 'cellXfs')[0], styleIndex = xfs.getElementsByTagNameNS(ns, 'xf').length, xf = xfs.firstChild.cloneNode(true)
+  xf.setAttribute('numFmtId', '164'); xf.setAttribute('applyNumberFormat', '1'); xfs.appendChild(xf); xfs.setAttribute('count', String(styleIndex + 1))
+  entries.set('xl/styles.xml', xmlBytes(styles))
+  for (const [index, source] of [primary, mirror].entries()) {
+    const path = `xl/worksheets/sheet${index + 1}.xml`, document = xmlDocument(entries.get(path)), address = addressOf(correction(source, 0, '', 'upn'))
+    Array.from(document.getElementsByTagNameNS(ns, 'c')).find(cell => cell.getAttribute('r') === address).setAttribute('s', String(styleIndex))
+    entries.set(path, xmlBytes(document))
+  }
+  const bytes = packageBytes(entries), before = bytes.slice()
+  const imported = XLSX.read(bytes.slice(), { type: 'array', cellStyles: true }), snapshot = await auditSnapshotFromWorkbook(imported, '')
+  assert.equal(snapshot.rows[0].upn, '0602')
+  assert.equal(snapshot.rows.length, 1)
+  const changes = [auditMakeCorrection(snapshot.rows[0], 'UPN', '603'), auditMakeCorrection(snapshot.rows[0], 'System Name', 'After')]
+  assert.deepEqual(validateAuditCorrections(imported, snapshot, changes), { correctionCount: 2, cellCount: 4, sheetCount: 2 })
+  const output = await buildUpdatedRegistryBytes(bytes, snapshot, changes), restored = await auditSnapshotFromWorkbook(XLSX.read(output, { type: 'array', cellStyles: true }), '')
+  assert.equal(restored.rows.length, 1)
+  assert.equal(restored.rows[0]._sources.length, 2)
+  assert.equal(restored.rows[0].upn, '603')
+  assert.equal(restored.rows[0].systemName, 'After')
+  assert.deepEqual(bytes, before)
+})
+
+packageTest('package mirror conflicts are rejected before compression or source-byte mutation', async () => {
+  const { book, snapshot, mirror } = mirroredCorrectionFixture(), target = addressOf(correction(mirror))
+  book.Sheets.Summary[target].v = 'Stale summary'
+  const bytes = new Uint8Array(XLSX.write(book, { type: 'array', bookType: 'xlsx' })), before = bytes.slice()
+  let compressed = false
+  await assert.rejects(buildUpdatedRegistryBytes(bytes, snapshot, [correction(snapshot)], { onProgress: () => { compressed = true } }), error => error.code === 'CONFLICT')
+  assert.equal(compressed, false)
+  assert.deepEqual(bytes, before)
+})
+
+packageTest('package export creates missing blank cells and retains inline whitespace and literal formula text', async () => {
+  const { bytes, snapshot } = syntheticPackage()
+  const first = correction(snapshot, 0, ' =1+1 ', 'dependencies'), second = correction(snapshot, 1, false, 'dependencies')
+  const output = await buildUpdatedRegistryBytes(bytes, snapshot, [second, first]), restored = XLSX.read(output, { type: 'array' })
+  assert.equal(restored.Sheets.Registry[addressOf(first)].v, first.value)
+  assert.equal(restored.Sheets.Registry[addressOf(first)].f, undefined)
+  assert.equal(restored.Sheets.Registry[addressOf(second)].v, false)
+})
+
+packageTest('missing cells are inserted in column order even when corrections arrive in reverse order', async () => {
+  const { entries, snapshot, target } = syntheticPackage(), document = xmlDocument(entries.get(target))
+  const first = correction(snapshot, 0, 'After', 'dependencies'), second = correction(snapshot, 0, 'Project', 'dependencyProject')
+  for (const cell of Array.from(document.getElementsByTagNameNS('*', 'c'))) if ([addressOf(first), addressOf(second)].includes(cell.getAttribute('r'))) cell.parentNode.removeChild(cell)
+  entries.set(target, xmlBytes(document))
+  const output = packageEntries(await buildUpdatedRegistryBytes(packageBytes(entries), snapshot, [second, first])), result = xmlDocument(output.get(target))
+  const row = Array.from(result.getElementsByTagNameNS('*', 'row')).find(row => row.getAttribute('r') === '2')
+  const columns = Array.from(row.getElementsByTagNameNS('*', 'c')).map(cell => XLSX.utils.decode_cell(cell.getAttribute('r')).c)
+  assert.deepEqual(columns, [...columns].sort((a, b) => a - b))
+})
+
+packageTest('package export also preserves part payloads when native deflate is unavailable', async () => {
+  const { bytes, entries, snapshot, change, target } = syntheticPackage(), compression = globalThis.CompressionStream
+  try {
+    globalThis.CompressionStream = undefined
+    const output = packageEntries(await buildUpdatedRegistryBytes(bytes, snapshot, [change]))
+    for (const [path, data] of entries) if (path !== target) assert.deepEqual(output.get(path), data)
+  } finally { globalThis.CompressionStream = compression }
+})
+
+packageTest('signed, legacy, and unsupported workbook packages fail without values-only fallback', async () => {
+  const { bytes, entries, snapshot, change } = syntheticPackage()
+  await assert.rejects(buildUpdatedRegistryBytes(new Uint8Array([1, 2, 3]), snapshot, [change]), error => error.code === 'PACKAGE')
+  entries.set('_xmlsignatures/sig.xml', utf8('<Signature/>'))
+  await assert.rejects(buildUpdatedRegistryBytes(packageBytes(entries), snapshot, [change]), error => error.code === 'PACKAGE')
+  entries.delete('_xmlsignatures/sig.xml')
+  const types = xmlDocument(entries.get('[Content_Types].xml'))
+  Array.from(types.getElementsByTagNameNS('*', 'Override')).find(node => node.getAttribute('PartName') === '/xl/workbook.xml').setAttribute('ContentType', 'application/vnd.ms-excel.sheet.macroEnabled.main+xml')
+  entries.set('[Content_Types].xml', xmlBytes(types))
+  await assert.rejects(buildUpdatedRegistryBytes(packageBytes(entries), snapshot, [change]), error => error.code === 'PACKAGE')
+  assert.ok(bytes.length)
+})
+
+packageTest('an ambiguous worksheet cell aborts package export before mutation', async () => {
+  const { entries, snapshot, change, target } = syntheticPackage(), document = xmlDocument(entries.get(target))
+  const cell = Array.from(document.getElementsByTagNameNS('*', 'c')).find(cell => cell.getAttribute('r') === addressOf(change))
+  cell.parentNode.appendChild(cell.cloneNode(true)); entries.set(target, xmlBytes(document))
+  await assert.rejects(buildUpdatedRegistryBytes(packageBytes(entries), snapshot, [change]), error => error.code === 'XML')
+})
+
+packageTest('updated-registry session export uses the immutable baseline and never downloads a partial correction', async t => {
+  const { downloads } = captureExportDownloads(t), { bytes, snapshot, change } = syntheticPackage(), original = bytes.slice()
+  S.session.sourceBytes = bytes; S.session.baselineSnapshot = snapshot; S.session.changes = [change]
+  S.session.snapshot = { ...snapshot, rows: snapshot.rows.map(row => ({ ...row, systemName: 'Corrected working draft' })) }
+  assert.equal(await exportUpdatedRegistryXlsx(), true)
+  const output = XLSX.read(await downloads[0].arrayBuffer(), { type: 'array' })
+  assert.equal(output.Sheets.Registry[addressOf(change)].v, 'After')
+  S.session.changes = [change, { ...correction(snapshot, 1), before: 'Conflict' }]
+  assert.equal(await exportUpdatedRegistryXlsx(), false)
+  assert.equal(downloads.length, 1, 'no partial second download')
+  S.session.baselineSnapshot = null
+  assert.equal(await exportUpdatedRegistryXlsx(), false)
+  assert.equal(downloads.length, 1, 'a working draft is never substituted for a missing baseline')
+  assert.deepEqual(bytes, original)
 })

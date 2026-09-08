@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.39.0",
+    "date": "2026-09-08",
+    "type": "feature",
+    "notes": "- Improved finding reviews and correction exports\n- Fixed issues affecting audit results and progress tracking"
+  },
+  {
     "version": "1.38.3",
     "date": "2026-08-26",
     "type": "fix",

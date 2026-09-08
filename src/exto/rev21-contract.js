@@ -118,6 +118,26 @@ export function extoRev21SystemName(upn,description,allowUniqueUpn=false){
   if(allowUniqueUpn&&candidates.length===1)return {value:candidates[0],status:'unique-upn',candidates};
   return {value:'',status:candidates.length?'description-mismatch':'unknown-system',candidates:[...candidates]};
 }
+function extoRev21LexicalKey(value){
+  return extoRev21Norm(value).split(/[^A-Z0-9]+/).filter(Boolean)
+    .map(word=>word==='MECH'?'MECHANICAL':word==='SYSTEMS'?'SYSTEM':word)
+    .filter(word=>word!=='SYSTEM').join(' ');
+}
+export function extoRev21LexicalDiscipline(value){
+  const key=extoRev21LexicalKey(value);if(!key)return '';
+  const matches=EXTO_REV21_VOCABULARY.Discipline.filter(name=>extoRev21LexicalKey(name)===key);
+  return matches.length===1?matches[0]:'';
+}
+export function extoRev21LexicalSystemName(upn,description){
+  const key=extoRev21Norm(upn),text=extoRev21Norm(description),options=extoRev21SystemsForUpn(key);
+  if(!options.length||!text)return '';
+  const prefix=text.match(/^([0-9]{3})\s+/);
+  if(prefix&&prefix[1]!==key)return '';
+  const body=value=>{const parts=extoRev21Norm(value).split(' ');return EXTO_REV21_UPN_SET.has(parts[0])?parts.slice(1).join(' '):value;};
+  const signature=extoRev21LexicalKey(body(text));if(!signature)return '';
+  const matches=options.filter(name=>extoRev21LexicalKey(body(name))===signature);
+  return matches.length===1?matches[0]:'';
+}
 export function extoRev21EffectiveDiscipline(value){
   const raw=String(value==null?'':value).trim();
   return /^(I\s*(?:&|AND)\s*C|INSTRUMENTATION(?:\s*(?:&|AND)\s*CONTROLS?)?)$/i.test(raw)?'FACILITIES MONITORING SYSTEM':(extoRev21Canonical('discipline',raw)||raw);
@@ -128,8 +148,10 @@ export function extoRev21EffectiveMel(row){
   const isInstrumentation=extoRev21EffectiveDiscipline(rawDiscipline)==='FACILITIES MONITORING SYSTEM'&&extoRev21Norm(rawDiscipline)!=='FACILITIES MONITORING SYSTEM';
   const upnCandidates=isInstrumentation?extoRev21UpnCandidates(tag):[];
   const effectiveUpn=isInstrumentation?(upnCandidates.length===1?upnCandidates[0]:''):rawUpn;
-  const effectiveDiscipline=extoRev21EffectiveDiscipline(rawDiscipline);
-  const system=extoRev21SystemName(effectiveUpn,description,isInstrumentation);
+  const effectiveDiscipline=extoRev21LexicalDiscipline(rawDiscipline)||extoRev21EffectiveDiscipline(rawDiscipline);
+  const exactSystem=extoRev21SystemName(effectiveUpn,description,false);
+  const lexicalSystem=exactSystem.value?'':extoRev21LexicalSystemName(effectiveUpn,description);
+  const system=exactSystem.value?exactSystem:lexicalSystem?{value:lexicalSystem,status:'lexical',candidates:[lexicalSystem]}:extoRev21SystemName(effectiveUpn,description,isInstrumentation);
   const composed=effectiveUpn&&description?(effectiveUpn+' '+description).replace(/\s+/g,' ').trim():description;
   const issues=[];
   if(isInstrumentation&&upnCandidates.length!==1)issues.push({ruleId:upnCandidates.length?'mel.ic-upn-ambiguous':'mel.ic-upn-missing',field:'UPN',reason:upnCandidates.length?'Multiple approved UPN values occur in the I&C Equipment Tag':'No approved UPN value occurs in the I&C Equipment Tag',candidates:upnCandidates});

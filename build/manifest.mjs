@@ -7,6 +7,8 @@ export const MODULES=[
   'src/exto/vf-item-masters.js',
   'src/audit/model.js',
   'src/audit/engine.js',
+  'src/audit/references.js',
+  'src/audit/actions.js',
   'src/audit/status-report.js',
   'src/audit/examples.js',
   'src/audit/compare.js',

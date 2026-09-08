@@ -6,11 +6,14 @@ import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIE
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
-import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx } from '../audit/export.js'
+import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, validateAuditCorrections } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
 import { auditStatusFromWorkbook } from '../audit/status-report.js'
+import { AUDIT_ACTION_FIELDS, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditCustomCorrection, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
+import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
+import { downloadBlob } from '../core/download.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -21,10 +24,11 @@ const SEARCH_DEBOUNCE_MS=150;
 const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
 const RULE_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
-const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.'};
+const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.',reference:'Milestone identities and parent relationships in the selected project register.'};
 const SEVERITY_LABELS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Note'};
 const SEVERITY_PLURALS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Notes'};
-const SOURCE_LABELS=Object.fromEntries(SSM_AUDIT_SOURCES.map(source=>[source.id,source.label]));
+const AUDIT_UI_SOURCES=[...SSM_AUDIT_SOURCES,{id:'reference',label:'Selected references',icon:'file-spreadsheet'}];
+const SOURCE_LABELS=Object.fromEntries(AUDIT_UI_SOURCES.map(source=>[source.id,source.label]));
 let drawerTrapCleanup=null,searchDebounceTimer=0;
 
 /* ---------------------------------------------------------------- shell nav */
@@ -121,7 +125,7 @@ function severityRank(severity){return {blocker:4,error:3,warning:2,info:1}[seve
 
 /* ------------------------------------------------------------- rules screen */
 
-function ruleCatalog(){return Object.values(SSM_AUDIT_RULES);}
+function ruleCatalog(){return [...Object.values(SSM_AUDIT_RULES),...Object.values(SSM_AUDIT_REFERENCE_RULES)];}
 /* ---- rule preferences ----
    The engine runs every check; the user decides which ones count. Switched-off
    checks are dropped from the result the rest of the app sees (findings,
@@ -133,27 +137,25 @@ export function loadRulePreferences(){
 }
 function saveRulePreferences(){try{localStorage.setItem(RULE_PREFERENCES_KEY,JSON.stringify(S.rules.disabled));}catch(_){/* private mode: the choice lasts for this session */}}
 export function isRuleActive(rule){return !!rule&&rule.enabled&&!(S.rules.disabled||[]).includes(rule.id);}
-export function activeRules(){return ruleCatalog().filter(isRuleActive);}
+export function activeRules(){return ruleCatalog().filter(rule=>isRuleActive(rule)&&(rule.source!=='reference'||!!S.session.references?.milestones));}
 /* The result the app works from: the engine's output minus switched-off checks,
    with the summary recounted. `rawResult` keeps the engine output so toggling
    never needs the workbook again. */
-export function applyRulePreferences(raw,disabled){
-  if(!raw)return raw;const off=new Set(disabled||[]);
-  if(!off.size)return raw;
-  const findings=raw.findings.filter(finding=>!off.has(finding.rule.id));
-  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
-  const status=severity.blocker?'blocked':raw.summary.status==='blocked'?'ready':raw.summary.status;
-  return Object.assign({},raw,{findings,summary:Object.assign({},raw.summary,{findings:findings.length,severity,status})});
+function auditUiRecount(result,findings){
+  const severity={blocker:0,error:0,warning:0,info:0},category=Object.fromEntries(SSM_AUDIT_CATEGORIES.map(key=>[key,0])),source=Object.fromEntries(AUDIT_UI_SOURCES.map(item=>[item.id,0]));let unverified=0;
+  for(const finding of findings){severity[finding.severity]++;category[finding.category]=(category[finding.category]||0)+1;source[finding.rule.source]=(source[finding.rule.source]||0)+1;if(finding.rule.id==='logic.external-path-unverified'||finding.rule.source==='reference'&&finding.severity==='info')unverified++;}
+  const status=severity.blocker?'blocked':severity.error||severity.warning||unverified?'review':'ready';
+  return {...result,findings,summary:{...result.summary,findings:findings.length,severity,category,source,unverified,status}};
 }
-/* Individual findings the user set aside on the Modifications screen are dropped
-   the same way switched-off checks are, with the summary recounted properly. */
+export function applyRulePreferences(raw,disabled){
+  if(!raw)return raw;const off=new Set(disabled||[]);if(!off.size)return raw;
+  return auditUiRecount(raw,raw.findings.filter(finding=>!off.has(finding.rule.id)));
+}
+/* Exclusions change the visible scope, not the original audit or working draft. */
 export function applyFindingExclusions(result,excluded){
   if(!result||!excluded||!excluded.size)return result;
   const findings=result.findings.filter(finding=>!excluded.has(finding.id));
-  if(findings.length===result.findings.length)return result;
-  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
-  const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
-  return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
+  return findings.length===result.findings.length?result:auditUiRecount(result,findings);
 }
 /* Equipment the site has finished (per the Equipment Status Report tab) is out
    of every metric. The registry is still audited whole first, so a completed
@@ -163,9 +165,7 @@ export function applyCompletedEquipment(result,completed){
   if(!result||!completed||!completed.size)return result;
   const findings=result.findings.filter(finding=>!finding.equipmentId||!completed.has(auditNormId(finding.equipmentId)));
   if(findings.length===result.findings.length)return result;
-  const severity={blocker:0,error:0,warning:0,info:0};for(const finding of findings)severity[finding.severity]=(severity[finding.severity]||0)+1;
-  const status=severity.blocker?'blocked':severity.error||severity.warning?'review':'ready';
-  return Object.assign({},result,{findings,summary:Object.assign({},result.summary,{findings:findings.length,severity,status})});
+  return auditUiRecount(result,findings);
 }
 function sessionEffectiveRaw(){
   const raw=S.session&&S.session.rawResult;if(!raw)return raw;
@@ -176,34 +176,29 @@ function refreshSessionResult(){
   S.session.result=applyFindingExclusions(applyRulePreferences(sessionEffectiveRaw(),S.rules.disabled),S.session.excluded);
   S.session.hierarchy=null;S.session.hierarchyCacheKey='';S.session.hierarchyCacheRows=null;S.session.headerIdSet=null;S.session.rowIndex=null;S.session.exportPlan=null;
   invalidateFindingCaches();
+  S.session.modifyGroupsKey='';S.session.modifyGroupsVal=null;S.session.dimOptionCache=null;S.session.filterOptionCache=null;
 }
 function setRuleDisabled(ruleId,off){
   const set=new Set(S.rules.disabled||[]);if(off)set.add(ruleId);else set.delete(ruleId);
   S.rules.disabled=[...set];saveRulePreferences();refreshSessionResult();
 }
-/* ---- actioned in the app ----
-   Marks live in localStorage keyed by a fingerprint of the registry's contents,
-   so reloading the same workbook (even renamed) brings the progress back.
-   Finding ids are content hashes, so they line up run after run. */
-function registryStoreKey(prefix){
-  const snapshot=S.session&&S.session.snapshot;if(!snapshot)return '';
-  const rows=snapshot.rows||[];
-  return 'ssm-audit.'+prefix+'.'+auditFingerprint(rows.length+'|'+rows.slice(0,64).map(row=>auditNormId(row.equipmentId)).join(','));
-}
-function registryActionKey(){return registryStoreKey('actioned');}
+/* Workbook-derived progress is session-only; review files are an explicit export. */
 function loadActioned(){
-  S.session.actioned=new Set();S.session.actionedRev=0;
-  try{const raw=localStorage.getItem(registryActionKey());if(raw)S.session.actioned=new Set(JSON.parse(raw).filter(id=>typeof id==='string'));}catch(_){}
+  S.session.actioned=new Set();S.session.reviewedIds=new Set();S.session.actionedRev=0;
 }
-function saveActioned(){try{const key=registryActionKey();if(key)localStorage.setItem(key,JSON.stringify([...S.session.actioned]));}catch(_){/* private mode: kept for this session */}}
+function saveActioned(){S.session.reviewDirty=true;}
 export function isActioned(finding){return !!(finding&&S.session&&S.session.actioned&&S.session.actioned.has(finding.id));}
 function setActioned(finding,on){
   if(!S.session.actioned)S.session.actioned=new Set();
+  if(!S.session.reviewedIds)S.session.reviewedIds=new Set();
+  if(on)S.session.reviewedIds.add(finding.id);else S.session.reviewedIds.delete(finding.id);
   if(on)S.session.actioned.add(finding.id);else S.session.actioned.delete(finding.id);
   S.session.actionedRev=(S.session.actionedRev||0)+1;saveActioned();
 }
 function setActionedMany(findings,on){
   if(!S.session.actioned)S.session.actioned=new Set();
+  if(!S.session.reviewedIds)S.session.reviewedIds=new Set();
+  for(const finding of findings){if(on)S.session.reviewedIds.add(finding.id);else S.session.reviewedIds.delete(finding.id);}
   for(const finding of findings){if(on)S.session.actioned.add(finding.id);else S.session.actioned.delete(finding.id);}
   S.session.actionedRev=(S.session.actionedRev||0)+1;saveActioned();
 }
@@ -214,35 +209,19 @@ function actionedInResult(){
 /* ---- staged metadata changes ----
    Actioning a set of flags can stage a correction -- tag, field, new value --
    that the Updated Registry Export writes back into a copy of the original
-   workbook. Stored like actioned marks, keyed by the registry's contents. */
+   workbook. Session-only unless explicitly saved in a review file. */
 function loadChanges(){
   S.session.changes=[];S.session.changesRev=0;
-  try{const raw=localStorage.getItem(registryStoreKey('changes'));if(raw){const list=JSON.parse(raw);if(Array.isArray(list))S.session.changes=list.filter(entry=>entry&&typeof entry.tag==='string'&&typeof entry.field==='string'&&typeof entry.value==='string');}}catch(_){}
 }
-function saveChanges(){try{const key=registryStoreKey('changes');if(key)localStorage.setItem(key,JSON.stringify(S.session.changes||[]));}catch(_){/* private mode: kept for this session */}}
-function stageChanges(list){
-  if(!S.session.changes)S.session.changes=[];
-  for(const entry of list){
-    const at=S.session.changes.findIndex(existing=>auditNormId(existing.tag)===auditNormId(entry.tag)&&existing.field===entry.field);
-    if(at>=0)S.session.changes[at]=entry;else S.session.changes.push(entry);
-  }
-  S.session.changesRev=(S.session.changesRev||0)+1;saveChanges();
-}
-function removeChange(index){
-  if(!S.session.changes)return;
-  S.session.changes.splice(index,1);
-  S.session.changesRev=(S.session.changesRev||0)+1;saveChanges();
-}
+function saveChanges(){S.session.reviewDirty=true;}
 /* ---- modifications: findings set aside ----
    The user's per-finding overrides. A set-aside finding disappears from every
    metric -- findings list, dashboard, hierarchy badges, export -- until it is
-   restored on the Modifications screen. Stored like actioned marks: keyed by the
-   registry's content fingerprint, so the same workbook brings the decisions back. */
+   restored on the Actions screen or explicitly loaded from a review file. */
 function loadExcluded(){
   S.session.excluded=new Set();S.session.excludedRev=0;
-  try{const raw=localStorage.getItem(registryStoreKey('excluded'));if(raw)S.session.excluded=new Set(JSON.parse(raw).filter(id=>typeof id==='string'));}catch(_){}
 }
-function saveExcluded(){try{const key=registryStoreKey('excluded');if(key)localStorage.setItem(key,JSON.stringify([...S.session.excluded]));}catch(_){/* private mode: kept for this session */}}
+function saveExcluded(){S.session.reviewDirty=true;}
 export function isExcludedId(id){return !!(S.session&&S.session.excluded&&S.session.excluded.has(id));}
 function setExcluded(id,on){
   if(!S.session.excluded)S.session.excluded=new Set();
@@ -323,17 +302,18 @@ function renderExportOptions(){
   const changesCount=(S.session.changes||[]).length;
   const kindTabs=`<div class="export-kinds" role="tablist">
       <button class="export-kind ${kind==='actionable'?'on':''}" type="button" data-export-kind="actionable"><b>Actionable Export</b><small>Findings beside the equipment tree — the working report.</small></button>
-      <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>The original workbook with your ${changesCount.toLocaleString()} staged fix${changesCount===1?'':'es'} written in — ready for Exto.</small></button>
+      <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>The original workbook with your ${changesCount.toLocaleString()} staged fix${changesCount===1?'':'es'} written into a separate XLSX copy.</small></button>
+      <button class="export-kind ${kind==='corrections'?'on':''}" type="button" data-export-kind="corrections"><b>Correction Log</b><small>Before-and-after values and review decisions.</small></button>
       <button class="export-kind ${kind==='tracker'?'on':''}" type="button" data-export-kind="tracker"><b>Tracker</b><small>One shareable tab — progress by milestone and discipline.</small></button>
     </div>`;
   if(kind!=='actionable'){
     $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose the export</h3>${kindTabs}
       ${kind==='updated'
-        ?`<p class="export-intro">Writes each staged correction into a copy of the original workbook — changed cells are shaded light yellow so they are easy to spot, and every other cell, tab, and value stays exactly as uploaded, so the file can be reimported into Exto. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
-        :`<p class="export-intro">A single tab to share: a big progress bar driven by the "Milestone actioned?" ticks, one row per L2 milestone with the actioned share prefilled from this app, and a column per discipline showing its progress inside each milestone.</p>`}
+        ?`<p class="export-intro">Writes validated corrections into a separate XLSX copy while retaining the workbook structure and untouched content. Formula and merged cells are not replaced. Review the copy before uploading; Excel may need to recalculate dependent formulas. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
+        :kind==='corrections'?`<p class="export-intro">Current corrections and review history, including reviewer, note, source row, and before-and-after values. Draft corrections have not been verified in an uploaded registry.</p>`:`<p class="export-intro">A single tab to share: a big progress bar driven by the "Milestone actioned?" ticks, one row per L2 milestone with the actioned share prefilled from this app, and a column per discipline showing its progress inside each milestone.</p>`}
       <footer class="export-foot"><span></span><div><button class="btn primary" type="button" id="exportGo" ${kind==='updated'&&(!changesCount||!S.session.sourceBytes)?'disabled':''}>${ic('file-down')}Export</button></div></footer>`;
     $$('[data-export-kind]').forEach(button=>button.onclick=()=>{S.session.exportKind=button.dataset.exportKind;renderExportOptions();});
-    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='updated')await exportUpdatedRegistryXlsx();else await exportTrackerXlsx();};
+    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='updated')await exportUpdatedRegistryXlsx();else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx();};
     return;
   }
   $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>${kindTabs}
@@ -420,7 +400,7 @@ function renderRuleCatalog(navigate){
   if(count)count.textContent=`${rows.length} of ${ruleCatalog().length} checks`;
   if(!rows.length){container.innerHTML=`<div class="rule-reference-empty">${ic('search')}<b>No checks match that search</b><span>Try a shorter word, or set both menus back to All.</span><button class="btn" type="button" id="ruleClear">Clear the search</button></div>`;
     $('#ruleClear').onclick=()=>{S.rules.search='';S.rules.source='all';S.rules.category='all';renderRules(navigate);};return;}
-  container.innerHTML=SSM_AUDIT_SOURCES.map(source=>{
+  container.innerHTML=AUDIT_UI_SOURCES.map(source=>{
     const matches=rows.filter(rule=>rule.source===source.id);if(!matches.length)return '';
     const categories=[...new Set(matches.map(rule=>rule.category))].sort((a,b)=>natCmp(RULE_CATEGORY_LABELS[a]||a,RULE_CATEGORY_LABELS[b]||b));
     return `<section class="rule-source-section"><header><span>${ic(source.id==='sop'?'book-open':source.id==='logic'?'network':'shield-check')}</span><div><h3>${esc(source.label)}</h3><p>${esc(RULE_SOURCE_DESCRIPTIONS[source.id]||source.description)}</p></div><b>${matches.length}</b></header>
@@ -512,8 +492,9 @@ function modifyGroupsBuild(){
 function modifyRowHtml(finding,compact){
   const excluded=isExcludedId(finding.id);
   const tag=finding.equipmentId?`<button type="button" class="modify-tag" data-mod-open="${esc(finding.id)}" title="Open this finding's details">${modifyHighlight(finding.equipmentId)}</button>`:'<b class="modify-tag"><i>Registry-wide</i></b>';
-  if(compact)return `<label class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}>${tag}<span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span></label>`;
-  return `<label class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span></label>`;
+  const action=`<button type="button" class="btn ghost sm" data-mod-review="${esc(finding.id)}">${ic('sliders-horizontal')}Review</button>`;
+  if(compact)return `<div class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}>${tag}<span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span>${action}</div>`;
+  return `<div class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span>${action}</div>`;
 }
 /* Findings with the same explanation are one pattern -- "row on UPN 603, parent
    on UPN RR" -- so a whole family of matches is kept or set aside with a single
@@ -562,48 +543,110 @@ function modifyListHtml(entry){
    The dialog offers each row's suggested fix (where a check has a deterministic
    one), a single typed value for every row, or marking actioned with no data
    change. Applied fixes are staged for the Updated Registry Export. */
-const MODIFY_ACTIONABLE_FIELDS={
-  'UPN':{prop:'upn',header:'UPN'},
-  'Discipline':{prop:'discipline',header:'Discipline'},
-  'System Name':{prop:'systemName',header:'System Name'},
-  'Closest Parent':{prop:'closestParent',header:'Closest Parent'},
-  'Dependencies':{prop:'dependencies',header:'Dependencies'},
-  'L2 Milestone':{prop:'milestone',header:'Milestone'},
-  'L1 Milestone Parent':{prop:'milestoneParent',header:'Milestone Parent'},
-  'Milestone Parent':{prop:'milestoneParent',header:'Milestone Parent'},
-  'Item Master Unique Identifier':{prop:'itemMaster',header:'Item Master Unique Identifier'},
-  'Equipment Classification':{prop:'equipmentClassification',header:'Equipment Classification'},
-};
-let modifyMajorityCache=null;
-function modifyUpnMajorities(upn){
-  if(!modifyMajorityCache)modifyMajorityCache=new Map();
-  const key=auditNormId(upn);if(!key)return null;
-  if(modifyMajorityCache.has(key))return modifyMajorityCache.get(key);
-  const systems=new Map(),disciplines=new Map(),milestones=new Map();
-  for(const row of S.session.snapshot.rows){
-    if(auditNormId(row.upn)!==key)continue;
-    for(const [map,value] of [[systems,row.systemName],[disciplines,row.discipline],[milestones,row.milestone]]){
-      const cleaned=clean(value);if(!cleaned)continue;
-      const norm=auditNormId(cleaned),entry=map.get(norm)||{count:0,display:cleaned};entry.count++;map.set(norm,entry);
-    }
-  }
-  const top=map=>{let best=null;for(const entry of map.values())if(!best||entry.count>best.count)best=entry;return best?best.display:'';};
-  const result={system:top(systems),discipline:top(disciplines),milestone:top(milestones)};
-  modifyMajorityCache.set(key,result);return result;
-}
+let modifyRecommendationContext=null;
 function modifySuggestedFix(finding){
-  const row=registryRowFor(finding);if(!row)return '';
-  if(finding.rule.id===SSM_AUDIT_RULES.upnInconsistent.id){
-    const majorities=modifyUpnMajorities(row.upn);if(!majorities)return '';
-    if(finding.field==='System Name')return majorities.system&&auditNormId(majorities.system)!==auditNormId(row.systemName)?majorities.system:'';
-    if(finding.field==='Discipline')return majorities.discipline&&auditNormId(majorities.discipline)!==auditNormId(row.discipline)?majorities.discipline:'';
-    return '';
-  }
-  if(finding.rule.id===SSM_AUDIT_RULES.milestoneUpn.id){
-    const majorities=modifyUpnMajorities(row.upn);
-    return majorities&&majorities.milestone&&auditNormId(majorities.milestone)!==auditNormId(row.milestone)?majorities.milestone:'';
-  }
-  return '';
+  if(!modifyRecommendationContext)modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,S.session.references);
+  return auditProposeCorrection(finding,modifyRecommendationContext);
+}
+export function sessionAudit(snapshot,references=S.session.references||{}){
+  const catalog=references.itemMasters;
+  const raw=runSsmAudit(snapshot,catalog?{itemMasterVocabulary:catalog.entries.map(entry=>entry.name||entry.value).filter(Boolean)}:{});
+  const extra=auditReferenceFindings(snapshot,references);if(!references.milestones)return raw;
+  const findings=[...raw.findings,...extra],severity={blocker:0,error:0,warning:0,info:0},category={...raw.summary.category},source={...raw.summary.source,reference:extra.length};
+  for(const finding of extra)category[finding.category]=(category[finding.category]||0)+1;
+  for(const finding of findings)severity[finding.severity]++;
+  return {...raw,findings,summary:{...raw.summary,checks:raw.summary.checks+Object.values(SSM_AUDIT_REFERENCE_RULES).length,findings:findings.length,severity,category,source,status:severity.blocker?'blocked':severity.error||severity.warning||raw.summary.unverified||extra.length?'review':'ready'}};
+}
+function openReferencesDialog(navigate){
+  const pending={...S.session.references},workbooks={},names={},token={kind:'references'};
+  const kinds=[['milestones','Milestone register'],['itemMasters','Item Master catalog']];
+  let busy=false;
+  const paint=()=>{
+    $('#actionModalBody').innerHTML=`<span class="eyebrow">Local references</span><h3 id="actionTitle">Reference workbooks</h3>
+      ${kinds.map(([kind,label])=>`<section class="reference-row"><div><b>${label}</b><small>${pending[kind]?`${pending[kind].entries.length.toLocaleString()} entries selected`:'Not selected'}</small><small>${esc(pending[kind]?.warning||'')}</small></div><button class="btn" type="button" data-reference-pick="${kind}">${ic('folder-open')}Choose file</button><button class="icon-btn btn ghost" type="button" data-reference-remove="${kind}" ${pending[kind]?'':'disabled'} title="Remove reference" aria-label="Remove ${label}">${ic('x')}</button><input type="file" data-reference-file="${kind}" accept=".xlsx,.xls" hidden>${workbooks[kind]?`<label class="reference-selection">Sheet<select data-reference-sheet="${kind}" aria-label="${label} sheet">${names[kind].map(name=>`<option value="${esc(name)}" ${pending[kind]?.sheetName===name?'selected':''}>${esc(name)}</option>`).join('')}</select></label>`:''}</section>`).join('')}
+      <footer class="export-foot"><span>Session only. Original workbooks unchanged.</span><div><button class="btn ghost" id="referencesCancel" type="button">Cancel</button><button class="btn primary" id="referencesApply" type="button">Apply references</button></div></footer>`;
+    $('#referencesCancel').onclick=closeActionDialog;
+    $$('[data-reference-pick]').forEach(button=>button.onclick=()=>document.querySelector(`[data-reference-file="${button.dataset.referencePick}"]`).click());
+    $$('[data-reference-remove]').forEach(button=>button.onclick=()=>{delete pending[button.dataset.referenceRemove];delete workbooks[button.dataset.referenceRemove];paint();});
+    $$('[data-reference-file]').forEach(input=>input.onchange=async()=>{
+      const file=input.files[0],kind=input.dataset.referenceFile;if(!file||busy)return;busy=true;
+      try{const bytes=await readArrayBuffer(file);if(actionScope!==token)return;const workbook=XLSX.read(bytes,{type:'array',dense:true});const sheets=auditReferenceSheets(workbook,kind);if(!sheets.length)throw new Error('No usable reference sheet was found.');
+        workbooks[kind]=workbook;names[kind]=sheets;
+        const candidates=sheets.map(name=>auditReadReferenceWorkbook(workbook,kind,name)).filter(parsed=>parsed.entries.length);
+        pending[kind]=(kind==='itemMasters'?candidates.find(parsed=>/\bVF\b/i.test(parsed.sheetName)):candidates.find(parsed=>parsed.entries.some(entry=>entry.parentId)))||candidates[0];
+        if(!pending[kind])throw new Error('No current reference entries were found.');paint();
+      }catch(error){toast(error.message||'This reference could not be read');}finally{busy=false;}
+    });
+    $$('[data-reference-sheet]').forEach(select=>select.onchange=()=>{const kind=select.dataset.referenceSheet;pending[kind]=auditReadReferenceWorkbook(workbooks[kind],kind,select.value);paint();});
+    $('#referencesApply').onclick=async()=>{
+      if(busy)return;busy=true;$('#referencesApply').disabled=true;
+      const session=S.session;
+      try{let baselineResult,result;
+        if(Object.values(pending).some(reference=>!reference?.entries?.length))throw new Error('Select a reference sheet with current entries, or remove that reference.');
+        await runWithProgress('Checking references','Original workbook unchanged',async(checkpoint,report)=>{
+          report(.2,'Checking original registry');await checkpoint();baselineResult=sessionAudit(session.baselineSnapshot,pending);
+          report(.65,'Checking working draft');await checkpoint();result=session.changes.length?sessionAudit(session.snapshot,pending):baselineResult;report(1,'References applied');
+        });
+        if(S.session!==session||actionScope!==token)return;
+        session.references=pending;session.baselineResult=baselineResult;session.reviewUndo=[];
+        const known=new Set([...baselineResult.findings,...result.findings].map(finding=>finding.id));session.actioned=new Set([...session.actioned].filter(id=>known.has(id)));session.reviewedIds=new Set([...(session.reviewedIds||[])].filter(id=>known.has(id)));session.excluded=new Set([...session.excluded].filter(id=>known.has(id)));
+        reviewInstallDraft({snapshot:session.snapshot,result,changes:session.changes});closeActionDialog();rerenderModifications(navigate);toast('References applied and draft re-audited');
+      }catch(error){toast(error.message||'References could not be applied');if($('#referencesApply'))$('#referencesApply').disabled=false;}finally{busy=false;}
+    };
+  };
+  actionScope=token;paint();const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;modal.onclick=event=>{if(event.target===modal&&!busy)closeActionDialog();};
+}
+function reviewRememberUndo(){
+  S.session.reviewUndo.push({changes:[...(S.session.changes||[])],actioned:[...(S.session.actioned||[])],reviewed:[...(S.session.reviewedIds||[])],excluded:[...(S.session.excluded||[])],history:[...S.session.reviewHistory],filterViews:[...(S.session.filterViews||[])]});
+  if(S.session.reviewUndo.length>20)S.session.reviewUndo.shift();
+}
+function reviewInstallDraft(prepared){
+  const session=S.session;
+  session.snapshot=prepared.snapshot;session.rawResult=prepared.result;session.changes=prepared.changes;
+  session.draftResolved=new Set(auditCorrectionImpact(session.baselineResult,prepared.result).resolved.map(finding=>finding.id));
+  session.actioned=new Set([...(session.reviewedIds||[]),...session.draftResolved]);
+  session.changesRev++;session.actionedRev++;session.auditedAt=Date.now();session.reviewDirty=true;
+  modifyRecommendationContext=null;S.comparison.targetSnapshot=session.snapshot;S.comparison.result=null;refreshSessionResult();
+}
+async function reviewPrepare(changes){
+  const session=S.session,revision=session.changesRev;let prepared;
+  await runWithProgress('Checking the draft','Original workbook unchanged',async(checkpoint,report)=>{
+    report(.15,'Validating source rows');await checkpoint();const snapshot=auditApplyCorrections(session.baselineSnapshot,changes);
+    let exportCheck={cellCount:0,sheetCount:0};
+    if(changes.length){
+      const bytes=session.sourceBytes&&new Uint8Array(session.sourceBytes);
+      if(!bytes||bytes[0]!==0x50||bytes[1]!==0x4b)throw new Error('Draft corrections require an original XLSX registry. Review decisions and reports remain available.');
+      session.reviewSourceWorkbook=session.reviewSourceWorkbook||XLSX.read(bytes,{type:'array',cellStyles:true});
+      exportCheck=validateAuditCorrections(session.reviewSourceWorkbook,session.baselineSnapshot,changes);
+    }
+    report(.45,'Running audit checks');await checkpoint();const result=sessionAudit(snapshot);
+    prepared={snapshot,result,changes,revision,exportCheck,impact:auditCorrectionImpact(session.rawResult,result)};report(1,'Preview ready');
+  });
+  if(S.session!==session||session.changesRev!==revision)throw new Error('The draft changed. Preview the corrections again.');
+  return prepared;
+}
+async function reviewUndoLast(navigate){
+  const session=S.session,undo=session.reviewUndo.pop();if(!undo)return;
+  try{const prepared=await reviewPrepare(undo.changes);S.session.actioned=new Set(undo.actioned);S.session.reviewedIds=new Set(undo.reviewed);S.session.excluded=new Set(undo.excluded);S.session.reviewHistory=undo.history;S.session.filterViews=undo.filterViews||[];reviewInstallDraft(prepared);closeActionDialog();rerenderModifications(navigate||currentNavigate);toast('Previous review state restored');}
+  catch(error){if(S.session===session)session.reviewUndo.push(undo);toast(error.message);}
+}
+async function saveReviewFile(){
+  try{const session=S.session,data=await auditReviewDocument(session);if(S.session!==session)throw new Error('The registry changed while saving. Try again.');downloadBlob('SSM-Audit-Review.json',new Blob([JSON.stringify(data)],{type:'application/json'}));S.session.reviewDirty=false;toast('Review file exported');}
+  catch(error){toast(error.message);}
+}
+async function loadReviewFile(file,navigate){
+  if(!file)return;
+  const session=S.session,revision=session.changesRev;
+  const checkSession=()=>{if(S.session!==session||session.changesRev!==revision)throw new Error('The registry changed while loading. No review was restored.');};
+  try{
+    if(file.size>25000000)throw new Error('This review file is too large.');
+    const content=await file.text();checkSession();
+    const restored=await auditReadReviewDocument(JSON.parse(content),session.baselineSnapshot,session.references);checkSession();
+    const prepared=await reviewPrepare(restored.changes);checkSession();
+    if(prepared.impact.unsafe.length)throw new Error('The saved corrections now introduce errors. No changes were loaded.');
+    const known=new Set([...S.session.baselineResult.findings,...prepared.result.findings].map(finding=>finding.id));
+    reviewRememberUndo();S.session.actioned=new Set([...restored.actioned].filter(id=>known.has(id)));S.session.reviewedIds=new Set([...restored.reviewed].filter(id=>known.has(id)));S.session.excluded=new Set([...restored.excluded].filter(id=>known.has(id)));S.session.reviewHistory=restored.history;S.session.filterViews=restored.filterViews||[];reviewInstallDraft(prepared);rerenderModifications(navigate);toast('Review restored and draft re-audited');
+  }catch(error){toast(error.message||'This review file could not be loaded');}
 }
 let actionTrapCleanup=null,actionOpener=null,actionScope=null;
 function closeActionDialog(){
@@ -611,62 +654,98 @@ function closeActionDialog(){
   actionTrapCleanup?.();actionTrapCleanup=null;actionScope=null;modal.setAttribute('aria-hidden','true');animateClose(modal);
   const opener=actionOpener;actionOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
 }
-function openActionDialog(label,findings,navigate){
-  /* Set-aside findings are the reviewer's explicit "no" -- bulk actioning must
-     never stage a fix or an actioned mark for them. */
-  findings=findings.filter(finding=>!isExcludedId(finding.id));
-  if(!findings.length){toast('Everything in this set is set aside — restore findings first to action them');return;}
-  const withTags=findings.filter(finding=>finding.equipmentId);
-  const fields=[...new Set(withTags.map(finding=>finding.field).filter(field=>MODIFY_ACTIONABLE_FIELDS[field]))];
-  const field=fields.length===1?fields[0]:'';
-  const suggestions=field?withTags.map(finding=>({finding,value:modifySuggestedFix(finding)})).filter(entry=>entry.value):[];
-  const sample=suggestions.length?suggestions[0].value:'';
-  const allSame=suggestions.length&&suggestions.every(entry=>auditNormId(entry.value)===auditNormId(sample));
-  actionScope={findings,field,suggestions};
-  $('#actionModalBody').innerHTML=`<span class="eyebrow">Action this set</span><h3 id="actionTitle">${esc(label)}</h3>
-    <p class="action-intro">${findings.length.toLocaleString()} finding${findings.length===1?'':'s'} selected${field?` &middot; the check points at the <b>${esc(field)}</b> column`:fields.length>1?' &middot; these findings point at different columns, so only marking actioned is offered':''}. Actioning marks every one as actioned; staging a fix also queues the metadata correction for the Updated Registry Export.</p>
-    <div class="action-modes">
-      ${field&&suggestions.length?`<label class="action-mode"><input type="radio" name="action-mode" value="suggested" checked><span><b>Use each row's suggested fix</b><small>${suggestions.length.toLocaleString()} of ${withTags.length.toLocaleString()} rows have one${allSame?` — all "${esc(sample)}"`:' (values differ per row)'}. Rows without a suggestion are only marked actioned.</small></span></label>`:''}
-      ${field?`<label class="action-mode"><input type="radio" name="action-mode" value="custom" ${suggestions.length?'':'checked'}><span><b>Write one value on every row</b><small>The same ${esc(field)} for all ${withTags.length.toLocaleString()} rows.</small><input type="text" id="actionValue" placeholder="${esc(field)}" value="${esc(allSame?sample:'')}"></span></label>`:''}
-      <label class="action-mode"><input type="radio" name="action-mode" value="mark" ${field?'':'checked'}><span><b>Only mark actioned</b><small>No data change — the flags are recorded as handled.</small></span></label>
-    </div>
-    <footer class="export-foot"><span></span><div><button class="btn ghost" type="button" id="actionCancel">Cancel</button><button class="btn primary" type="button" id="actionApply">${ic('zap')}Apply</button></div></footer>`;
-  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
-  actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
-  $('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;
-  modal.onclick=event=>{if(event.target===modal)closeActionDialog();};
-  $('#actionApply').onclick=()=>{
-    const mode=(modal.querySelector('input[name="action-mode"]:checked')||{}).value||'mark';
-    const scope=actionScope;if(!scope)return;
-    let staged=0;
-    if(mode==='suggested'){
-      const list=scope.suggestions.map(entry=>({tag:entry.finding.equipmentId,field:entry.finding.field,header:(MODIFY_ACTIONABLE_FIELDS[entry.finding.field]||{}).header||entry.finding.field,value:entry.value,ruleId:entry.finding.rule.id}));
-      stageChanges(list);staged=list.length;
-    }else if(mode==='custom'){
-      const value=clean($('#actionValue')&&$('#actionValue').value);
-      if(!value){toast('Enter the value to write, or choose another option');return;}
-      const list=scope.findings.filter(finding=>finding.equipmentId&&MODIFY_ACTIONABLE_FIELDS[finding.field]).map(finding=>({tag:finding.equipmentId,field:finding.field,header:MODIFY_ACTIONABLE_FIELDS[finding.field].header,value,ruleId:finding.rule.id}));
-      stageChanges(list);staged=list.length;
-    }
-    setActionedMany(scope.findings,true);
-    closeActionDialog();
-    toast(`${scope.findings.length.toLocaleString()} actioned${staged?` · ${staged.toLocaleString()} fix${staged===1?'':'es'} staged`:''}`);
-    rerenderModifications(navigate||currentNavigate);
-  };
-  $('#actionApply').focus();
+function renderActionPreview(){
+  const scope=actionScope;if(!scope)return;const entries=scope.previewEntries||scope.suggestions,offset=scope.offset||0,rows=entries.slice(offset,offset+80);
+  $('#actionPreviewRows').innerHTML=rows.map((entry,index)=>`<tr><td><input type="checkbox" data-proposal="${offset+index}" aria-label="Select ${esc(entry.row.equipmentId)}" ${scope.selected.has(offset+index)?'checked':''} ${scope.previewEntries?'disabled':''}></td><td><b>${esc(entry.row.equipmentId)}</b><small>Row ${entry.finding.row}</small></td><td>${entry.changes.map(change=>`<div><small>${esc(change.field)}</small>${esc(change.before||'(blank)')}</div>`).join('')}</td><td>${entry.changes.map(change=>`<div><small>${esc(change.field)}</small>${esc(change.value||'(blank)')}</div>`).join('')}</td><td><b>${esc(entry.confidence)}</b><small>${esc(entry.reason)}</small></td></tr>`).join('');
+  $('#actionPage').textContent=entries.length?`${offset+1}-${offset+rows.length} of ${entries.length} proposals`:'No supported suggestions';
+  $('#actionPrevious').disabled=!offset;$('#actionNext').disabled=offset+80>=entries.length;
+  $('#actionSelected').textContent=`${scope.selected.size} selected`;
 }
-function openChangesDialog(navigate){
-  const changes=S.session.changes||[];
-  $('#actionModalBody').innerHTML=`<span class="eyebrow">Updated Registry Export</span><h3 id="actionTitle">Staged changes</h3>
-    <p class="action-intro">These corrections are written into a copy of the original workbook when you export the Updated Registry. Everything else in the file stays as it was.</p>
-    <div class="action-changes">${changes.length?changes.map((entry,index)=>`<div class="action-change"><b>${esc(entry.tag)}</b><span>${esc(entry.field)} &rarr; ${esc(entry.value)}</span><button class="xbtn icon-btn" type="button" data-change-remove="${index}" title="Drop this change">${ic('x')}</button></div>`).join(''):'<p class="action-intro">Nothing staged yet.</p>'}</div>
-    <footer class="export-foot"><span>${changes.length.toLocaleString()} change${changes.length===1?'':'s'}</span><div><button class="btn ghost" type="button" id="changesClear" ${changes.length?'':'disabled'}>${ic('trash-2')}Drop all</button><button class="btn primary" type="button" id="changesDone">Done</button></div></footer>`;
+function invalidateActionPreview(){
+  if(!actionScope)return;actionScope.prepared=null;actionScope.previewEntries=null;actionScope.offset=0;renderActionPreview();$('#actionImpact').innerHTML='';$('#actionApply').disabled=false;
+  const mode=$('#actionModal').querySelector('[name="action-mode"]:checked')?.value;
+  $('#actionApply').textContent=['mark','exception'].includes(mode)?'Record review':'Preview changes';
+}
+function openActionDialog(label,findings,navigate){
+  findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
+  modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,S.session.references);
+  const fields=[...new Set(findings.map(finding=>finding.field))],field=fields.length===1&&AUDIT_ACTION_FIELDS[fields[0]]?fields[0]:'';
+  const suggestions=findings.map(modifySuggestedFix).filter(Boolean);
+  actionScope={findings,field,suggestions,selected:new Set(),offset:0,prepared:null};
+  $('#actionModalBody').innerHTML=`<span class="eyebrow">Review this set</span><h3 id="actionTitle">${esc(label)}</h3>
+    <div class="action-summary"><span>${findings.length.toLocaleString()} findings</span><span>${suggestions.length.toLocaleString()} supported suggestions</span><span>${(findings.length-suggestions.length).toLocaleString()} need individual review</span></div>
+    <div class="action-modes">
+      ${suggestions.length?'<label class="action-mode"><input type="radio" name="action-mode" value="suggested" checked><span><b>Review suggested corrections</b></span></label>':''}
+      ${field?`<label class="action-mode"><input type="radio" name="action-mode" value="custom"><span><b>Choose a ${esc(field)}</b><input id="actionValue" type="text" aria-label="New ${esc(field)}" placeholder="${esc(field)}"></span></label>${['Dependencies','Dependency Project','L2 Milestone','L1 Milestone Parent','Milestone Parent'].includes(field)?'<label class="action-clear"><input id="actionClear" type="checkbox">Clear this field</label>':''}`:''}
+      <label class="action-mode"><input type="radio" name="action-mode" value="mark" ${suggestions.length?'':'checked'}><span><b>Mark reviewed without changing data</b></span></label>
+      <label class="action-mode"><input type="radio" name="action-mode" value="exception"><span><b>Accept an exception</b></span></label>
+    </div>
+    <div class="action-proposal-tools"><button class="btn ghost sm" id="actionSelectAll">${ic('check')}Select suggestions</button><button class="btn ghost sm" id="actionSelectNone">${ic('x')}Clear selection</button><span id="actionSelected"></span></div>
+    <div class="action-preview"><table><thead><tr><th aria-label="Selection"></th><th>Equipment</th><th>Current</th><th>Proposed</th><th>Evidence</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div>
+    <div class="action-pager"><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous suggestions" title="Previous suggestions">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next suggestions" title="Next suggestions">${ic('chevron-right')}</button></div>
+    <div class="action-review-fields"><label>Reviewer<input id="actionOwner" maxlength="200" placeholder="Optional" value="${esc(S.session.reviewOwner||'')}"></label><label>Review note<textarea id="actionReason" maxlength="4000" rows="2"></textarea></label></div>
+    <div id="actionImpact" class="action-impact" role="status" aria-live="polite"></div>
+    <footer class="export-foot"><span>Original workbook unchanged</span><div><button class="btn ghost" id="actionCancel">Cancel</button><button class="btn primary" id="actionApply">${suggestions.length?'Preview changes':'Record review'}</button></div></footer>`;
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
-  actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
-  $('#actionModalClose').onclick=closeActionDialog;$('#changesDone').onclick=closeActionDialog;
-  modal.onclick=event=>{if(event.target===modal)closeActionDialog();};
-  $$('[data-change-remove]',modal).forEach(button=>button.onclick=()=>{removeChange(Number(button.dataset.changeRemove));openChangesDialog(navigate);});
-  $('#changesClear').onclick=()=>{S.session.changes=[];S.session.changesRev=(S.session.changesRev||0)+1;saveChanges();closeActionDialog();rerenderModifications(navigate||currentNavigate);};
+  actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;
+  modal.onclick=event=>{if(event.target===modal&&!S.session.reviewBusy)closeActionDialog();};renderActionPreview();
+  $('#actionSelectAll').onclick=()=>{actionScope.selected=new Set(actionScope.suggestions.map((_,index)=>index));invalidateActionPreview();renderActionPreview();};
+  $('#actionSelectNone').onclick=()=>{actionScope.selected.clear();invalidateActionPreview();renderActionPreview();};
+  $('#actionPrevious').onclick=()=>{actionScope.offset=Math.max(0,actionScope.offset-80);renderActionPreview();};
+  $('#actionNext').onclick=()=>{actionScope.offset+=80;renderActionPreview();};
+  $('#actionPreviewRows').onchange=event=>{const input=event.target.closest('[data-proposal]');if(!input)return;const index=Number(input.dataset.proposal);if(input.checked)actionScope.selected.add(index);else actionScope.selected.delete(index);invalidateActionPreview();$('#actionSelected').textContent=`${actionScope.selected.size} selected`;};
+  $$('[name="action-mode"]',modal).forEach(input=>input.onchange=invalidateActionPreview);
+  if($('#actionValue'))$('#actionValue').oninput=invalidateActionPreview;if($('#actionClear'))$('#actionClear').onchange=invalidateActionPreview;
+  $('#actionApply').onclick=async()=>{
+    const scope=actionScope;if(!scope||S.session.reviewBusy)return;
+    const mode=modal.querySelector('[name="action-mode"]:checked')?.value||'mark',reason=clean($('#actionReason').value),owner=clean($('#actionOwner').value);
+    try{
+      if(mode==='mark'||mode==='exception'){
+        if(!reason){toast('Add a short reason for the review decision');$('#actionReason').focus();return;}
+        reviewRememberUndo();setActionedMany(scope.findings,true);if(mode==='exception')setExcludedMany(scope.findings.map(finding=>finding.id),true);
+        S.session.reviewOwner=owner;S.session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner,reason,disposition:mode==='exception'?'exception':'reviewed',findingIds:scope.findings.map(finding=>finding.id),changes:[]});
+        closeActionDialog();rerenderModifications(navigate||currentNavigate);toast('Review recorded; registry data unchanged');return;
+      }
+      if(scope.prepared){
+        if(scope.prepared.revision!==S.session.changesRev)throw new Error('The draft changed. Preview it again.');
+        if(scope.prepared.impact.unsafe.length)throw new Error('Resolve the new errors before applying this batch.');
+        reviewRememberUndo();reviewInstallDraft(scope.prepared);S.session.reviewOwner=owner;
+        S.session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner,reason:reason||'Accepted the displayed corrections after draft audit.',disposition:'corrected-draft',findingIds:scope.prepared.impact.resolved.map(finding=>finding.id),changes:scope.incoming});
+        const count=scope.prepared.impact.resolved.length;closeActionDialog();rerenderModifications(navigate||currentNavigate);toast(`${count.toLocaleString()} findings cleared in the draft`);return;
+      }
+      let incoming;
+      if(mode==='suggested'){
+        if(!scope.selected.size){toast('Select the suggestions to preview');return;}
+        incoming=[...scope.selected].flatMap(index=>scope.suggestions[index].changes);
+      }else{
+        const clearing=!!$('#actionClear')?.checked,value=clearing?'':clean($('#actionValue')?.value);if(!value&&!clearing){toast('Enter a value or choose Clear this field');return;}
+        scope.previewEntries=scope.findings.map(finding=>auditCustomCorrection(finding,value,modifyRecommendationContext));scope.offset=0;renderActionPreview();incoming=scope.previewEntries.flatMap(entry=>entry.changes);
+      }
+      const changes=auditMergeCorrections(S.session.baselineSnapshot,S.session.changes,incoming);S.session.reviewBusy=true;$('#actionApply').disabled=true;
+      const prepared=await reviewPrepare(changes);if(actionScope!==scope)return;scope.prepared=prepared;scope.incoming=incoming;
+      const impact=prepared.impact;$('#actionImpact').innerHTML=`<b>${impact.resolved.length.toLocaleString()} findings cleared in draft</b><span>${impact.introduced.length.toLocaleString()} new findings; ${impact.unsafe.length.toLocaleString()} new errors</span>${impact.unsafe.slice(0,6).map(finding=>`<p>${esc(finding.equipmentId)}: ${esc(finding.rule.title)}</p>`).join('')}${impact.unsafe.length?'<p>This batch was not applied.</p>':'<p>Other findings may remain.</p>'}`;
+      $('#actionApply').textContent='Apply to draft';$('#actionApply').disabled=!!impact.unsafe.length;
+    }catch(error){toast(error.message||'The corrections could not be checked');if($('#actionApply'))$('#actionApply').disabled=false;}
+    finally{S.session.reviewBusy=false;}
+  };
+}
+function openChangesDialog(navigate,offset=0){
+  const changes=S.session.changes||[],page=changes.slice(offset,offset+80);
+  $('#actionModalBody').innerHTML=`<span class="eyebrow">Working draft</span><h3 id="actionTitle">Corrections and review history</h3>
+    <div class="action-summary"><span>${changes.length.toLocaleString()} cells changed</span><span>${S.session.draftResolved.size.toLocaleString()} findings cleared in draft</span></div>
+    <div class="action-preview"><table><thead><tr><th>Equipment / field</th><th>Original</th><th>Draft</th><th></th></tr></thead><tbody>${page.map((entry,index)=>`<tr><td><b>${esc(entry.tag)}</b><small>${esc(entry.field)} · row ${entry.source?.row||''}</small></td><td>${esc(entry.before||'(blank)')}</td><td>${esc(entry.value||'(blank)')}</td><td><button class="icon-btn btn ghost sm" data-change-remove="${offset+index}" aria-label="Revert this cell" title="Revert this cell">${ic('rotate-ccw')}</button></td></tr>`).join('')}</tbody></table></div>
+    <div class="action-pager"><button class="icon-btn btn ghost sm" id="changesPrevious" ${offset?'':'disabled'} aria-label="Previous corrections" title="Previous corrections">${ic('chevron-left')}</button><span>${changes.length?`${offset+1}-${offset+page.length} of ${changes.length}`:'No corrections'}</span><button class="icon-btn btn ghost sm" id="changesNext" ${offset+page.length<changes.length?'':'disabled'} aria-label="Next corrections" title="Next corrections">${ic('chevron-right')}</button></div>
+    <details class="action-history"><summary>Recent review history (${S.session.reviewHistory.length})</summary>${S.session.reviewHistory.slice(-100).reverse().map(entry=>`<p><b>${esc(entry.disposition==='corrected-draft'?'Draft correction':entry.disposition==='exception'?'Exception':'Reviewed')}</b> · ${esc(entry.owner||'Unassigned')} · ${esc(new Date(entry.at).toLocaleString())}<br>${esc(entry.reason)}</p>`).join('')}</details>
+    <footer class="export-foot"><span>Not yet verified in an uploaded registry</span><div><button class="btn ghost" id="changesUndo" ${S.session.reviewUndo.length?'':'disabled'}>${ic('undo-2')}Undo batch</button><button class="btn primary" id="changesDone">Done</button></div></footer>`;
+  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
+  $('#actionModalClose').onclick=closeActionDialog;$('#changesDone').onclick=closeActionDialog;modal.onclick=event=>{if(event.target===modal&&!S.session.reviewBusy)closeActionDialog();};
+  $('#changesPrevious').onclick=()=>openChangesDialog(navigate,Math.max(0,offset-80));$('#changesNext').onclick=()=>openChangesDialog(navigate,offset+80);
+  $('#changesUndo').onclick=()=>reviewUndoLast(navigate);
+  $$('[data-change-remove]',modal).forEach(button=>button.onclick=async()=>{
+    const next=changes.filter((_,index)=>index!==Number(button.dataset.changeRemove));button.disabled=true;
+    try{const prepared=await reviewPrepare(next);if(prepared.impact.unsafe.length)throw new Error('Reverting this cell would introduce errors. Undo the complete batch instead.');reviewRememberUndo();reviewInstallDraft(prepared);openChangesDialog(navigate,Math.min(offset,Math.max(0,next.length-1)));}
+    catch(error){toast(error.message);button.disabled=false;}
+  });
 }
 
 /* A pattern's box mirrors its rows: all kept, none kept, or (indeterminate) mixed. */
@@ -748,7 +827,7 @@ function updateModifyCounts(navigate){
 export function renderModifications(navigate){
   if(!(S.session&&S.session.rawResult)){navigate('upload');return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='modify';S.homeMode='audit';
-  currentNavigate=navigate;modifyPatternMap=new Map();modifyMajorityCache=null;
+  currentNavigate=navigate;modifyPatternMap=new Map();modifyRecommendationContext=null;
   const groups=modifyGroups(),query=clean(S.session.modifySearch),aside=excludedInBase(),result=S.session.result;
   const filtered=!!query||modifyDimActive();
   const matchTotal=filtered?groups.reduce((sum,group)=>sum+group.rules.reduce((inner,entry)=>inner+entry.matches.length,0),0):0;
@@ -757,13 +836,15 @@ export function renderModifications(navigate){
   const changesCount=(S.session.changes||[]).length;
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)} — action a whole set of flags at once (staging the metadata fix for the Updated Registry Export), or untick any finding you disagree with to set it aside. Decisions are remembered for this registry, even after a reload.</p></div></div>
+    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div></div>
+    <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands"><button class="btn ghost sm" id="reviewReferences">${ic('file-spreadsheet')}References</button><button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding shown aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!filtered&&(S.session.modifyClosedCats||[]).includes(group.category);
       return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,filtered)).join('')}</div></section>`;
     }).join(''):`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No findings match those filters':'Nothing to action'}</b><span>${filtered?'Try a different search, milestone, or discipline.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
+  $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
   const body=$('#modifyBody');
   body.onchange=event=>{
     const groupBox=event.target.closest('[data-mod-group]');
@@ -782,6 +863,8 @@ export function renderModifications(navigate){
     updateModifyCounts(navigate);
   };
   body.onclick=event=>{
+    const review=event.target.closest('[data-mod-review]');
+    if(review){event.preventDefault();const finding=S.session.rawResult.findings.find(item=>item.id===review.dataset.modReview);if(finding)openActionDialog(finding.rule.title,[finding],navigate);return;}
     const pct=event.target.closest('[data-mod-pct]');
     if(pct){
       event.preventDefault();
@@ -1042,7 +1125,7 @@ export function renderRules(navigate){
   $('#view').innerHTML=`<section class="rules-shell">
     <div class="screen-heading"><div><span class="eyebrow">Plain-language reference</span><h2>What SSM Audit checks</h2><p>Every check the audit runs, grouped by where it comes from. Switch any check off to leave it out of the findings, the Dashboard, and the Excel report. ${hasResult?'Counts show how many times each check fired on the registry you loaded.':'Load a registry to see how many times each check fires.'}</p></div></div>
     <div class="rules-overview"><div><span>Checks in use</span><b>${rules.length}</b><p>Applied to every equipment row.</p></div><div><span>Sources</span><b>${sources.size}</b><p>Registry integrity, the SSM SOP, and commissioning logic.</p></div><div><span>Topics</span><b>${topics.size}</b><p>Hierarchy, dependencies, consistency, milestones, and headers.</p></div></div>
-    <div class="rules-toolbar"><div class="searchbox">${ic('search')}<input id="ruleSearch" aria-label="Search audit rules" placeholder="Search checks and explanations" value="${esc(S.rules.search)}"></div><select id="ruleSource" aria-label="Filter by rule source"><option value="all">All sources</option>${SSM_AUDIT_SOURCES.map(source=>`<option value="${esc(source.id)}" ${S.rules.source===source.id?'selected':''}>${esc(source.label)}</option>`).join('')}</select><select id="ruleCategory" aria-label="Filter by topic"><option value="all">All topics</option>${Object.entries(RULE_CATEGORY_LABELS).filter(([key])=>rules.some(rule=>rule.category===key)).map(([key,label])=>`<option value="${esc(key)}" ${S.rules.category===key?'selected':''}>${esc(label)}</option>`).join('')}</select><span id="ruleResultCount"></span></div>
+    <div class="rules-toolbar"><div class="searchbox">${ic('search')}<input id="ruleSearch" aria-label="Search audit rules" placeholder="Search checks and explanations" value="${esc(S.rules.search)}"></div><select id="ruleSource" aria-label="Filter by rule source"><option value="all">All sources</option>${AUDIT_UI_SOURCES.map(source=>`<option value="${esc(source.id)}" ${S.rules.source===source.id?'selected':''}>${esc(source.label)}</option>`).join('')}</select><select id="ruleCategory" aria-label="Filter by topic"><option value="all">All topics</option>${Object.entries(RULE_CATEGORY_LABELS).filter(([key])=>rules.some(rule=>rule.category===key)).map(([key,label])=>`<option value="${esc(key)}" ${S.rules.category===key?'selected':''}>${esc(label)}</option>`).join('')}</select><span id="ruleResultCount"></span></div>
     <div class="rules-note rule-off-banner" id="ruleOffBanner" hidden>${ic('info')}<span><b></b> — switched-off checks are not counted in findings, the Dashboard, or the Excel report. The choice is remembered on this device.</span><button class="btn-link" type="button" id="ruleAllOn">Turn all on</button></div>
     <div class="rule-catalog" id="ruleCatalog"></div>
   </section>`;
@@ -1117,8 +1200,8 @@ export async function addAuditTarget(file,navigate){
       report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
       report(.8,'Running every check');await checkpoint();
       const status=await sessionStatusReport(workbook,snapshot,checkpoint);
-      const rawResult=runSsmAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
+      const rawResult=sessionAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
+      S.session={...S.session,baselineSnapshot:snapshot,baselineResult:rawResult,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -1188,7 +1271,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
       report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){statusReport=await sessionStatusReport(workbook,snapshot,checkpoint);auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+    if(side==='target'){resetSession();S.session={...S.session,name:file.name,baselineSnapshot:snapshot,baselineResult:auditResult,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
@@ -1327,7 +1410,7 @@ function filterSectionOptions(section){
   if(cache[section.id])return cache[section.id];
   let options=[];
   if(section.id==='severity')options=SSM_AUDIT_SEVERITIES.map(level=>({key:level,label:SEVERITY_LABELS[level],count:result.summary.severity[level]||0}));
-  else if(section.id==='source')options=SSM_AUDIT_SOURCES.map(source=>({key:source.id,label:source.label,count:result.summary.source[source.id]||0}));
+  else if(section.id==='source')options=AUDIT_UI_SOURCES.map(source=>({key:source.id,label:source.label,count:result.summary.source[source.id]||0}));
   else if(section.id==='category')options=SSM_AUDIT_CATEGORIES.filter(category=>(result.summary.category[category]||0)>0).map(category=>({key:category,label:CATEGORY_LABELS[category]||category,count:result.summary.category[category]||0}));
   else if(section.id==='rule'){
     const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);
@@ -1371,12 +1454,9 @@ function filterSectionSet(section,key,on){
   if(on)hidden.delete(key);else hidden.add(key);
   S.session[section.stateKey]=[...hidden];
 }
-/* ---- saved filter views ----
-   A view is a named copy of every filter list, kept on the device. Values that
-   do not exist in the current registry simply match nothing. */
-const FILTER_VIEWS_KEY='ssm-audit.filter-views';
-function loadFilterViews(){try{const raw=localStorage.getItem(FILTER_VIEWS_KEY);const list=raw?JSON.parse(raw):[];return Array.isArray(list)?list.filter(view=>view&&typeof view.name==='string'&&view.filters):[];}catch(_){return [];}}
-function saveFilterViews(views){try{localStorage.setItem(FILTER_VIEWS_KEY,JSON.stringify(views));}catch(_){/* private mode */}}
+/* Filter values can contain project data; persist them only in review exports. */
+function loadFilterViews(){return S.session.filterViews||[];}
+function saveFilterViews(views){S.session.filterViews=views.slice(-100);S.session.reviewDirty=true;}
 function captureFilterView(name){
   return {name,filters:{hiddenSeverities:[...(S.session.hiddenSeverities||[])],hiddenSources:[...(S.session.hiddenSources||[])],hiddenCategories:[...(S.session.hiddenCategories||[])],hiddenRules:[...(S.session.hiddenRules||[])],dimFilters:JSON.parse(JSON.stringify(dimFilterMap()))}};
 }
@@ -1406,7 +1486,7 @@ function wireFilterViewsRow(){
     row.innerHTML=`<span class="filter-views-label">Views</span><input id="filterViewName" class="filter-view-name" maxlength="40" placeholder="Name this view" aria-label="Name for the saved view"><button class="btn primary sm" type="button" id="filterViewConfirm">Save</button><button class="btn ghost sm" type="button" id="filterViewCancel">Cancel</button>`;
     const input=$('#filterViewName');input.focus();
     const commit=()=>{const name=clean(input.value);if(!name){renderFilterViewsRow();return;}
-      const views=loadFilterViews().filter(entry=>entry.name!==name);views.push(captureFilterView(name));saveFilterViews(views);renderFilterViewsRow();toast(`View \u201c${name}\u201d saved`);};
+      const views=loadFilterViews().filter(entry=>entry.name!==name);views.push(captureFilterView(name));saveFilterViews(views);renderFilterViewsRow();toast(`View \u201c${name}\u201d saved for this session`);};
     $('#filterViewConfirm').onclick=commit;$('#filterViewCancel').onclick=()=>renderFilterViewsRow();
     input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();commit();}if(event.key==='Escape'){event.stopPropagation();renderFilterViewsRow();}};
   };
@@ -1727,7 +1807,7 @@ function openFinding(id,opener){
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
     <div class="finding-evidence">${ic('file-spreadsheet')}${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}${finding.field?' &middot; '+esc(finding.field):''}</div>
-    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Actioned — click to undo':'Mark actioned'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is set aside — click to have it count again':'Disagree with this finding? Set it aside — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Set aside — click to restore':'Set aside'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
+    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Reviewed - click to undo':'Review finding'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is set aside — click to have it count again':'Disagree with this finding? Set it aside — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Set aside — click to restore':'Set aside'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
     <div class="finding-steps"><button class="btn ghost sm" type="button" id="findingPrev" ${position>0?'':'disabled'}>${ic('chevron-left')}Previous</button><span>${position>=0?`${(position+1).toLocaleString()} of ${list.length.toLocaleString()}`:''}</span><button class="btn ghost sm" type="button" id="findingNext" ${position>=0&&position<list.length-1?'':'disabled'}>Next${ic('chevron-right')}</button></div>
   </div>`;
   wireCopyTags($('#drawerBody'));
@@ -1736,7 +1816,7 @@ function openFinding(id,opener){
   if(next)next.onclick=()=>{const target=list[position+1];if(target)openFinding(target.id,opener);};
   if(inTree)inTree.onclick=()=>{closeDrawer();focusHierarchyOnEquipment(finding.equipmentId);};
   const actionedButton=$('#findingActioned');
-  if(actionedButton)actionedButton.onclick=()=>{setActioned(finding,!isActioned(finding));if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else renderRows();openFinding(finding.id,opener);};
+  if(actionedButton)actionedButton.onclick=()=>{if(!isActioned(finding)){closeDrawer();openActionDialog(finding.rule.title,[finding],currentNavigate);return;}reviewRememberUndo();setActioned(finding,false);if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else renderRows();openFinding(finding.id,opener);};
   const excludeButton=$('#findingExclude');
   if(excludeButton)excludeButton.onclick=()=>{
     const on=!isExcludedId(finding.id);
@@ -1996,7 +2076,7 @@ function dashCheckOverview(scoped){
   for(const finding of scoped.findings)if(severityRank(finding.severity)>severityRank(worst.get(finding.rule.id)||''))worst.set(finding.rule.id,finding.severity);
   const enabled=activeRules();
   let max=0;for(const rule of enabled)max=Math.max(max,counts.get(rule.id)||0);
-  const groups=SSM_AUDIT_SOURCES.map(source=>{
+  const groups=AUDIT_UI_SOURCES.map(source=>{
     const entries=enabled.filter(rule=>rule.source===source.id)
       .map(rule=>({rule,count:counts.get(rule.id)||0,severity:worst.get(rule.id)||''}))
       .sort((a,b)=>b.count-a.count||severityRank(b.severity)-severityRank(a.severity)||natCmp(a.rule.title,b.rule.title));
@@ -2135,6 +2215,7 @@ function dashBlockHtml(title,explainer,body,extra){
 
 function dashScopeLine(scoped){
   const summary=S.session.result.summary;
+  if(S.session.changes?.length)return `Working draft &middot; ${S.session.changes.length.toLocaleString()} changed cells &middot; ${S.session.draftResolved.size.toLocaleString()} findings cleared &middot; original workbook unchanged`;
   if(!dashIsScoped())return `Audited ${summary.rows.toLocaleString()} rows &middot; ${summary.checks.toLocaleString()} checks &middot; ${esc(dashAuditedAt())}${S.session.status&&S.session.status.matched?` &middot; <span title="Marked Completed on the Equipment Status Report tab — their findings are not counted anywhere">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}`;
   return `Scoped: ${scoped.rows.length.toLocaleString()} of ${summary.rows.toLocaleString()} rows &middot; ${scoped.findings.length.toLocaleString()} of ${summary.findings.toLocaleString()} findings`;
 }

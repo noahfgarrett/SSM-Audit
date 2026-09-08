@@ -185,13 +185,16 @@ test('SSM Audit recognizes common Instrumentation and Controls discipline wordin
   assert.ok(rules(runSsmAudit(snapshot)).has('metadata.ic-discipline'))
 })
 
-test('SSM Audit accepts explicitly external parent and dependency paths', () => {
+test('SSM Audit accepts external references without certifying their power or control paths', () => {
   const snapshot = auditSnapshotFromAoa([
     headers,
     row({ equipmentId: 'B1-RIO650-01', closestParent: 'OTHER-PROJECT-PANEL', closestParentStatus: 'EXISTING', upn: '650', discipline: 'FACILITIES MONITORING SYSTEM', systemName: '650 Facility Management System', equipmentDescription: 'Remote I/O Panel', dependencies: 'OTHER-PROJECT-PLC', dependencyProject: 'Other project' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
-  const found = rules(runSsmAudit(snapshot))
-  for (const ruleId of ['parent.unresolved','dependency.unresolved','dependency.control-link-missing','dependency.control-electrical-path','dependency.rio-controller-path']) assert.ok(!found.has(ruleId),ruleId)
+  const result = runSsmAudit(snapshot), found = rules(result)
+  for (const ruleId of ['parent.unresolved','dependency.unresolved','logic.control-link-missing','logic.control-electrical-path-missing','logic.rio-control-path-missing']) assert.ok(!found.has(ruleId),ruleId)
+  assert.deepEqual(equipmentIdsForRule(result, 'externalPathReview'), ['B1-RIO650-01'])
+  assert.equal(result.summary.unverified, 1)
+  assert.equal(result.summary.status, 'review')
 })
 
 test('post-upload audit omits import completeness and vocabulary rules', () => {
@@ -252,7 +255,7 @@ test('every finding explains itself in plain language, without implementation ta
   }
 })
 
-test('Item Master standard flags legacy CA_ names and proposes the VF equivalent', () => {
+test('legacy Item Masters get optional migration advice only with one clear VF equivalent', () => {
   assert.equal(SSM_AUDIT_RULES.itemMasterStandard.enabled, true)
   const snapshot = auditSnapshotFromAoa([
     headers,
@@ -261,17 +264,19 @@ test('Item Master standard flags legacy CA_ names and proposes the VF equivalent
     row({ equipmentId: 'B1-UNKNOWN', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', itemMaster: 'PROJECT99_PANEL' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const withVocabulary = runSsmAudit(snapshot, { itemMasterVocabulary: ['VF_ELEC_PANEL', 'VF_MECH_PUMP'] })
-  assert.deepEqual(equipmentIdsForRule(withVocabulary, 'itemMasterStandard'), ['B1-CA', 'B1-UNKNOWN'])
-  const ca = withVocabulary.findings.find(f => f.equipmentId === 'B1-CA')
+  assert.deepEqual(equipmentIdsForRule(withVocabulary, 'itemMasterStandard'), [])
+  assert.deepEqual(equipmentIdsForRule(withVocabulary, 'itemMasterMigration'), ['B1-CA'])
+  const ca = withVocabulary.findings.find(f => f.equipmentId === 'B1-CA' && f.rule.id === SSM_AUDIT_RULES.itemMasterMigration.id)
   assert.equal(ca.expected, 'VF_ELEC_PANEL', 'the VF equivalent is proposed by suffix match')
-  assert.match(ca.recommendation, /Replace with VF_ELEC_PANEL/)
-  assert.match(ca.why, /site-prefixed Item Master \(CA_\)/, 'any site prefix is called out by name, not only CA_')
-  assert.equal(ca.severity, 'warning', 'in a mostly-VF registry a stray legacy name is a warning')
-  // an explicit empty vocabulary disables the unknown-name check; only site-prefixed legacy names can fire
-  assert.deepEqual(equipmentIdsForRule(runSsmAudit(snapshot, { itemMasterVocabulary: [] }), 'itemMasterStandard'), ['B1-CA'])
-  // by default the shipped VF list is used, so names absent from it — even VF-looking ones — are flagged
+  assert.match(ca.recommendation, /Optional migration: consider VF_ELEC_PANEL/)
+  assert.match(ca.why, /prefix alone does not make the current assignment wrong/)
+  assert.equal(ca.severity, 'info', 'migration is optional even in a mostly-VF registry')
+  const noVocabulary = runSsmAudit(snapshot, { itemMasterVocabulary: [] })
+  assert.deepEqual(equipmentIdsForRule(noVocabulary, 'itemMasterStandard'), [])
+  assert.deepEqual(equipmentIdsForRule(noVocabulary, 'itemMasterMigration'), [])
+  // The shipped list judges VF names, not unrecognized project naming schemes.
   const shipped = runSsmAudit(snapshot)
-  assert.deepEqual(equipmentIdsForRule(shipped, 'itemMasterStandard'), ['B1-CA', 'B1-UNKNOWN', 'B1-VF'], 'the invented VF_ELEC_PANEL is not a real Rev14 name, so it is flagged too')
+  assert.deepEqual(equipmentIdsForRule(shipped, 'itemMasterStandard'), ['B1-VF'], 'the invented VF_ELEC_PANEL is not a real Rev14 name')
 })
 
 test('milestone rules are enabled as review-grade checks', () => {
@@ -302,7 +307,24 @@ test('the L2 milestone should name the row UPN; a different UPN is flagged for r
   assert.ok(!byId['L2-OWN'], 'an L2 naming the row UPN passes')
   assert.equal(byId['L2-OTHER'].severity, 'warning')
   assert.match(byId['L2-OTHER'].why, /belongs to UPN 604.*on UPN 602/)
-  assert.equal(byId['L2-NONE'].severity, 'info', 'an L2 with no UPN in its name cannot be checked, so it is only noted')
+  assert.ok(!byId['L2-NONE'], 'an unlinked milestone is not a UPN mismatch')
+  const unknown = result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.milestoneUpnUnknown.id)
+  assert.equal(unknown.equipmentId, 'L2-NONE')
+  assert.equal(unknown.severity, 'info')
+  assert.notEqual(unknown.rule.title, SSM_AUDIT_RULES.milestoneUpn.title)
+})
+
+test('milestone UPN checks leave organizational headers and wrong-level fields to their specific rules', () => {
+  const snapshot = auditSnapshotFromAoa([
+    headers,
+    row({ equipmentId: 'SUPPORT HEADER', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', milestoneParent: 'L1 Enabling', milestone: 'L2-M2 604 Normal Power Enabling', itemMaster: 'VF_Blank' }),
+    row({ equipmentId: 'CHILD-1', closestParent: 'SUPPORT HEADER', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage' }),
+    row({ equipmentId: 'WRONG-LEVEL', closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', milestoneParent: 'L1 Enabling', milestone: 'SITE-L1-M1-119 - Building ready' }),
+  ], { file: 'synthetic.xlsx', sheet: 'Registry' })
+  const result = runSsmAudit(snapshot)
+  assert.deepEqual(equipmentIdsForRule(result, 'milestoneUpn'), [])
+  assert.deepEqual(equipmentIdsForRule(result, 'milestoneUpnUnknown'), [])
+  assert.deepEqual(equipmentIdsForRule(result, 'milestoneLevel'), ['WRONG-LEVEL'])
 })
 
 test('milestone cohort candidates require ten strongly agreeing local peers', () => {
@@ -624,11 +646,12 @@ test('same-UPN dependencies are normal in top-down disciplines and on instrument
 test('a registry that is wholesale on a site item-master scheme is a migration, not thousands of warnings', () => {
   const rows = [headers]
   for (let i = 0; i < 60; i++) rows.push(row({ equipmentId: `B1-PNL-${String(i).padStart(3, '0')}`, closestParent: '602  Medium Voltage', closestParentStatus: 'NEW', upn: '602', discipline: 'ELECTRICAL', systemName: '602  Medium Voltage', itemMaster: 'SP_NB_ELEC_PANEL' }))
-  const result = runSsmAudit(auditSnapshotFromAoa(rows, { file: 'synthetic.xlsx', sheet: 'Registry' }))
-  const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.itemMasterStandard.id)
+  const result = runSsmAudit(auditSnapshotFromAoa(rows, { file: 'synthetic.xlsx', sheet: 'Registry' }), { itemMasterVocabulary: ['VF_ELEC_PANEL'] })
+  const findings = result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.itemMasterMigration.id)
   assert.equal(findings.length, 60, 'every row still gets its migration note')
   assert.ok(findings.every(f => f.severity === 'info'), 'but as info, so structural findings stay on top')
-  assert.match(findings[0].why, /site-prefixed Item Master \(SP_\)/)
+  assert.match(findings[0].recommendation, /Optional migration/)
+  assert.deepEqual(equipmentIdsForRule(result, 'itemMasterStandard'), [])
 })
 
 
@@ -680,11 +703,12 @@ test('a system with no root row, a description typed as a tag, and a site classi
     // every row on 101 nests under 104 equipment: 101 has no top
     row({ equipmentId: 'FCU-1', closestParent: 'AHU-1', upn: '101', discipline: 'MECHANICAL DRY', systemName: '101  Cleanroom Makeup Air System', equipmentDescription: 'Fan Coil', equipmentClassification: 'ZZ-SITE' }),
     row({ equipmentId: 'Distribution piping east wing', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Piping', itemMaster: 'VF_Blank' }),
+    row({ equipmentId: 'Air handler east wing', closestParent: MECH_ROOT, closestParentStatus: 'NEW', ...MECH, equipmentDescription: 'Air Handler' }),
   ], { file: 'synthetic.xlsx', sheet: 'Registry' })
   const result = runSsmAudit(snapshot)
   const noRoot = result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.systemNoRoot.id)
   assert.ok(noRoot && /101/.test(noRoot.actual), 'the 101 system has no root row')
-  assert.deepEqual(equipmentIdsForRule(result, 'tagLooksLikeText'), ['Distribution piping east wing'])
+  assert.deepEqual(equipmentIdsForRule(result, 'tagLooksLikeText'), ['Air handler east wing'], 'Blank headers keep their descriptive names')
   assert.equal(result.findings.find(f => f.rule.id === 'identity.tag-looks-like-description').severity, 'warning', 'a description-shaped tag is Check this, not Invalid')
   assert.deepEqual(equipmentIdsForRule(result, 'siteClassification'), ['FCU-1'])
   assert.equal(result.findings.find(f => f.rule.id === SSM_AUDIT_RULES.siteClassification.id).severity, 'info')

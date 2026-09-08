@@ -111,10 +111,10 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     focus:[{row:1,field:'discipline'}],
     caption:'The middle pump disagrees with the rest of UPN 111 on Discipline. Every row on a UPN should agree on System Name and Discipline, so the odd row out is the one flagged.',fix:`Set the middle pump to ${MECH} like its neighbours.`}),
   ex('identity.tag-looks-like-description',{
-    rows:[r({id:'Chilled water pumps',desc:'',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Blank'})],
+    rows:[r({id:'Chilled water pumps',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
     focus:[{row:0,field:'equipmentId'}],
     marks:[{row:0,field:'equipmentId',parts:[['Chilled ',true],['water ',true],['pumps',true]]}],
-    caption:'Lowercase words in the Equipment ID column read like a description typed where the tag belongs.',fix:'Use a tag (B1-CHW-PUMPS-HDR) and put the words in Equipment Description.'}),
+    caption:'This equipment row has a pump Item Master, but its Equipment ID contains descriptive words instead of a tag.',fix:'Use the equipment tag (for example B1-PMP-1111) and keep the words in Equipment Description.'}),
   ex('metadata.classification-not-in-list',{
     rows:[r({id:'B1-XV-1111',desc:'Isolation valve',parent:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_I&C_VALVE',cls:'XV'}),r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',cls:'PMP'})],
     focus:[{row:0,field:'equipmentClassification'}],
@@ -130,6 +130,10 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     focus:[{row:0,field:'milestone'},{row:0,field:'upn'}],
     marks:[{row:0,field:'milestone',parts:[['L2-M1-',false],['104',true],[' 30% Capacity',false]]}],
     caption:'The row is on UPN 111 but its L2 milestone names UPN 104.',fix:'Assign the L2 milestone for 111 (L2-M1-111 …), or move the row to the right UPN.'}),
+  ex('milestone.l2-upn-unknown',{
+    rows:[r({...PANEL,l1:'L1 Building Ready',l2:'L2 Building Ready'})],
+    focus:[{row:0,field:'milestone'},{row:0,field:'upn'}],
+    caption:'The L2 milestone says Building Ready without identifying a UPN or system. Its name cannot confirm whether it applies to this panel, but does not prove a mismatch.',fix:'Check the approved milestone reference and confirm that this L2 applies to UPN 604. Keep the assignment if the reference supports it.'}),
   ex('milestone.intent-mismatch',{
     rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP',l1:'L1-M1 30% Capacity',l2:'L2-M1-111 100% Capacity'})],
     focus:[{row:0,field:'milestoneParent'},{row:0,field:'milestone'}],
@@ -158,10 +162,15 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
 
   /* ---------------- item masters & headers ---------------- */
   ex('item-master.standardized-assignment',{
-    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'CA_MD_GAH/GMAH'}),r({id:'B1-AHU-1042',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'}),r({id:'B1-AHU-1043',desc:'Air handler',parent:sys('104'),upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    rows:[r({...AHU,im:'VF_MD_GAH/GMAHX'}),r({...AHU,id:'B1-AHU-1042'})],
     focus:[{row:0,field:'itemMaster'}],
-    marks:[{row:0,field:'itemMaster',parts:[['CA',true],['_MD_GAH/GMAH',false]]}],
-    caption:'A legacy project-prefixed Item Master (CA_…) where the VF standard name exists.',fix:'Replace with VF_MD_GAH/GMAH.'}),
+    marks:[{row:0,field:'itemMaster',parts:[['VF_MD_GAH/GMAH',false],['X',true]]}],
+    caption:'The first air handler names a VF Item Master with an extra X. That VF name is absent from the approved list; the second row shows the listed name.',fix:'Confirm the intended checklist and correct the typo to VF_MD_GAH/GMAH, or verify the name against a newer approved list.'}),
+  ex('item-master.migration-advisory',{
+    rows:[r({...AHU,im:'LEGACY_MD_GAH/GMAH'}),r({...AHU,id:'B1-AHU-1042'})],
+    focus:[{row:0,field:'itemMaster'}],
+    marks:[{row:0,field:'itemMaster',parts:[['LEGACY',true],['_MD_GAH/GMAH',false]]}],
+    caption:'The legacy Item Master has one matching VF name in the approved list. Its prefix alone does not make the existing assignment invalid.',fix:'Optional migration: consider VF_MD_GAH/GMAH only after confirming checklist equivalence and project approval. Otherwise keep the existing assignment.'}),
   ex('header.item-master-not-blank',{
     rows:[r({id:'B1-CHW-PIPING',desc:'Chilled water piping',parent:sys('111'),upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-TT-1111',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-TT-1112',desc:'Temperature transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'}),r({id:'B1-PT-1111',desc:'Pressure transmitter',parent:'B1-CHW-PIPING',upn:'111',disc:FMS,im:'VF_I&C_TRANSMITTER'})],
     focus:[{row:0,field:'itemMaster'}],
@@ -212,6 +221,10 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     rows:[r({...PANEL}),r({id:'B1-RIO-6501',desc:'Remote I/O panel',parent:sys('650'),deps:'B1-PNL-6041',upn:'650',disc:FMS,im:'VF_I&C_RIO W/O SUD'})],
     focus:[{row:1,field:'dependencies'}],
     caption:'The RIO has power but names no PLC, I/O cluster or upstream RIO that runs it.',fix:'Add the PLC (B1-PLC-6501) as a dependency.'}),
+  ex('logic.external-path-unverified',{
+    rows:[r({id:'B1-RIO-6501',desc:'Remote I/O panel',parent:sys('650'),deps:'B2-PNL-6041; B2-PLC-6501',depProject:'OTHER-PROJECT',upn:'650',disc:FMS,im:'VF_I&C_RIO W/O SUD'})],
+    focus:[{row:0,field:'dependencies'},{row:0,field:'dependencyProject'}],
+    caption:'The RIO names a panel and PLC in another project. Those external references are valid, but this registry cannot verify the power supply or controller link they provide.',fix:'Review the referenced equipment in the other project and document which power and control relationships it supplies. Keep valid external references; do not treat the tag names alone as proof.'}),
   ex('logic.drive-parent-unexpected',{
     rows:[r({...PANEL}),r({...AHU}),r({id:'B1-VFD-1041',desc:'Variable frequency drive',parent:'B1-PNL-6041',deps:'B1-PLC-6501',upn:'104',disc:ELEC,im:'VF_EL_VFD'}),r({...PLC})],
     focus:[{row:2,field:'closestParent'}],

@@ -1,5 +1,7 @@
 import { clean, natCmp } from '../core/text.js'
+import { zipDeflateAvailable, zipEntries } from '../core/zip.js'
 import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob, workbookBlobCompact } from '../core/download.js'
+import { EXTO_REV21_COLUMNS, extoRev21Norm } from '../exto/rev21-contract.js'
 import { S } from '../state.js'
 import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
@@ -7,7 +9,7 @@ import { auditColumnName, auditNormId } from './model.js'
 
 function addSheet(workbook,sheet,name){XLSX.utils.book_append_sheet(workbook,sheet,name);}
 function printable(value){return typeof value==='string'?value:JSON.stringify(value);}
-const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'Commissioning Logic'},EXPORT_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
+const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'Commissioning Logic',reference:'Selected references'},EXPORT_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
 
 /* ---- SSM Audit workbook ----
    One tab per L2 milestone so a commissioning engineer can work a milestone end
@@ -71,7 +73,6 @@ const AUDIT_EXPORT_STYLES=Object.freeze({
   muted:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.muted,vertical:'top'}),
   repeat:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.repeat,vertical:'top'}),
   flag:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.black,fill:AUDIT_EXPORT_PALETTE.flag,vertical:'top'}),
-  changedCell:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.black,fill:'FFF2C2'}),
   linkText:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.link,underline:true,vertical:'top'}),
   linkBand:sheetCellStyle({color:AUDIT_EXPORT_PALETTE.link,underline:true,fill:AUDIT_EXPORT_PALETTE.band,vertical:'top'}),
   label:sheetCellStyle({bold:true,color:AUDIT_EXPORT_PALETTE.body,vertical:'center'}),
@@ -623,66 +624,299 @@ export function exportSsmComparisonXlsx(){
 }
 
 /* ---- Updated Registry Export ----
-   The original workbook is re-opened from the bytes kept at load time and the
-   staged corrections are written into their cells -- every other cell, tab, and
-   value stays as uploaded, so the file can go straight back into Exto. */
-export function applyChangesToWorkbook(workbook,snapshot,changes){
-  const byId=new Map();
-  for(const row of snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byId.has(key))byId.set(key,row);}
-  const headerCache=new Map();
-  const columnFor=(sheetName,header)=>{
-    let map=headerCache.get(sheetName);
-    if(!map){
-      map=new Map();
-      const sheet=workbook.Sheets[sheetName];
-      if(sheet&&sheet['!ref']){
-        const range=XLSX.utils.decode_range(sheet['!ref']);
-        for(let r=range.s.r;r<=Math.min(range.e.r,range.s.r+24);r++){
-          for(let c=range.s.c;c<=range.e.c;c++){
-            const cell=sheet[XLSX.utils.encode_cell({r,c})];
-            const value=auditNormId(cell&&cell.v);
-            if(value&&!map.has(value))map.set(value,c);
-          }
-        }
-      }
-      headerCache.set(sheetName,map);
+   Preflight against the immutable import, never the corrected draft. Package
+   output retains untouched part payloads, including forms and relationships.
+   Target worksheet XML is DOM-serialized; ZIP bytes/metadata and XML spelling
+   are not preserved exactly. Formula inputs may require Excel recalculation. */
+export class AuditCorrectionExportError extends Error{
+  constructor(code,message,index){super(index==null?message:`Correction ${index+1}: ${message}`);this.name='AuditCorrectionExportError';this.code=code;this.changeIndex=index;}
+}
+function auditCorrectionFail(code,message,index){throw new AuditCorrectionExportError(code,message,index);}
+function auditCorrectionSourceKey(source){return JSON.stringify([source&&source.sheet,source&&source.row]);}
+function auditCorrectionRows(snapshot){return snapshot&&Array.isArray(snapshot.snapshots)?snapshot.snapshots.flatMap(auditCorrectionRows):snapshot&&snapshot.rows||[];}
+/* Import records trimmed display values, not raw storage values. Format a copy
+   without cached text so validation neither mutates cells nor trusts stale w. */
+function auditCorrectionCellValue(cell){return cell?clean(XLSX.utils.format_cell({...cell,w:undefined})):'';}
+function auditCorrectionColumn(change,index){
+  const aliases={'L2 Milestone':'milestone','L1 Milestone Parent':'milestoneParent'};
+  const label=change.header||change.field;
+  const column=EXTO_REV21_COLUMNS.find(column=>change.prop?column.field===change.prop:column.field===label||extoRev21Norm(column.header)===extoRev21Norm(label)||column.field===aliases[label]);
+  if(!column)auditCorrectionFail('FIELD','The field is not an exported registry column.',index);
+  if(change.header&&extoRev21Norm(change.header)!==extoRev21Norm(column.header))auditCorrectionFail('FIELD','The header and property identify different columns.',index);
+  return column;
+}
+function auditCorrectionValue(value,index){
+  if(value===null)return '';
+  if(typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value))return value;
+  if(typeof value!=='string'||value.length>32767||/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value))auditCorrectionFail('VALUE','The replacement is not a supported Excel cell value.',index);
+  return value;
+}
+/* A tag match is not evidence of a mirror. Only the import's occurrence-paired
+   cross-sheet sources may expand a canonical correction, and each must still
+   match its complete original registry row before any cell is written. */
+function auditCorrectionMirrorRows(workbook,canonical,bySource,mirrorOwners,index){
+  const sources=canonical._sources;
+  if(!Array.isArray(sources)||!sources.length)auditCorrectionFail('SOURCE','The imported mirror locations are invalid.',index);
+  const seenSheets=new Set(),rows=[],canonicalKey=auditCorrectionSourceKey(canonical._source);
+  for(const source of sources){
+    const key=auditCorrectionSourceKey(source),matches=bySource.get(key);
+    if(!source||!source.sheet||!Number.isInteger(source.row)||source.row<1||source.row>1048576||!matches||matches.length!==1)auditCorrectionFail('SOURCE','A mirrored row has no unique original physical location.',index);
+    if(seenSheets.has(source.sheet)||mirrorOwners.get(key)?.size!==1)auditCorrectionFail('AMBIGUOUS','Mirrored copies must belong to one occurrence on distinct worksheets.',index);
+    seenSheets.add(source.sheet);
+    const row=matches[0],columns=row._source.columns,declared=source.columns;
+    if(!columns||!declared||Object.keys(columns).length!==Object.keys(declared).length||Object.entries(columns).some(([prop,column])=>declared[prop]!==column))auditCorrectionFail('COLUMN','A mirrored row column mapping differs from the original import.',index);
+    if(EXTO_REV21_COLUMNS.some(column=>clean(row[column.field])!==clean(canonical[column.field])))auditCorrectionFail('BASELINE','A mirrored row is not identical to its canonical baseline row.',index);
+    const sheet=workbook.Sheets[source.sheet];if(!sheet)auditCorrectionFail('SHEET','An original mirrored worksheet is missing.',index);
+    for(const field of EXTO_REV21_COLUMNS){
+      const column=columns[field.field];if(column==null)continue;
+      if(!Number.isInteger(column)||column<0||column>16383)auditCorrectionFail('COLUMN','A mirrored row has an invalid original column mapping.',index);
+      const cell=sheet[XLSX.utils.encode_cell({r:source.row-1,c:column})];
+      if(auditCorrectionCellValue(cell)!==clean(row[field.field]))auditCorrectionFail('CONFLICT','An original mirrored row has changed; no corrections were written.',index);
     }
-    const column=map.get(auditNormId(header));
-    return column==null?-1:column;
-  };
-  let applied=0;
-  for(const change of changes){
-    const row=byId.get(auditNormId(change.tag));if(!row||!row._source)continue;
-    const sheetName=row._source.sheet,sheet=workbook.Sheets[sheetName];if(!sheet)continue;
-    const column=columnFor(sheetName,change.header||change.field);if(column<0)continue;
-    const address=XLSX.utils.encode_cell({r:(row._source.row||1)-1,c:column});
-    const cell=sheet[address]||{};
-    cell.t='s';cell.v=change.value;delete cell.w;delete cell.f;
-    /* Light yellow marks every cell the export changed, so a reviewer can scan
-       the file and see exactly what the staged actions touched. */
-    cell.s=AUDIT_EXPORT_STYLES.changedCell;
-    sheet[address]=cell;applied++;
+    rows.push(row);
   }
-  return applied;
+  if(!rows.some(row=>auditCorrectionSourceKey(row._source)===canonicalKey))auditCorrectionFail('SOURCE','The canonical row is missing from its imported mirror group.',index);
+  return rows;
+}
+function auditCorrectionPreflight(workbook,snapshot,changes){
+  if(!snapshot||!Array.isArray(snapshot.rows)||!workbook||!workbook.Sheets||!Array.isArray(changes))auditCorrectionFail('BASELINE','The original baseline and a correction list are required.');
+  const bySource=new Map(),byTag=new Map();
+  for(const row of auditCorrectionRows(snapshot)){
+    const sourceKey=auditCorrectionSourceKey(row._source),tag=auditNormId(row.equipmentId);
+    const sources=bySource.get(sourceKey)||[];sources.push(row);bySource.set(sourceKey,sources);
+    if(tag){const rows=byTag.get(tag)||[];rows.push(row);byTag.set(tag,rows);}
+  }
+  const canonicalBySource=new Map(),mirrorOwners=new Map();
+  for(const row of snapshot.rows){
+    const key=auditCorrectionSourceKey(row._source),matches=canonicalBySource.get(key)||[];matches.push(row);canonicalBySource.set(key,matches);
+    for(const source of Array.isArray(row._sources)?row._sources:[]){const sourceKey=auditCorrectionSourceKey(source),owners=mirrorOwners.get(sourceKey)||new Set();owners.add(row);mirrorOwners.set(sourceKey,owners);}
+  }
+  const targets=new Map(),plan=[];
+  const pending=changes.map((change,index)=>({change,index,mirrored:false})),verifiedMirrors=new Map();
+  for(const {index,change,mirrored} of pending){
+    if(!change||typeof change!=='object')auditCorrectionFail('CHANGE','The correction is invalid.',index);
+    const explicit=Object.hasOwn(change,'source'),candidates=explicit?bySource.get(auditCorrectionSourceKey(change.source)):byTag.get(auditNormId(change.tag));
+    if(!candidates||!candidates.length)auditCorrectionFail('SOURCE','No original row matches this correction.',index);
+    if(candidates.length!==1)auditCorrectionFail('AMBIGUOUS','Multiple original rows match; an exact sheet and row are required.',index);
+    const row=candidates[0],source=row._source,column=auditCorrectionColumn(change,index),prop=column.field;
+    if(!source||typeof source.sheet!=='string'||!Number.isInteger(source.row)||source.row<1||source.row>1048576)auditCorrectionFail('SOURCE','The original row has no valid physical location.',index);
+    if(change.tag!=null&&auditNormId(change.tag)!==auditNormId(row.equipmentId))auditCorrectionFail('SOURCE','The tag does not match the original physical row.',index);
+    const c=source.columns&&source.columns[prop],tagColumn=source.columns&&source.columns.equipmentId;
+    if(!Number.isInteger(c)||c<0||c>16383||!Number.isInteger(tagColumn)||tagColumn<0||tagColumn>16383)auditCorrectionFail('COLUMN','The original column mapping is missing or invalid.',index);
+    if(explicit){
+      const columns=change.source&&change.source.columns;
+      if(!columns||columns[prop]!==c||Object.entries(columns).some(([field,at])=>source.columns[field]!==at))auditCorrectionFail('COLUMN','The correction column mapping differs from the original import.',index);
+      if(!Object.hasOwn(change,'before'))auditCorrectionFail('BEFORE','The original value is required for a source-targeted correction.',index);
+    }
+    const before=Object.hasOwn(change,'before')?change.before:row[prop];
+    if(before===undefined||clean(before)!==clean(row[prop]))auditCorrectionFail('BASELINE','The original value does not match the immutable baseline.',index);
+    if(!mirrored){
+      const canonicalKey=auditCorrectionSourceKey(source),canonicalRows=canonicalBySource.get(canonicalKey)||[];
+      if(canonicalRows.length>1)auditCorrectionFail('AMBIGUOUS','Multiple canonical rows share the correction location.',index);
+      const canonical=canonicalRows[0];
+      if(canonical&&Object.hasOwn(canonical,'_sources')){
+        let copies=verifiedMirrors.get(canonicalKey);
+        if(!copies){copies=auditCorrectionMirrorRows(workbook,canonical,bySource,mirrorOwners,index);verifiedMirrors.set(canonicalKey,copies);}
+        for(const copy of copies)if(auditCorrectionSourceKey(copy._source)!==canonicalKey)pending.push({index,mirrored:true,change:{...change,before,source:copy._source}});
+      }
+    }
+    const sheet=workbook.Sheets[source.sheet];
+    if(!sheet)auditCorrectionFail('SHEET','The original worksheet is missing.',index);
+    const address=XLSX.utils.encode_cell({r:source.row-1,c}),tagAddress=XLSX.utils.encode_cell({r:source.row-1,c:tagColumn}),cell=sheet[address];
+    if(auditCorrectionCellValue(sheet[tagAddress])!==clean(row.equipmentId))auditCorrectionFail('CONFLICT','The original equipment cell has changed.',index);
+    if(cell&&(cell.f!=null||cell.F!=null||cell.t==='e'))auditCorrectionFail('FORMULA','Formula, array, and error cells cannot be replaced by a metadata correction.',index);
+    if(auditCorrectionCellValue(cell)!==clean(before))auditCorrectionFail('CONFLICT','The original cell value has changed; no corrections were written.',index);
+    if((sheet['!merges']||[]).some(range=>source.row-1>=range.s.r&&source.row-1<=range.e.r&&c>=range.s.c&&c<=range.e.c))auditCorrectionFail('MERGED','Merged cells cannot be corrected safely.',index);
+    const value=auditCorrectionValue(change.value,index),key=JSON.stringify([source.sheet,address]),previous=targets.get(key);
+    if(previous&&!Object.is(previous.value,value))auditCorrectionFail('CONFLICT','Two corrections request different values for the same cell.',index);
+    const target={sheet,sheetName:source.sheet,address,row:source.row,column:c,value,index};
+    if(!previous){targets.set(key,target);plan.push(target);}
+  }
+  for(const target of plan){
+    for(const key of [target.address,'!ref']){
+      const descriptor=Object.getOwnPropertyDescriptor(target.sheet,key);
+      if(descriptor?descriptor.writable!==true:!Object.isExtensible(target.sheet))auditCorrectionFail('WORKBOOK','A target worksheet is read-only; no corrections were written.',target.index);
+    }
+    const ref=target.sheet['!ref'];
+    if(ref&&!/^[A-Z]+[1-9][0-9]*(?::[A-Z]+[1-9][0-9]*)?$/.test(ref))auditCorrectionFail('WORKBOOK','A target worksheet range is invalid.',target.index);
+  }
+  return plan;
+}
+/* Read-only preview for an original sparse SheetJS workbook read with
+   cellStyles:true to retain imported number formats. Counts include
+   proven mirror cells and deduplicate identical writes. This checks cells, not
+   package eligibility: callers must separately require an original safe XLSX. */
+export function validateAuditCorrections(workbook,baselineSnapshot,changes){
+  const plan=auditCorrectionPreflight(workbook,baselineSnapshot,changes);
+  return {correctionCount:changes.length,cellCount:plan.length,sheetCount:new Set(plan.map(target=>target.sheetName)).size};
+}
+/* Legacy callers may omit source/before only when the baseline tag is unique.
+   The return count is logical corrections, including any proven mirror writes.
+   All validation runs before the first write. Styles and annotations survive. */
+export function applyChangesToWorkbook(workbook,baselineSnapshot,changes){
+  const plan=auditCorrectionPreflight(workbook,baselineSnapshot,changes);
+  for(const target of plan){
+    const cell={...target.sheet[target.address],t:typeof target.value==='number'?'n':typeof target.value==='boolean'?'b':'s',v:target.value};
+    for(const key of ['w','f','F','D','h','r'])delete cell[key];
+    sheetSetCell(target.sheet,target.address,cell);
+  }
+  return changes.length;
+}
+
+const AUDIT_PACKAGE_NS='http://schemas.openxmlformats.org/package/2006/relationships';
+const AUDIT_SHEET_NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+function auditPackageChildren(node,name,namespace=node.namespaceURI){return Array.from(node.childNodes).filter(child=>child.nodeType===1&&child.localName===name&&child.namespaceURI===namespace);}
+function auditPackageXml(bytes){
+  const xml=new TextDecoder('utf-8',{fatal:true}).decode(bytes),document=new DOMParser().parseFromString(xml,'application/xml');
+  if(!document.documentElement||document.doctype||document.getElementsByTagNameNS('*','parsererror').length)auditCorrectionFail('XML','The original workbook contains unsupported or invalid XML.');
+  return document;
+}
+function auditPackagePath(base,target){
+  if(!target||target.includes('\\'))auditCorrectionFail('PACKAGE','A workbook relationship has an invalid target.');
+  const url=new URL(target,`https://xlsx.invalid/${base}`);
+  if(url.origin!=='https://xlsx.invalid'||url.search||url.hash)auditCorrectionFail('PACKAGE','External workbook relationships cannot be edited.');
+  return decodeURIComponent(url.pathname.slice(1));
+}
+function auditPackageRelationships(document){
+  if(document.documentElement.localName!=='Relationships'||document.documentElement.namespaceURI!==AUDIT_PACKAGE_NS)auditCorrectionFail('PACKAGE','Workbook relationships are invalid.');
+  const map=new Map();
+  for(const relation of auditPackageChildren(document.documentElement,'Relationship')){
+    const id=relation.getAttribute('Id');if(!id||map.has(id))auditCorrectionFail('PACKAGE','Workbook relationships are ambiguous.');map.set(id,relation);
+  }
+  return map;
+}
+function auditPackageElement(parent,name){return parent.ownerDocument.createElementNS(parent.namespaceURI,parent.prefix?`${parent.prefix}:${name}`:name);}
+/* Only XLSX packages are supported: never silently downgrade a legacy, macro,
+   signed, or unparseable workbook to a values-only copy. No source bytes mutate. */
+export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,changes,options={}){
+  if(typeof DOMParser!=='function'||typeof XMLSerializer!=='function')auditCorrectionFail('XML','This browser does not provide the XML tools needed for safe export.');
+  const bytes=sourceBytes instanceof ArrayBuffer?new Uint8Array(sourceBytes.slice(0)):ArrayBuffer.isView(sourceBytes)?new Uint8Array(sourceBytes.buffer,sourceBytes.byteOffset,sourceBytes.byteLength).slice():null;
+  if(!bytes||bytes[0]!==0x50||bytes[1]!==0x4b)auditCorrectionFail('PACKAGE','Safe updated-registry export requires an original XLSX workbook.');
+  const container=XLSX.CFB.read(bytes,{type:'array'}),entries=[],parts=new Map();
+  container.FullPaths.forEach((path,index)=>{
+    const name=path.slice(container.FullPaths[0].length),file=container.FileIndex[index];
+    if(!name||name.endsWith('/')||name.startsWith('\u0001')||!file||file.type!==2)return;
+    if(parts.has(name))auditCorrectionFail('PACKAGE','The original package contains duplicate parts.');
+    const entry={name,data:new Uint8Array(file.content)};entries.push(entry);parts.set(name,entry);
+  });
+  if(entries.some(entry=>entry.name.toLowerCase().startsWith('_xmlsignatures/')))auditCorrectionFail('PACKAGE','Digitally signed workbooks cannot be corrected without invalidating their signatures.');
+  const xmlAt=path=>{const entry=parts.get(path);if(!entry)auditCorrectionFail('PACKAGE','An original workbook part is missing.');return auditPackageXml(entry.data);};
+  const roots=[...auditPackageRelationships(xmlAt('_rels/.rels')).values()].filter(relation=>relation.getAttribute('Type').endsWith('/officeDocument'));
+  if(roots.length!==1||roots[0].getAttribute('TargetMode')==='External')auditCorrectionFail('PACKAGE','The original workbook relationship is missing or ambiguous.');
+  const workbookPath=auditPackagePath('',roots[0].getAttribute('Target'));
+  const types=xmlAt('[Content_Types].xml'),type=Array.from(types.getElementsByTagNameNS('*','Override')).filter(node=>node.getAttribute('PartName')===`/${workbookPath}`);
+  if(type.length!==1||type[0].getAttribute('ContentType')!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml')auditCorrectionFail('PACKAGE','Safe updated-registry export supports XLSX workbooks only.');
+  const workbookXml=xmlAt(workbookPath),root=workbookXml.documentElement;
+  if(root.localName!=='workbook'||root.namespaceURI!==AUDIT_SHEET_NS)auditCorrectionFail('PACKAGE','This workbook XML format is not supported for safe export.');
+  const slash=workbookPath.lastIndexOf('/'),relationships=auditPackageRelationships(xmlAt(`${workbookPath.slice(0,slash+1)}_rels/${workbookPath.slice(slash+1)}.rels`));
+  const sheetPaths=new Map(),sheetNames=new Set(),worksheetParts=new Set();
+  for(const node of workbookXml.getElementsByTagNameNS(AUDIT_SHEET_NS,'sheet')){
+    const name=node.getAttribute('name'),relation=relationships.get(node.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'));
+    if(sheetNames.has(name))auditCorrectionFail('PACKAGE','Worksheet names are ambiguous.');sheetNames.add(name);
+    if(relation&&relation.getAttribute('TargetMode')!=='External'&&relation.getAttribute('Type').endsWith('/worksheet')){
+      const path=auditPackagePath(workbookPath,relation.getAttribute('Target'));
+      if(worksheetParts.has(path))auditCorrectionFail('PACKAGE','Multiple worksheets point to the same physical package part.');worksheetParts.add(path);sheetPaths.set(name,path);
+    }
+  }
+  const workbook=XLSX.read(bytes,{type:'array',cellStyles:true}),plan=auditCorrectionPreflight(workbook,baselineSnapshot,changes),documents=new Map(),rowIndexes=new Map(),patches=[];
+  for(const target of plan){
+    const path=sheetPaths.get(target.sheetName);if(!path)auditCorrectionFail('PACKAGE','A targeted worksheet relationship is missing.',target.index);
+    let rowsByNumber=rowIndexes.get(path);
+    if(!rowsByNumber){
+      const document=xmlAt(path),sheet=document.documentElement,data=auditPackageChildren(sheet,'sheetData');
+      if(sheet.localName!=='worksheet'||sheet.namespaceURI!==AUDIT_SHEET_NS||data.length!==1)auditCorrectionFail('XML','A targeted worksheet has invalid cell data.',target.index);
+      documents.set(path,document);rowsByNumber=new Map();rowIndexes.set(path,rowsByNumber);
+      for(const row of auditPackageChildren(data[0],'row')){const key=row.getAttribute('r'),matches=rowsByNumber.get(key)||[];matches.push(row);rowsByNumber.set(key,matches);}
+    }
+    const rows=rowsByNumber.get(String(target.row));
+    if(!rows||rows.length!==1)auditCorrectionFail('XML','A targeted physical row is missing or ambiguous.',target.index);
+    const cells=auditPackageChildren(rows[0],'c'),matches=cells.filter(cell=>cell.getAttribute('r')===target.address);
+    if(matches.length>1)auditCorrectionFail('XML','A targeted physical cell is ambiguous.',target.index);
+    const cell=matches[0];if(cell&&auditPackageChildren(cell,'f').length)auditCorrectionFail('FORMULA','A formula cell cannot be replaced by a metadata correction.',target.index);
+    patches.push({target,row:rows[0],cell,cells});
+  }
+  /* All physical cells and conflicts have now been checked. Only temporary DOMs
+     are edited; no partially corrected workbook can escape on failure. */
+  for(const {target,row,cell:existing,cells} of patches.sort((left,right)=>left.target.column-right.target.column)){
+    const cell=existing||auditPackageElement(row,'c');
+    if(!existing){cell.setAttribute('r',target.address);row.insertBefore(cell,cells.find(candidate=>XLSX.utils.decode_cell(candidate.getAttribute('r')).c>target.column)||null);}
+    for(const name of ['v','is'])for(const child of auditPackageChildren(cell,name))cell.removeChild(child);
+    const isString=typeof target.value==='string';cell.setAttribute('t',isString?'inlineStr':typeof target.value==='boolean'?'b':'n');
+    const value=auditPackageElement(cell,isString?'is':'v');
+    if(isString){const text=auditPackageElement(cell,'t');text.setAttributeNS('http://www.w3.org/XML/1998/namespace','xml:space','preserve');text.textContent=target.value.replace(/_x[0-9a-f]{4}_/gi,match=>`_x005F_${match.slice(1)}`).replace(/\r/g,'_x000D_');value.appendChild(text);}
+    else value.textContent=typeof target.value==='boolean'?(target.value?'1':'0'):String(target.value);
+    cell.insertBefore(value,cell.firstChild);
+  }
+  const encoder=new TextEncoder();for(const [path,document] of documents)parts.get(path).data=encoder.encode(new XMLSerializer().serializeToString(document));
+  if(zipDeflateAvailable())return zipEntries(entries,options.onProgress);
+  for(const entry of entries){const file=XLSX.CFB.find(container,`/${entry.name}`);file.content=entry.data;file.size=entry.data.length;}
+  return new Uint8Array(XLSX.CFB.write(container,{fileType:'zip',type:'array',compression:true}));
 }
 export async function exportUpdatedRegistryXlsx(){
-  const bytes=S.session&&S.session.sourceBytes,changes=S.session&&S.session.changes||[];
-  if(!bytes){toast('The original workbook is not in memory — load the registry again first');return;}
-  if(!changes.length){toast('Nothing staged — action findings with a fix first');return;}
-  const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  const session=S.session,bytes=session&&session.sourceBytes,baseline=session&&session.baselineSnapshot;
+  const changes=(session&&session.changes||[]).map(change=>({...change,...(change.source?{source:{...change.source,columns:{...change.source.columns}}}:{})}));
+  if(!bytes){toast('The original workbook is not in memory — load the registry again first');return false;}
+  if(!baseline){toast('The original audit baseline is missing; load the registry again first');return false;}
+  if(!changes.length){toast('Nothing staged — action findings with a fix first');return false;}
+  const base=clean(session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   try{
-    let applied=0;
-    await runWithProgress('Building the updated registry',S.session.name,async(checkpoint,report)=>{
-      report(.05,'Re-opening the original workbook');await checkpoint();
-      const workbook=XLSX.read(bytes,{type:'array',cellStyles:false});
-      report(.35,`Applying ${changes.length.toLocaleString()} staged change${changes.length===1?'':'s'}`);await checkpoint();
-      applied=applyChangesToWorkbook(workbook,S.session.snapshot,changes);
-      report(.5,'Writing the workbook');await checkpoint();
-      const blob=await workbookBlobCompact(workbook,{onProgress:async(fraction,name)=>{report(.55+fraction*.42,`Compressing ${name.replace(/^xl\//,'').replace(/\.xml$/,'')}`);await checkpoint();}});
-      report(1,`${applied.toLocaleString()} change${applied===1?'':'s'} written`);downloadBlob(`${base}-Updated-Registry.xlsx`,blob);
+    await runWithProgress('Building the updated registry','Checking original cells and staged corrections',async(checkpoint,report)=>{
+      report(.05,'Checking every correction against the original workbook');await checkpoint();
+      const updated=await buildUpdatedRegistryBytes(bytes,baseline,changes,{onProgress:async fraction=>{report(.4+fraction*.58,'Packaging the corrected copy');await checkpoint();}});
+      report(1,'Corrected copy ready');downloadBlob(`${base}-Updated-Registry.xlsx`,new Blob([updated],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
     });
-    toast(`Updated registry exported — ${applied.toLocaleString()} change${applied===1?'':'s'} written`);
-  }catch(error){console.error('Updated registry export failed',error);toast('The updated registry could not be built');}
+    toast(`Updated registry exported: ${changes.length.toLocaleString()} corrections written`);
+    return true;
+  }catch(error){toast(error instanceof AuditCorrectionExportError?error.message:'The updated registry could not be built; no corrected copy was exported');return false;}
+}
+
+/* Current corrections and the review journal are separate: a reviewed finding
+   is not necessarily corrected, and a staged change is not a source-file edit. */
+export function buildAuditCorrectionsWorkbook(changes=[],reviewHistory=[],options={}){
+  const workbook=XLSX.utils.book_new(),findings=new Map((options.baselineResult&&options.baselineResult.findings||[]).map(finding=>[finding.id,finding]));
+  const sourceRows=new Map((options.baselineResult&&options.baselineResult.rows||[]).map(row=>[auditCorrectionSourceKey(row._source),row]));
+  const dispositionLabels={'corrected-draft':'Corrected in draft',reviewed:'Reviewed',exception:'Exception'};
+  const changeKey=change=>JSON.stringify([auditCorrectionSourceKey(change.source),change.prop||change.header||change.field,change.before,change.value]);
+  const reviewByFinding=new Map(),reviewByChange=new Map();
+  for(const review of reviewHistory){for(const id of review.findingIds||[])reviewByFinding.set(id,review);for(const change of review.changes||[])reviewByChange.set(changeKey(change),review);}
+  const columns=['Equipment ID','Field','Before','After','Reason','Sheet','Row','Column','Cell','Status','Owner','Recorded At','Rule','Finding ID'];
+  const correctionRow=(change,review,status)=>{
+    const finding=findings.get(change.findingId),source=change.source||{},column=source.columns&&source.columns[change.prop||EXTO_REV21_COLUMNS.find(column=>extoRev21Norm(column.header)===extoRev21Norm(change.header||change.field))?.field];
+    const letter=Number.isInteger(column)&&column>=0&&column<16384?auditColumnName(column):'';
+    const value=value=>value==null?'':typeof value==='object'?JSON.stringify(value):value;
+    return [clean(change.tag),clean(change.header||change.field||change.prop),value(change.before),value(change.value),clean(review&&review.reason||change.reason||finding&&finding.why),source.sheet||'',source.row||'',letter,letter&&source.row?`${letter}${source.row}`:'',status,clean(review&&review.owner),review&&review.at!=null?String(review.at):'',clean(change.ruleId||finding&&finding.rule&&finding.rule.id),clean(change.findingId)];
+  };
+  const log=[columns,...changes.map(change=>correctionRow(change,reviewByChange.get(changeKey(change))||reviewByFinding.get(change.findingId),'Staged in draft'))];
+  const actions=[['Review ID','Recorded At','Owner','Disposition','Reason','Finding ID','Equipment ID','Field','Before','After','Sheet','Row','Column','Cell','Rule']];
+  for(const review of reviewHistory){
+    const disposition=dispositionLabels[review.disposition]||clean(review.disposition),ids=review.findingIds||[];
+    const reviewedChanges=[...(review.changes||[])],represented=new Set(reviewedChanges.map(change=>change.findingId));
+    for(const id of ids)if(!represented.has(id)){
+      const finding=findings.get(id),row=sourceRows.get(auditCorrectionSourceKey(finding));
+      reviewedChanges.push({findingId:id,tag:finding?.equipmentId,field:finding?.field,before:finding?.actual,source:row?row._source:{sheet:finding?.sheet,row:finding?.row},ruleId:finding?.rule?.id});
+    }
+    if(!reviewedChanges.length)reviewedChanges.push(null);
+    for(const change of reviewedChanges){
+      const cells=change?correctionRow(change,review,disposition):null;
+      actions.push([clean(review.id),review.at==null?'':String(review.at),clean(review.owner),disposition,clean(review.reason),cells?cells[13]:'',cells?cells[0]:'',cells?cells[1]:'',cells?cells[2]:'',cells?cells[3]:'',cells?cells[5]:'',cells?cells[6]:'',cells?cells[7]:'',cells?cells[8]:'',cells?cells[12]:'']);
+    }
+  }
+  const decorate=(rows,name,widths)=>{
+    const sheet=XLSX.utils.aoa_to_sheet(rows);sheet['!cols']=widths.map(wch=>({wch}));styleHeaderRow(sheet);sheetFreezeRows(sheet,1);sheetAutoFilter(sheet,`A1:${auditColumnName(rows[0].length-1)}${rows.length}`);
+    for(let r=1;r<rows.length;r++)for(let c=0;c<rows[0].length;c++)sheetStyleCell(sheet,XLSX.utils.encode_cell({r,c}),AUDIT_EXPORT_STYLES.wrap);
+    addSheet(workbook,sheet,name);
+  };
+  decorate(log,'Correction Log',[30,28,42,42,58,26,8,9,12,22,22,26,26,30]);
+  decorate(actions,'Actions',[28,26,22,24,58,38,30,28,42,42,26,8,9,12,26]);
+  return workbook;
+}
+export async function exportAuditCorrectionsXlsx(){
+  const session=S.session;if(!session||!session.baselineResult){toast('Run an SSM Audit first');return false;}
+  const base=clean(session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  try{
+    const workbook=buildAuditCorrectionsWorkbook(session.changes||[],session.reviewHistory||[],{baselineResult:session.baselineResult});
+    downloadBlob(`${base}-Corrections.xlsx`,await workbookBlobCompact(workbook));toast('Correction log and review actions exported');return true;
+  }catch(_){toast('The correction log could not be built');return false;}
 }
 
 /* ---- Tracker Export ----
@@ -690,20 +924,29 @@ export async function exportUpdatedRegistryXlsx(){
    "Milestone actioned?" ticks, one row per L2 milestone (progress prefilled
    from in-app actioning), and one column per discipline showing that
    discipline's actioned share within the milestone. */
-export async function exportTrackerXlsx(){
-  const result=S.session&&S.session.result;if(!result){toast('Run an SSM Audit first');return;}
-  const actioned=S.session.actioned||new Set();
-  const byId=new Map();
-  for(const row of S.session.snapshot.rows){const key=auditNormId(row.equipmentId);if(key&&!byId.has(key))byId.set(key,row);}
+export function buildAuditTrackerWorkbook(currentResult,sessionName,options={}){
+  const result=options.baselineResult||currentResult,actioned=new Set([...(options.actionedIds||[]),...(options.draftResolvedIds||[])]);
+  const disabled=new Set(options.disabledRules||[]),excluded=new Set(options.excludedIds||[]),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
+  const inScope=finding=>!disabled.has(finding.rule?.id)&&!completed.has(auditNormId(finding.equipmentId))&&(!excluded.has(finding.id)||actioned.has(finding.id));
+  const bySource=new Map(),byId=new Map();
+  for(const row of [...(currentResult&&currentResult.rows||[]),...(result&&result.rows||[])]){
+    if(row._source)bySource.set(auditCorrectionSourceKey(row._source),row);
+  }
+  for(const row of bySource.values()){const key=auditNormId(row.equipmentId),rows=byId.get(key)||[];rows.push(row);byId.set(key,rows);}
+  const findingKey=finding=>JSON.stringify([finding.sheet||'',finding.row||0,finding.rule?.id||finding.ruleId||'',finding.row?'':auditNormId(finding.equipmentId)]);
+  const baselineFindings=result&&result.findings||[],findings=baselineFindings.filter(inScope),baselineKeys=new Set(baselineFindings.map(findingKey));
+  const baselineCounts=new Map();for(const finding of baselineFindings){const key=findingKey(finding);baselineCounts.set(key,(baselineCounts.get(key)||0)+1);}
+  const doneKeys=new Set((currentResult&&currentResult.findings||[]).filter(finding=>actioned.has(finding.id)).map(findingKey));
+  for(const finding of currentResult&&currentResult.findings||[])if(inScope(finding)&&!baselineKeys.has(findingKey(finding))){findings.push(finding);baselineKeys.add(findingKey(finding));}
   const groups=new Map(),discSet=new Set();
-  for(const finding of result.findings){
-    const row=byId.get(auditNormId(finding.equipmentId));
+  for(const finding of findings){
+    const candidates=byId.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditCorrectionSourceKey(finding))||(candidates.length===1?candidates[0]:null);
     const milestone=clean(row&&row.milestone)||'No L2 milestone';
     const discipline=clean(row&&row.discipline)||'No discipline';
     discSet.add(discipline);
     const group=groups.get(milestone)||{total:0,done:0,disc:new Map()};
-    group.total++;if(actioned.has(finding.id))group.done++;
-    const cell=group.disc.get(discipline)||{total:0,done:0};cell.total++;if(actioned.has(finding.id))cell.done++;group.disc.set(discipline,cell);
+    const key=findingKey(finding),done=actioned.has(finding.id)||baselineCounts.get(key)===1&&doneKeys.has(key);group.total++;if(done)group.done++;
+    const cell=group.disc.get(discipline)||{total:0,done:0};cell.total++;if(done)cell.done++;group.disc.set(discipline,cell);
     groups.set(milestone,group);
   }
   const disciplines=[...discSet].sort(natCmp),milestones=[...groups.keys()].sort(natCmp);
@@ -711,7 +954,7 @@ export async function exportTrackerXlsx(){
   const fixedHeaders=['L2 Milestone','Findings','Actioned in app','%','Progress','Milestone actioned?'];
   const aoa=[
     ['SSM Audit — Tracker','','','','',''],
-    [`${clean(S.session.name)} — generated ${new Date().toLocaleDateString()}`,'','','','',''],
+    [`${clean(sessionName)} — generated ${(options.generatedAt||new Date()).toLocaleDateString()}`,'','','','',''],
     [`Action findings in the SSM Audit app, then tick "Milestone actioned?" (${AUDIT_EXPORT_TICK}) here when a whole milestone is closed out. The big bar follows the ticks.`,'','','','',''],
     ['','','','','',''],
     ['MILESTONES ACTIONED','','','','',''],
@@ -760,10 +1003,15 @@ export async function exportTrackerXlsx(){
   sheetFreezeRows(sheet,headerSheetRow);
   const workbook=XLSX.utils.book_new();
   addSheet(workbook,sheet,'Tracker');
-  const base=clean(S.session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  return workbook;
+}
+export async function exportTrackerXlsx(){
+  const session=S.session,result=session&&(session.rawResult||session.result);if(!result){toast('Run an SSM Audit first');return;}
+  const workbook=buildAuditTrackerWorkbook(result,session.name,{baselineResult:session.baselineResult,actionedIds:session.actioned,draftResolvedIds:session.draftResolved,disabledRules:S.rules.disabled,excludedIds:session.excluded,completedEquipmentIds:session.status&&session.status.completed});
+  const base=clean(session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   try{
     const blob=await workbookBlobCompact(workbook,{});
     downloadBlob(`${base}-Tracker.xlsx`,blob);
     toast('Tracker exported');
-  }catch(error){console.error('Tracker export failed',error);toast('The tracker could not be built');}
+  }catch(_){toast('The tracker could not be built');}
 }
