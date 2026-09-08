@@ -110,6 +110,15 @@ for(const child of [
   const original=servedDrive({child}),row=original.rows[1];
   assert.equal(auditProposeCorrection(finding(row,'parent.cross-upn','Closest Parent'),auditRecommendationContext(original)),null);
 });
+test('an instrument under a matching system header suggests metadata, never a replacement parent',()=>{
+  const original=servedDrive({parent:{equipmentId:'DEMO-HEADER',equipmentDescription:'System header',itemMaster:'VF_Blank'},child:{equipmentId:'F77-TET101-02-01',equipmentDescription:'Temperature Transmitter',closestParent:'DEMO-HEADER'}});
+  const proposal=auditProposeCorrection(finding(original.rows[1],'parent.cross-upn','Closest Parent'),auditRecommendationContext(original));
+  assert.ok(proposal);
+  assert.deepEqual(proposal.changes.map(c=>[c.field,c.value]),[['UPN','101'],['System Name',extoRev21SystemsForUpn('101')[0]]]);
+  const draft=auditApplyCorrections(original,proposal.changes);
+  assert.equal(draft.rows[1].closestParent,'DEMO-HEADER');
+  assert.equal(draft.rows[1].dependencies,'SUPPLY-PANEL');
+});
 test('tag and correct System Name repair the UPN instead of overwriting the correct system',()=>{
   const original=servedDrive({child:{systemName:extoRev21SystemsForUpn('101')[0]}}),row=original.rows[1];
   const issue=runSsmAudit(original).findings.find(f=>f.rule.id==='metadata.system-upn-mismatch'&&f.row===row._source.row);

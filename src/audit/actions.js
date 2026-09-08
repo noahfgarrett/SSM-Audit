@@ -149,15 +149,18 @@ export function auditProposeCorrection(finding,context){
       const parent=parents[0],role=auditCommissioningRole(row);
       const tagUpn=auditActionTagUpn(row);
       if(!tagUpn||tagUpn!==auditNormId(parent.upn))return null;
+      if(!clean(row.building)||auditNormId(row.building)!==auditNormId(parent.building))return null;
+      const systems=extoRev21SystemsForUpn(tagUpn),parentSystem=systems.find(value=>auditNormId(value)===auditNormId(parent.systemName));
+      const currentSystem=systems.find(value=>auditNormId(value)===auditNormId(row.systemName));
+      const system=currentSystem||parentSystem;if(!system)return null;
+      // A UPN conflict does not by itself mean the equipment has the wrong
+      // parent. Tag and parent agreement support correcting system metadata.
+      add('UPN',tagUpn);add('System Name',system);
       const directInstrument=['instrument','control-valve','room-sensor'].includes(role)&&/\d+-\d+[A-Z]?$/.test(auditActionSuffix(row))&&auditActionSuffix(row)===auditActionSuffix(parent);
-      if((role!=='drive'&&!directInstrument)||auditCommissioningRole(parent)!=='driven-equipment'||auditIsBlankItemMaster(parent))return null;
-      if(!clean(row.building)||auditNormId(row.building)!==auditNormId(parent.building)||auditNormId(parent.upn)==='650')return null;
-      const systems=extoRev21SystemsForUpn(parent.upn),system=systems.find(value=>auditNormId(value)===auditNormId(parent.systemName));
       const discipline=extoRev21Canonical('discipline',parent.discipline);
-      if(!system||!discipline)return null;
-      add('UPN',parent.upn);add('System Name',system);add('Discipline',discipline);
-      reason=`The tag identifies UPN ${parent.upn} and this ${role==='drive'?'drive':'instrument'} is already nested under ${parent.equipmentId} in the same building. Match its UPN, System Name, and Discipline to the served equipment; keep its dependencies. Confirm that it serves this equipment.`;
-      confidence='Supported; confirm service';
+      if((role==='drive'||directInstrument)&&auditCommissioningRole(parent)==='driven-equipment'&&!auditIsBlankItemMaster(parent)&&discipline)add('Discipline',discipline);
+      reason=`The equipment tag and ${parent.equipmentId} both identify UPN ${tagUpn}. Keep this parent and its dependencies; correct the system metadata. Confirm the equipment belongs to this system.`;
+      confidence='Supported; confirm system';
     }else if(['metadata.system-upn-mismatch','metadata.upn-inconsistent'].includes(finding.rule.id)&&finding.field==='System Name'){
       const tagUpn=auditActionTagUpn(row);
       if(auditNormId(row.discipline)!=='ELECTRICAL'){

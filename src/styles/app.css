@@ -2182,6 +2182,15 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-preview th:first-child:has(+th:nth-last-child(4)){width:36px}
 .action-preview small{display:block;font-size:11px;color:var(--ink-2);margin:3px 0;line-height:1.4}
 .action-preview td div+div{margin-top:8px}
+.action-modal:has(.action-simple){width:min(780px,calc(100vw - 24px))}
+.action-simple .action-preview{height:auto;min-height:0;max-height:360px}
+.action-simple .action-preview table{min-width:0}
+.action-simple .action-preview th:first-child{width:40%}
+.action-simple .action-preview th:not(:first-child){width:30%}
+.action-simple [hidden]{display:none!important}
+.action-simple .action-impact:empty{display:none}
+.action-simple .action-impact{color:var(--ink);padding:10px;background:var(--surface-2)}
+.action-simple .action-empty{margin:18px 0;color:var(--ink-2);font-size:14px}
 .action-pager{justify-content:flex-end;font-size:12px;margin:6px 0}
 .action-proposal-tools{margin:12px 0 0;font-size:12px}
 .action-review-fields{display:grid;grid-template-columns:minmax(130px,1fr) minmax(220px,3fr);gap:12px;margin-top:12px}

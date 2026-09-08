@@ -19,7 +19,7 @@ test('Guide starts with the audit workflow and covers each current review surfac
 test('reference help and Guide share the same plain-language scope and limitations', () => {
   const help = referenceHelpHtml()
   assert.equal(GUIDE_SECTIONS.find(section => section.id === 'references').body, help)
-  for (const text of ['Milestone register', 'Item Master catalog', 'does not choose', 'Apply references', 'Preview changes', 'Apply to draft', 'same registry and reference data', 'Compare Projects']) assert(help.includes(text))
+  for (const text of ['Milestone register', 'Item Master catalog', 'does not choose', 'Apply references', 'Apply changes', 'Cancel', 'same registry and reference data', 'Compare Projects']) assert(help.includes(text))
   assert.match(help, /does not apply corrections/)
   assert.match(help, /different prefix alone is not an error/)
   assert.match(help, /Confirm the equipment and checklist requirements/)
@@ -27,7 +27,8 @@ test('reference help and Guide share the same plain-language scope and limitatio
 
 test('Guide distinguishes drafts, reviewed findings, saved sessions and offline exports', () => {
   const body = GUIDE_SECTIONS.map(section => section.body).join('\n')
-  for (const text of ['Mark reviewed', 'Accept an exception', 'Cleared in draft', 'Save review', 'Load review', 'Updated Registry', 'Correction Log', 'Tracker']) assert(body.includes(text))
+  for (const text of ['Apply changes', 'Cancel', 'Cleared in draft', 'Save review', 'Load review', 'Updated Registry', 'Correction Log', 'Tracker']) assert(body.includes(text))
+  assert.doesNotMatch(body,/Preview changes|Apply to draft|Mark reviewed|Accept an exception/)
   assert.match(body, /Workbook ticks do not change Exto or sync back into the app/)
   assert.match(body, /different registry revision is rejected/)
   assert.match(body, /fallback checks may run/)
