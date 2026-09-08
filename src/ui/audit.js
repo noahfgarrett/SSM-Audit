@@ -1,7 +1,8 @@
 import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S, resetSession } from '../state.js'
 import { readArrayBuffer } from '../io/workbook.js'
-import { auditNormId, auditSnapshotFromWorkbook, auditSplitReferences, auditFingerprint } from '../audit/model.js'
+import { importAuditWorkbook } from '../io/import-client.js'
+import { auditNormId, auditSplitReferences, auditFingerprint } from '../audit/model.js'
 import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
@@ -10,7 +11,6 @@ import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, expor
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { auditStatusFromWorkbook } from '../audit/status-report.js'
 import { AUDIT_ACTION_FIELDS, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditCustomCorrection, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
 import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { downloadBlob } from '../core/download.js'
@@ -1197,13 +1197,10 @@ export async function addAuditTarget(file,navigate){
   resetSession();clearComparisonTarget();S.session.name=file.name;
   try{
     await runWithProgress('Running SSM Audit',file.name,async(checkpoint,report)=>{
-      const bytes=new Uint8Array(await readArrayBuffer(file));await checkpoint();
-      const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
-      const snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.6,label));
-      report(.74,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();
-      report(.8,'Running every check');await checkpoint();
-      const status=await sessionStatusReport(workbook,snapshot,checkpoint);
-      const rawResult=sessionAudit(snapshot),result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
+      await checkpoint();
+      const {bytes,snapshot,status,rawResult}=await importAuditWorkbook(file,{report});
+      await checkpoint();
+      const result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
       S.session={...S.session,baselineSnapshot:snapshot,baselineResult:rawResult,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
@@ -1211,15 +1208,6 @@ export async function addAuditTarget(file,navigate){
   }catch(error){
     console.error('SSM Audit failed',error);S.session.error=error&&error.message||'Could not read this registry';S.session.snapshot=null;S.session.result=null;renderUpload(navigate);
   }
-}
-
-/* Reads the status tab (when present) and records how many completed equipment
-   actually match registry tags -- the matched count is what changes the audit. */
-async function sessionStatusReport(workbook,snapshot,checkpoint){
-  const status=await auditStatusFromWorkbook(workbook,checkpoint);
-  if(!status)return null;
-  let matched=0;for(const row of snapshot.rows)if(status.completed.has(auditNormId(row.equipmentId)))matched++;
-  return {...status,matched};
 }
 
 function clearComparisonTarget(){S.comparison.targetName='';S.comparison.targetSnapshot=null;S.comparison.targetError='';S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};}
@@ -1270,9 +1258,10 @@ async function addComparisonFile(file,side,navigate){
   try{
     let snapshot,auditResult,statusReport=null,targetBytes=null;
     await runWithProgress(side==='target'?'Loading registry to audit':'Loading finished project',file.name,async(checkpoint,report)=>{
-      const bytes=new Uint8Array(await readArrayBuffer(file));targetBytes=bytes;await checkpoint();const workbook=XLSX.read(bytes,{type:'array',dense:true});report(.1,'Registry opened');await checkpoint();
-      snapshot=await auditSnapshotFromWorkbook(workbook,file.name,checkpoint,(fraction,label)=>report(.1+fraction*.68,label));
-      report(.82,`${snapshot.rows.length.toLocaleString()} rows parsed`);await checkpoint();if(side==='target'){statusReport=await sessionStatusReport(workbook,snapshot,checkpoint);auditResult=runSsmAudit(snapshot);report(1,`${auditResult.findings.length.toLocaleString()} audit findings`);}else report(1,'Reference ready');
+      await checkpoint();
+      const imported=await importAuditWorkbook(file,{audit:side==='target',report});
+      snapshot=imported.snapshot;targetBytes=imported.bytes;statusReport=imported.status;auditResult=imported.rawResult;
+      await checkpoint();report(1,side==='target'?`${auditResult.findings.length.toLocaleString()} audit findings`:'Reference ready');
     });
     if(side==='target'){resetSession();S.session={...S.session,name:file.name,baselineSnapshot:snapshot,baselineResult:auditResult,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}

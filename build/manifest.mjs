@@ -3,6 +3,7 @@ export const MODULES=[
   'src/version.js',
   'src/state.js',
   'src/io/workbook.js',
+  'src/io/import-client.js',
   'src/exto/rev21-contract.js',
   'src/exto/vf-item-masters.js',
   'src/audit/model.js',

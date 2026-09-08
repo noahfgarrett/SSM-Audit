@@ -16,11 +16,14 @@ function classicScript(source,path){
 function replaceOnce(source,marker,value){const count=source.split(marker).length-1;if(count!==1)throw new Error(`Expected one ${marker}, found ${count}`);return source.replace(marker,()=>value);}
 
 const app=MODULES.map(path=>classicScript(read(path),path)).join('');
+const workerModules=['src/core/text.js','src/io/workbook.js','src/exto/rev21-contract.js','src/exto/vf-item-masters.js','src/audit/model.js','src/audit/engine.js','src/audit/status-report.js','src/io/import-worker.js'];
+const workerSource=workerModules.map(path=>classicScript(read(path),path)).join('');
 const changelog=JSON.parse(read('src/changelog.json'));
 let html=read('src/index.html');
 html=replaceOnce(html,'<!--@inject:styles-->',read('src/styles/app.css'));
 html=replaceOnce(html,'<!--@inject:vendor:sheetjs-->',read('src/vendor/sheetjs.js'));
 html=replaceOnce(html,'<!--@inject:changelog-->',`const CHANGELOG=Object.freeze(${JSON.stringify(changelog)});`);
+html=replaceOnce(html,'<!--@inject:import-worker-->',`const AUDIT_IMPORT_WORKER_SOURCE=${JSON.stringify(workerSource).replace(/</g,'\\u003c')};`);
 html=replaceOnce(html,'<!--@inject:app-->',app);
 if(/@inject:/.test(html))throw new Error('A build injection marker remains');
 if(!html.includes("UPDATE_REPOSITORY='noahfgarrett/SSM-Audit-Releases'"))throw new Error('Standalone updater repository is not pinned');
