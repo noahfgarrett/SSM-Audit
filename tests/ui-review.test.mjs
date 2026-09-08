@@ -6,7 +6,7 @@ import { clean, esc } from '../src/core/text.js'
 import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { AUDIT_ACTION_FIELDS, auditCorrectionKey, auditProposeCorrection, auditRecommendationContext, auditCustomCorrection, auditMergeCorrections, auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, auditReadReviewDocument, auditRegistryRevision, auditReviewDocument } from '../src/audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditFindingRow, auditCorrectionKey, auditProposeCorrection, auditRecommendationContext, auditCustomCorrection, auditMergeCorrections, auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, auditReadReviewDocument, auditRegistryRevision, auditReviewDocument } from '../src/audit/actions.js'
 import { auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES } from '../src/audit/references.js'
 import { validateAuditCorrections } from '../src/audit/export.js'
 import { resetSession } from '../src/state.js'
@@ -20,9 +20,9 @@ const reviewSource = ui.slice(start, end).replace('export function sessionAudit(
 const headers = EXTO_REV21_COLUMNS.map(column => column.header)
 const system = '602  Medium Voltage'
 
-function registry(overrides = {}) {
+function registry(overrides = {}, additional = []) {
   const values = { equipmentId: 'EQ-1', building: 'DEMO', upn: '602', discipline: 'ELECTRICAL', systemName: '650  Facility Management System', closestParent: system, equipmentDescription: 'Electrical panel', ...overrides }
-  const aoa = [headers, EXTO_REV21_COLUMNS.map(column => values[column.field] || '')]
+  const aoa = [headers, ...[values,...additional].map(row=>EXTO_REV21_COLUMNS.map(column => row[column.field] || ''))]
   const baseline = auditSnapshotFromAoa(aoa, { sheet: 'Registry' }), book = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(aoa), 'Registry')
   const result = runSsmAudit(baseline)
@@ -47,7 +47,7 @@ function reviewHarness(session) {
   }
   const context = vm.createContext({
     S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,
-    crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
+    crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
     modifySuggestedFix:finding=>auditProposeCorrection(finding,auditRecommendationContext(session.snapshot,session.references)),
     auditApplyCorrections, auditCorrectionImpact, auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES, runSsmAudit,
     auditReadReviewDocument: async (...args) => { calls.readReview++; return auditReadReviewDocument(...args) },
@@ -64,12 +64,12 @@ function reviewHarness(session) {
     },
   })
   vm.runInContext(reviewSource, context, { filename: 'audit-review-helpers.js' })
-  vm.runInContext(ui.slice(end,ui.indexOf('\nfunction openChangesDialog(',end)),context)
+  vm.runInContext(ui.slice(end,ui.indexOf('\nfunction syncModifyPatternBox(',end)),context)
   const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit})', context)
   return { context, api, calls, hooks, messages, node, lists }
 }
 
-test('Actions show the supported drive correction and apply it with one validated click',async()=>{
+test('Actions show the issue and editable drive corrections, preview all cells, then confirm success',async()=>{
   const system101=extoRev21SystemsForUpn('101')[0],rows=[
     {equipmentId:'DEMO-MAH101-01-00',building:'DEMO',upn:'101',systemName:system101,discipline:'MECHANICAL DRY',equipmentDescription:'MAH Makeup Air Handler'},
     {equipmentId:'DEMO-VFD101-01-00',building:'DEMO',upn:'650',systemName:extoRev21SystemsForUpn('650')[0],discipline:'FACILITIES MONITORING SYSTEM',equipmentDescription:'Variable Frequency Drive',closestParent:'DEMO-MAH101-01-00'},
@@ -79,30 +79,79 @@ test('Actions show the supported drive correction and apply it with one validate
   const session={...registry(),baselineSnapshot:snapshot,snapshot,baselineResult:runSsmAudit(snapshot),rawResult:runSsmAudit(snapshot),sourceBytes:XLSX.write(book,{type:'array',bookType:'xlsx'})};
   const h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='parent.cross-upn');
   h.api.openActionDialog('Parent UPN mismatch',[issue]);
-  assert.match(h.node('#actionPreviewRows').innerHTML,/UPN/);assert.match(h.node('#actionPreviewRows').innerHTML,/>101</);assert.match(h.node('#actionPreviewRows').innerHTML,/System Name/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/UPN/);assert.match(h.node('#actionPreviewRows').innerHTML,/value="101"/);assert.match(h.node('#actionPreviewRows').innerHTML,/System Name/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/This row is on UPN 650/);
   assert.equal(session.snapshot.rows[1].upn,'650','opening the action changes no data');
   assert.doesNotMatch(h.node('#actionModalBody').innerHTML,/action-mode|actionValue|actionOwner|actionReason|actionSelectAll|Preview changes/);
   assert.doesNotMatch(h.node('#actionPreviewRows').innerHTML,/checkbox/);
-  assert.match(h.node('#actionModalBody').innerHTML,/>Apply changes</);
+  assert.match(h.node('#actionModalBody').innerHTML,/>Review changes</);
+  await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[1].upn,'650','review does not apply edits');
+  assert.match(h.node('#actionModalBody').innerHTML,/3 cells will change/);
+  assert.doesNotMatch(h.node('#actionPreviewRows').innerHTML,/<input/);
   await h.node('#actionApply').onclick();
   assert.equal(session.snapshot.rows[1].upn,'101');assert.equal(session.snapshot.rows[1].systemName,system101);
   assert.equal(session.baselineSnapshot.rows[1].upn,'650');assert.equal(session.changes.length,3);
   assert.ok(session.draftResolved.has(issue.id));assert.equal(session.reviewHistory.at(-1).disposition,'corrected-draft');assert.equal(h.calls.refresh,1);
+  assert.match(h.node('#actionModalBody').innerHTML,/Changes applied/);
+  assert.match(h.node('#actionModalBody').innerHTML,/3 cells updated/);
+  assert.equal(h.node('#actionModal').classList.contains('show'),true,'confirmation stays visible until dismissed');
+  await h.node('#actionApply').onclick();assert.match(h.node('#actionModalBody').innerHTML,/Corrections and review history/);
+  assert.match(h.node('#actionModalBody').innerHTML,/3 cells changed/);
 });
 
-test('an unsupported action offers only Cancel and leaves the registry unchanged',async()=>{
+test('an unsupported action allows verified input without inventing a correction',async()=>{
   const session=registry({closestParent:'UNKNOWN-PARENT'}),h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='parent.unresolved');
   assert.ok(issue);h.api.openActionDialog('Missing parent',[issue]);
-  assert.match(h.node('#actionModalBody').innerHTML,/No reliable correction/);
-  assert.match(h.node('#actionModalBody').innerHTML,/id="actionApply" hidden disabled/);
-  assert.doesNotMatch(h.node('#actionModalBody').innerHTML,/Choose a|actionValue/);
-  await h.node('#actionApply').onclick();h.node('#actionCancel').onclick();
+  assert.match(h.node('#actionPreviewRows').innerHTML,/No reliable suggestion/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/value="UNKNOWN-PARENT"/);
+  await h.node('#actionApply').onclick();
+  assert.match(h.node('#actionImpact').textContent,/No values have changed/);h.node('#actionCancel').onclick();
   assert.equal(session.changes.length,0);assert.equal(h.calls.preflight,0);
+});
+test('a user-entered fix is previewed, can be edited again, and is only applied after confirmation',async()=>{
+  const session=registry({systemName:system,closestParent:'UNKNOWN-PARENT'},[{equipmentId:'DEMO-PANEL',building:'DEMO',upn:'602',discipline:'ELECTRICAL',systemName:system,closestParent:system,closestParentStatus:'NEW'}]),h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='parent.unresolved');
+  h.api.openActionDialog('Parent missing',[issue]);
+  const edit=value=>h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'0',actionCell:'0'},value})}});
+  edit('EQ-1');await h.node('#actionApply').onclick();
+  assert.match(h.node('#actionImpact').textContent,/No changes applied/);
+  edit('DEMO-PANEL');await h.node('#actionApply').onclick();
+  assert.equal(session.changes.length,0);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/UNKNOWN-PARENT/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/DEMO-PANEL/,h.node('#actionImpact').textContent);
+  h.node('#actionBack').onclick();
+  assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-PANEL"/);
+  await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].closestParent,'DEMO-PANEL');assert.equal(session.changes.length,1);
+  assert.ok(session.draftResolved.has(issue.id));assert.match(h.node('#actionModalBody').innerHTML,/1 cell updated/);
+  h.node('#actionCancel').onclick();await h.api.reviewUndoLast();
+  assert.equal(session.snapshot.rows[0].closestParent,'UNKNOWN-PARENT');assert.equal(session.changes.length,0);
+});
+test('edits survive pagination and every page is included in the reviewed batch',async()=>{
+  const records=Array.from({length:81},(_,i)=>({equipmentId:`DEMO-${i}`,building:'DEMO',upn:'602',discipline:'ELECTRICAL',systemName:extoRev21SystemsForUpn('650')[0],closestParent:system}));
+  const aoa=[headers,...records.map(row=>EXTO_REV21_COLUMNS.map(c=>row[c.field]||''))],snapshot=auditSnapshotFromAoa(aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+  const session={...registry(),baselineSnapshot:snapshot,snapshot,baselineResult:runSsmAudit(snapshot),rawResult:runSsmAudit(snapshot),sourceBytes:XLSX.write(book,{type:'array',bookType:'xlsx'})},h=reviewHarness(session);
+  const issues=session.rawResult.findings.filter(f=>f.rule.id==='metadata.system-upn-mismatch');assert.equal(issues.length,81);
+  h.api.openActionDialog('System mismatch',issues);
+  assert.equal((h.node('#actionPreviewRows').innerHTML.match(/<tr>/g)||[]).length,80);
+  h.node('#actionNext').onclick();assert.match(h.node('#actionPreviewRows').innerHTML,/DEMO-80/);
+  h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'80',actionCell:'0'},value:system+' '})}});
+  h.node('#actionPrevious').onclick();h.node('#actionNext').onclick();
+  assert.match(h.node('#actionPreviewRows').innerHTML,/value="602  Medium Voltage "/);
+  await h.node('#actionApply').onclick();assert.match(h.node('#actionModalBody').innerHTML,/81 cells will change/,h.node('#actionImpact').textContent);
+  await h.node('#actionApply').onclick();assert.equal(session.changes.length,81);assert.equal(session.snapshot.rows[80].systemName,system);
+});
+test('changing the draft after preview invalidates the final confirmation',async()=>{
+  const session=registry(),h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='metadata.system-upn-mismatch');
+  h.api.openActionDialog('System mismatch',[issue]);await h.node('#actionApply').onclick();
+  session.changesRev++;await h.node('#actionApply').onclick();
+  assert.equal(session.changes.length,0);assert.match(h.node('#actionImpact').textContent,/registry changed/);
 });
 for(const cancelDuringValidation of [false,true])test(`Cancel leaves suggestions unapplied ${cancelDuringValidation?'during validation':'before validation'}`,async()=>{
   const session=registry(),h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='metadata.system-upn-mismatch');
   h.api.openActionDialog('System mismatch',[issue,issue]);
-  assert.match(h.node('#actionModalBody').innerHTML,/1 suggestion/);
+  assert.equal((h.node('#actionPreviewRows').innerHTML.match(/<tr>/g)||[]).length,1);
   if(cancelDuringValidation){
     const gate=pauseOnce();h.hooks.checkpoint=gate.pause;
     const job=h.node('#actionApply').onclick();await gate.reached;

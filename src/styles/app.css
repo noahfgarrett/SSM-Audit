@@ -2182,7 +2182,7 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-preview th:first-child:has(+th:nth-last-child(4)){width:36px}
 .action-preview small{display:block;font-size:11px;color:var(--ink-2);margin:3px 0;line-height:1.4}
 .action-preview td div+div{margin-top:8px}
-.action-modal:has(.action-simple){width:min(780px,calc(100vw - 24px))}
+.action-modal:has(.action-simple){width:min(960px,calc(100vw - 24px))}
 .action-simple .action-preview{height:auto;min-height:0;max-height:360px}
 .action-simple .action-preview table{min-width:0}
 .action-simple .action-preview th:first-child{width:40%}
@@ -2191,6 +2191,20 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-simple .action-impact:empty{display:none}
 .action-simple .action-impact{color:var(--ink);padding:10px;background:var(--surface-2)}
 .action-simple .action-empty{margin:18px 0;color:var(--ink-2);font-size:14px}
+.action-fields{margin:0;padding:0;border:0;min-width:0}
+.action-edit-field{display:block;margin:0 0 12px;font-size:11px;color:var(--ink-2)}
+.action-edit-field:last-child{margin-bottom:0}
+.action-value-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:16px;margin-top:4px}
+.action-current{padding:9px 0;color:var(--ink);font-size:12px;overflow-wrap:anywhere}
+.action-edit-field input{box-sizing:border-box;width:100%;min-width:0;padding:8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:12px}
+.action-edit-field input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.action-simple .action-problem{color:var(--ink);margin:8px 0}
+.action-new-value{background:var(--surface-2)}
+.action-success{display:flex;gap:12px;align-items:center;padding:16px 0;color:#18764b}
+.action-success>svg{width:28px;height:28px;flex-shrink:0}
+.action-success b,.action-success span{display:block;line-height:1.5}
+.action-success span{color:var(--ink-2);font-size:13px}
+@media(max-width:640px){.action-simple .export-foot{align-items:flex-start;gap:12px;flex-direction:column}.action-simple .export-foot>div{display:flex;flex-wrap:wrap;gap:8px}.action-simple .action-preview{max-height:48dvh}.action-value-pair{grid-template-columns:minmax(0,1fr);gap:4px}.action-simple .action-preview th:first-child{width:38%}}
 .action-pager{justify-content:flex-end;font-size:12px;margin:6px 0}
 .action-proposal-tools{margin:12px 0 0;font-size:12px}
 .action-review-fields{display:grid;grid-template-columns:minmax(130px,1fr) minmax(220px,3fr);gap:12px;margin-top:12px}

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.39.5",
+    "date": "2026-09-08",
+    "type": "fix",
+    "notes": "- Improved action reviews and editing\n- Added clearer change previews and confirmation"
+  },
+  {
     "version": "1.39.4",
     "date": "2026-09-08",
     "type": "fix",

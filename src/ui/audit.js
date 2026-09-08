@@ -11,7 +11,7 @@ import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, expor
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
 import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
@@ -656,45 +656,83 @@ function closeActionDialog(){
   const opener=actionOpener;actionOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
 }
 function renderActionPreview(){
-  const scope=actionScope;if(!scope)return;const entries=scope.suggestions,offset=scope.offset||0,rows=entries.slice(offset,offset+80);
-  $('#actionPreviewRows').innerHTML=rows.map(entry=>`<tr><td><b>${esc(entry.row.equipmentId)}</b><small>${esc(entry.reason)}</small></td><td>${entry.changes.map(change=>`<div><small>${esc(change.field)}</small>${esc(change.before||'(blank)')}</div>`).join('')}</td><td>${entry.changes.map(change=>`<div><small>${esc(change.field)}</small>${esc(change.value||'(blank)')}</div>`).join('')}</td></tr>`).join('');
-  $('#actionPage').textContent=entries.length?`${offset+1}-${offset+rows.length} of ${entries.length} proposals`:'No supported suggestions';
+  const scope=actionScope;if(!scope)return;const editing=scope.stage==='edit',entries=editing?scope.suggestions:scope.incoming,offset=scope.offset||0,rows=entries.slice(offset,offset+80);
+  $('#actionPreviewRows').innerHTML=editing?rows.map((entry,index)=>`<tr><td><b>${esc(entry.row.equipmentId)}</b><small class="action-problem">${esc(entry.finding.why||entry.finding.rule.title)}</small><small>${esc(entry.reason)}</small></td><td colspan="2">${entry.changes.map((change,cell)=>`<label class="action-edit-field"><span>${esc(change.field)}</span><span class="action-value-pair"><span class="action-current">${esc(change.before||'(blank)')}</span><input data-action-entry="${offset+index}" data-action-cell="${cell}" aria-label="${esc(change.field)} for ${esc(entry.row.equipmentId)}" value="${esc(change.value)}" maxlength="32767"></span></label>`).join('')}</td></tr>`).join(''):rows.map(change=>`<tr><td><b>${esc(change.tag)}</b><small>${esc(change.field)}</small></td><td>${esc(change.before||'(blank)')}</td><td class="action-new-value">${esc(change.value||'(blank)')}</td></tr>`).join('');
+  $('#actionPage').textContent=entries.length?`${offset+1}-${offset+rows.length} of ${entries.length}`:'No changes';
+  $('#actionPager').hidden=entries.length<=80;
   $('#actionPrevious').disabled=!offset;$('#actionNext').disabled=offset+80>=entries.length;
+}
+function paintActionDialog(){
+  const scope=actionScope,editing=scope.stage==='edit',success=scope.stage==='success';
+  const cells=scope.incoming?.length||0,cleared=scope.prepared?.impact.resolved.length||0;
+  $('#actionModalBody').innerHTML=`<section class="action-simple"><span class="eyebrow">${success?'Completed in working draft':editing?'1. Review and edit':'2. Confirm changes'}</span><h3 id="actionTitle">${success?'Changes applied':esc(scope.label)}</h3>
+    ${success?`<div class="action-success" role="status">${ic('circle-check')}<div><b>${cells.toLocaleString()} ${cells===1?'cell':'cells'} updated</b><span>${cleared.toLocaleString()} findings cleared. ${scope.prepared.impact.introduced.length.toLocaleString()} new findings.</span></div></div>`:`<p class="action-summary">${editing?`${scope.findings.length.toLocaleString()} findings${scope.unsupported?`; ${scope.unsupported.toLocaleString()} need a verified value`:''}`:`${cells.toLocaleString()} cells will change; ${cleared.toLocaleString()} findings will clear`}</p>`}
+    ${!scope.suggestions.length?'<p class="action-empty">No editable correction is available for this finding.</p>':''}
+    <fieldset id="actionFields" class="action-fields"><div class="action-preview" ${scope.suggestions.length?'':'hidden'}><table><thead><tr><th>Equipment / ${editing?'issue':'field'}</th><th>Current</th><th>${editing?'Suggested / your value':success?'Applied':'New value'}</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div></fieldset>
+    <div class="action-pager" id="actionPager"><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous changes" title="Previous changes">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next changes" title="Next changes">${ic('chevron-right')}</button></div>
+    <div id="actionImpact" class="action-impact" role="status" aria-live="polite">${!editing&&!success&&scope.prepared.impact.introduced.length?`${scope.prepared.impact.introduced.length} new findings need review. No new errors were introduced.`:''}</div>
+    <footer class="export-foot"><span>${success?'Changed cells are highlighted yellow in Updated Registry.':'Original workbook unchanged'}</span><div>${!editing&&!success?'<button class="btn ghost" id="actionBack">Edit values</button>':''}<button class="btn ghost" id="actionCancel">${success?'Done':'Cancel'}</button><button class="btn primary" id="actionApply" ${scope.suggestions.length?'':'hidden disabled'}>${success?'View all changes':editing?'Review changes':'Apply changes'}</button></div></footer></section>`;
+  $('#actionCancel').onclick=closeActionDialog;
+  if($('#actionBack'))$('#actionBack').onclick=()=>{scope.stage='edit';scope.offset=0;scope.prepared=null;paintActionDialog();};
+  $('#actionPrevious').onclick=()=>{scope.offset=Math.max(0,scope.offset-80);renderActionPreview();};
+  $('#actionNext').onclick=()=>{scope.offset+=80;renderActionPreview();};
+  $('#actionPreviewRows').oninput=event=>{
+    const input=event.target.closest('[data-action-entry]');if(!input||scope.stage!=='edit'||scope.session.reviewBusy)return;
+    scope.suggestions[Number(input.dataset.actionEntry)].changes[Number(input.dataset.actionCell)].value=input.value;
+    $('#actionImpact').textContent='';
+  };
+  $('#actionApply').onclick=()=>processActionDialog(scope);
+  renderActionPreview();
+}
+async function processActionDialog(scope){
+  if(actionScope!==scope||!scope.suggestions.length||S.session.reviewBusy)return;
+  if(scope.stage==='success'){openChangesDialog(scope.navigate);return;}
+  const session=scope.session,button=$('#actionApply'),editing=scope.stage==='edit';
+  try{
+    if(S.session!==session||session.changesRev!==scope.revision)throw new Error('The registry changed. Close this dialog and open the action again.');
+    if(editing){
+      const cells=new Map();
+      for(const change of scope.suggestions.flatMap(entry=>entry.changes)){
+        const value=clean(change.value),key=auditCorrectionKey(change);
+        if(value===change.before)continue;
+        if(cells.has(key)&&cells.get(key).value!==value)throw new Error('Two suggestions edit the same cell differently. Give them the same value or review these findings separately.');
+        cells.set(key,{...change,value});
+      }
+      const incoming=[...cells.values()];if(!incoming.length)throw new Error('No values have changed. Enter a correction or cancel.');
+      const changes=auditMergeCorrections(session.baselineSnapshot,session.changes,incoming);
+      session.reviewBusy=true;button.disabled=true;$('#actionFields').disabled=true;button.textContent='Checking changes...';$('#actionImpact').textContent='';
+      const prepared=await reviewPrepare(changes);if(actionScope!==scope||S.session!==session)return;
+      if(prepared.impact.unsafe.length)throw new Error(`No changes applied. ${prepared.impact.unsafe[0].rule.title}. Adjust the values and review again.`);
+      scope.incoming=incoming;scope.prepared=prepared;scope.stage='review';scope.offset=0;paintActionDialog();$('#actionApply').focus();
+    }else{
+      if(!scope.prepared||scope.prepared.revision!==session.changesRev)throw new Error('The registry changed. Review the corrections again.');
+      reviewRememberUndo();reviewInstallDraft(scope.prepared);
+      session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner:session.reviewOwner||'',reason:'Confirmed corrections after reviewing values and validation.',disposition:'corrected-draft',findingIds:scope.prepared.impact.resolved.map(finding=>finding.id),changes:scope.incoming});
+      rerenderModifications(scope.navigate||currentNavigate);scope.stage='success';scope.offset=0;paintActionDialog();$('#actionCancel').focus();toast('Changes applied to the working draft');
+    }
+  }catch(error){if(actionScope===scope)$('#actionImpact').textContent=error.message||'No changes applied. The corrections could not be checked.';}
+  finally{session.reviewBusy=false;if(actionScope===scope&&scope.stage==='edit'){button.disabled=false;button.textContent='Review changes';$('#actionFields').disabled=false;}}
 }
 function openActionDialog(label,findings,navigate){
   findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
   modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,S.session.references);
-  const proposed=findings.map(modifySuggestedFix),seen=new Set(),suggestions=proposed.filter(entry=>{
+  let unsupported=0;
+  const proposed=findings.map(finding=>{
+    const suggested=modifySuggestedFix(finding);if(suggested)return {...suggested,changes:suggested.changes.map(change=>({...change}))};
+    unsupported++;
+    const row=auditFindingRow(finding,modifyRecommendationContext.index);if(!row)return null;
+    const fields=finding.rule.id==='parent.cross-upn'?['UPN','System Name']:[finding.field];
+    const changes=fields.filter(field=>AUDIT_ACTION_FIELDS[field]&&row._source.columns?.[AUDIT_ACTION_FIELDS[field]]!=null).map(field=>auditMakeCorrection(row,field,row[AUDIT_ACTION_FIELDS[field]],finding));
+    return changes.length?{row,finding,changes,reason:'No reliable suggestion. Enter a verified value or cancel.'}:null;
+  }),seen=new Set(),suggestions=proposed.filter(entry=>{
     if(!entry)return false;const key=JSON.stringify(entry.changes.map(change=>[auditCorrectionKey(change),change.value]).sort());
     if(seen.has(key))return false;seen.add(key);return true;
-  }),unsupported=proposed.filter(entry=>!entry).length;
-  actionScope={suggestions,offset:0,session:S.session,revision:S.session.changesRev};
-  $('#actionModalBody').innerHTML=`<section class="action-simple"><h3 id="actionTitle">${esc(label)}</h3>
-    ${suggestions.length?`<p class="action-summary">${suggestions.length.toLocaleString()} ${suggestions.length===1?'suggestion':'suggestions'}${unsupported?`; ${unsupported.toLocaleString()} findings still need review`:''}</p>`:'<p class="action-empty">No reliable correction is available for this finding.</p>'}
-    <div class="action-preview" ${suggestions.length?'':'hidden'}><table><thead><tr><th>Equipment</th><th>Current</th><th>Suggested</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div>
-    <div class="action-pager" ${suggestions.length>80?'':'hidden'}><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous suggestions" title="Previous suggestions">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next suggestions" title="Next suggestions">${ic('chevron-right')}</button></div>
-    <div id="actionImpact" class="action-impact" role="status" aria-live="polite"></div>
-    <footer class="export-foot"><span>Original workbook unchanged</span><div><button class="btn ghost" id="actionCancel">Cancel</button><button class="btn primary" id="actionApply" ${suggestions.length?'':'hidden disabled'}>Apply changes</button></div></footer></section>`;
+  });
+  actionScope={label,findings,navigate,unsupported,suggestions,stage:'edit',offset:0,session:S.session,revision:S.session.changesRev};
+  paintActionDialog();
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
   actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;
-  modal.onclick=event=>{if(event.target===modal&&!S.session.reviewBusy)closeActionDialog();};renderActionPreview();
-  $('#actionPrevious').onclick=()=>{actionScope.offset=Math.max(0,actionScope.offset-80);renderActionPreview();};
-  $('#actionNext').onclick=()=>{actionScope.offset+=80;renderActionPreview();};
-  $('#actionApply').onclick=async()=>{
-    const scope=actionScope;if(!scope?.suggestions.length||S.session.reviewBusy)return;
-    const session=scope.session,button=$('#actionApply');
-    try{
-      if(S.session!==session||session.changesRev!==scope.revision)throw new Error('The registry changed. Close this dialog and open the action again.');
-      const incoming=scope.suggestions.flatMap(entry=>entry.changes),changes=auditMergeCorrections(session.baselineSnapshot,session.changes,incoming);
-      session.reviewBusy=true;button.disabled=true;button.textContent='Checking changes...';$('#actionImpact').textContent='';
-      const prepared=await reviewPrepare(changes);if(actionScope!==scope||S.session!==session)return;
-      if(prepared.impact.unsafe.length)throw new Error(`No changes applied. ${prepared.impact.unsafe[0].rule.title}. Review this equipment before applying the suggestion.`);
-      reviewRememberUndo();reviewInstallDraft(prepared);
-      session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner:session.reviewOwner||'',reason:'Accepted suggested corrections after validation.',disposition:'corrected-draft',findingIds:prepared.impact.resolved.map(finding=>finding.id),changes:incoming});
-      closeActionDialog();rerenderModifications(navigate||currentNavigate);toast(`${prepared.impact.resolved.length.toLocaleString()} findings cleared in the draft`);
-    }catch(error){if(actionScope===scope)$('#actionImpact').textContent=error.message||'No changes applied. The corrections could not be checked.';}
-    finally{session.reviewBusy=false;if(actionScope===scope){button.disabled=false;button.textContent='Apply changes';}}
-  };
+  modal.onclick=event=>{if(event.target===modal&&!S.session.reviewBusy)closeActionDialog();};
 }
 function openChangesDialog(navigate,offset=0){
   const changes=S.session.changes||[],page=changes.slice(offset,offset+80);
