@@ -1,5 +1,5 @@
 import { clean } from '../core/text.js'
-import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn, extoRev21EffectiveDiscipline } from '../exto/rev21-contract.js'
+import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn, extoRev21EffectiveDiscipline, extoRev21Canonical, extoRev21UpnCandidates } from '../exto/rev21-contract.js'
 import { auditNormId, auditSourceKey, auditSplitReferences } from './model.js'
 import { auditCommissioningRole, auditIsBlankItemMaster, auditMilestoneBranchCandidates, auditMilestoneCohortCandidates, auditItemMasterCanonicalCandidates } from './engine.js'
 import { VF_ITEM_MASTER_NAMES } from '../exto/vf-item-masters.js'
@@ -113,6 +113,15 @@ export function auditRecommendationContext(snapshot,references={}){
   return {snapshot,index,references,cohorts,branches};
 }
 function auditActionSuffix(row){return auditNormId(row.equipmentId).split('-').slice(-2).join('-');}
+function auditActionTagUpn(row){
+  if(auditIsBlankItemMaster(row)||auditNormId(row.discipline)==='ELECTRICAL')return '';
+  const body=auditNormId(row.equipmentId);
+  const candidates=new Set();
+  for(const match of body.matchAll(/(?:^|[-_ ])([A-Z]{2,})(\d{3})/g)){
+    for(const upn of extoRev21UpnCandidates(match[1]+match[2]))candidates.add(upn);
+  }
+  return candidates.size===1?[...candidates][0]:'';
+}
 export function auditParentRecommendations(row,context){
   const group=context.index.bySystem.get(JSON.stringify([auditNormId(row.building),auditNormId(row.upn)]))||[];
   const role=auditCommissioningRole(row),suffix=auditActionSuffix(row),current=auditNormId(row.closestParent);
@@ -134,7 +143,34 @@ export function auditProposeCorrection(finding,context){
   try{
     const reference=auditReferenceRecommendation(row,finding.field,context.references);
     if(reference){add(finding.field,reference.value);reason=reference.reason;confidence=reference.confidence||'Reference';}
-    else if(['metadata.system-upn-mismatch','metadata.upn-inconsistent'].includes(finding.rule.id)&&finding.field==='System Name'){
+    else if(finding.rule.id==='parent.cross-upn'){
+      const parents=context.index.byTag.get(auditNormId(row.closestParent));
+      if(parents?.length!==1||context.index.byTag.get(auditNormId(row.equipmentId))?.length!==1)return null;
+      const parent=parents[0],role=auditCommissioningRole(row);
+      const tagUpn=auditActionTagUpn(row);
+      if(!tagUpn||tagUpn!==auditNormId(parent.upn))return null;
+      const directInstrument=['instrument','control-valve','room-sensor'].includes(role)&&/\d+-\d+[A-Z]?$/.test(auditActionSuffix(row))&&auditActionSuffix(row)===auditActionSuffix(parent);
+      if((role!=='drive'&&!directInstrument)||auditCommissioningRole(parent)!=='driven-equipment'||auditIsBlankItemMaster(parent))return null;
+      if(!clean(row.building)||auditNormId(row.building)!==auditNormId(parent.building)||auditNormId(parent.upn)==='650')return null;
+      const systems=extoRev21SystemsForUpn(parent.upn),system=systems.find(value=>auditNormId(value)===auditNormId(parent.systemName));
+      const discipline=extoRev21Canonical('discipline',parent.discipline);
+      if(!system||!discipline)return null;
+      add('UPN',parent.upn);add('System Name',system);add('Discipline',discipline);
+      reason=`The tag identifies UPN ${parent.upn} and this ${role==='drive'?'drive':'instrument'} is already nested under ${parent.equipmentId} in the same building. Match its UPN, System Name, and Discipline to the served equipment; keep its dependencies. Confirm that it serves this equipment.`;
+      confidence='Supported; confirm service';
+    }else if(['metadata.system-upn-mismatch','metadata.upn-inconsistent'].includes(finding.rule.id)&&finding.field==='System Name'){
+      const tagUpn=auditActionTagUpn(row);
+      if(auditNormId(row.discipline)!=='ELECTRICAL'){
+        if(!tagUpn)return null;
+        if(tagUpn!==auditNormId(row.upn)){
+          const systems=extoRev21SystemsForUpn(tagUpn),system=systems.find(value=>auditNormId(value)===auditNormId(row.systemName));
+          const parents=context.index.byTag.get(auditNormId(row.closestParent));
+          if(!system||parents&&(parents.length!==1||auditNormId(parents[0].upn)!==tagUpn))return null;
+          add('UPN',tagUpn);
+          reason=`The equipment tag and its assigned System Name both identify UPN ${tagUpn}. Correct the UPN and keep that System Name. Confirm the system assignment.`;
+          return changes.length?{finding,row,changes,reason,confidence:'Supported; confirm system'}:null;
+        }
+      }
       const systems=extoRev21SystemsForUpn(row.upn);if(systems.length!==1)return null;
       add('System Name',systems[0]);
       if(auditNormId(row.closestParent)===auditNormId(row.systemName)&&!context.index.byTag.has(auditNormId(row.closestParent)))add('Closest Parent',systems[0]);

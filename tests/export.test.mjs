@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 
-import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
+import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditMergeSnapshots, auditSnapshotFromAoa, auditSnapshotFromWorkbook } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { auditMakeCorrection } from '../src/audit/actions.js'
+import { auditMakeCorrection, auditRecommendationContext, auditProposeCorrection, auditApplyCorrections } from '../src/audit/actions.js'
 import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx } from '../src/audit/export.js'
 import { S, resetSession } from '../src/state.js'
 
@@ -968,14 +968,21 @@ packageTest('package export preserves forms, styles, relationships, formulas and
   const output = await buildUpdatedRegistryBytes(bytes, snapshot, [change]), after = packageEntries(output)
   assert.deepEqual(bytes, original, 'the original imported bytes never change')
   assert.deepEqual([...after.keys()].sort(), [...entries.keys()].sort())
-  for (const [path, data] of entries) if (path !== target) assert.deepEqual(after.get(path), data, `untargeted package part changed: ${path}`)
+  for (const [path, data] of entries) if (path !== target && path !== 'xl/styles.xml') assert.deepEqual(after.get(path), data, `untargeted package part changed: ${path}`)
   const beforeXml = xmlDocument(entries.get(target)), afterXml = xmlDocument(after.get(target))
   const at = document => Array.from(document.getElementsByTagNameNS('*', 'c')).find(cell => cell.getAttribute('r') === addressOf(change))
-  assert.equal(at(beforeXml).getAttribute('s'), at(afterXml).getAttribute('s'))
+  const beforeStyles=xmlDocument(entries.get('xl/styles.xml')),afterStyles=xmlDocument(after.get('xl/styles.xml'))
+  const formats=document=>Array.from(document.getElementsByTagNameNS('*','cellXfs')[0].childNodes).filter(node=>node.nodeType===1)
+  const oldFormats=formats(beforeStyles),newFormats=formats(afterStyles),serialize=node=>new XMLSerializer().serializeToString(node)
+  oldFormats.forEach((format,index)=>assert.equal(serialize(newFormats[index]),serialize(format),'existing styles stay intact'))
+  const oldFormat=oldFormats[Number(at(beforeXml).getAttribute('s')||0)],newFormat=newFormats[Number(at(afterXml).getAttribute('s'))].cloneNode(true)
+  newFormat.setAttribute('fillId',oldFormat.getAttribute('fillId'));if(oldFormat.hasAttribute('applyFill'))newFormat.setAttribute('applyFill',oldFormat.getAttribute('applyFill'));else newFormat.removeAttribute('applyFill')
+  assert.equal(serialize(newFormat),serialize(oldFormat),'only the fill changes on the corrected cell')
   for (const document of [beforeXml, afterXml]) { const cell = at(document); cell.parentNode.removeChild(cell) }
   assert.equal(new XMLSerializer().serializeToString(afterXml), new XMLSerializer().serializeToString(beforeXml), 'all other worksheet XML survives semantically, including form references and validation')
   const restored = XLSX.read(output, { type: 'array', cellStyles: true })
   assert.equal(restored.Sheets.Registry[addressOf(change)].v, change.value)
+  assert.equal(restored.Sheets.Registry[addressOf(change)].s.fgColor.rgb,'FFF2CC')
   assert.equal(restored.Sheets.Registry.A6.f, '1+1')
 })
 
@@ -996,7 +1003,7 @@ packageTest('export and reimport preserve logical row counts after correcting oc
   assert.deepEqual(after.rows.map(row => row.systemName), ['Before', 'After'])
   assert.deepEqual(after.rows.map(row => row._sources.length), [2, 2])
   const resultParts = packageEntries(output)
-  for (const [path, data] of originalParts) if (!['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'].includes(path)) assert.deepEqual(resultParts.get(path), data)
+  for (const [path, data] of originalParts) if (!['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml','xl/styles.xml'].includes(path)) assert.deepEqual(resultParts.get(path), data)
   assert.deepEqual(bytes, before)
 })
 
@@ -1068,7 +1075,7 @@ packageTest('package export also preserves part payloads when native deflate is 
   try {
     globalThis.CompressionStream = undefined
     const output = packageEntries(await buildUpdatedRegistryBytes(bytes, snapshot, [change]))
-    for (const [path, data] of entries) if (path !== target) assert.deepEqual(output.get(path), data)
+    for (const [path, data] of entries) if (path !== target && path !== 'xl/styles.xml') assert.deepEqual(output.get(path), data)
   } finally { globalThis.CompressionStream = compression }
 })
 
@@ -1091,6 +1098,47 @@ packageTest('an ambiguous worksheet cell aborts package export before mutation',
   cell.parentNode.appendChild(cell.cloneNode(true)); entries.set(target, xmlBytes(document))
   await assert.rejects(buildUpdatedRegistryBytes(packageBytes(entries), snapshot, [change]), error => error.code === 'XML')
 })
+
+packageTest('recommended drive corrections round-trip with every metadata cell intact and only changes yellow',async()=>{
+  const system=extoRev21SystemsForUpn('101')[0];
+  const records=[
+    {equipmentId:'DEMO-MAH101-01-00',upn:'101',systemName:system,discipline:'MECHANICAL DRY',building:'DEMO',equipmentDescription:'MAH Makeup Air Handler'},
+    {equipmentId:'DEMO-VFD101-01-00',upn:'650',systemName:extoRev21SystemsForUpn('650')[0],discipline:'FACILITIES MONITORING SYSTEM',building:'DEMO',equipmentDescription:'Variable Frequency Drive',closestParent:'DEMO-MAH101-01-00',dependencies:'DEMO-PNL-1',manufacturer:'Retain manufacturer',modelNumber:'Retain model',milestone:'Retain L2',milestoneParent:'Retain L1',itemMaster:'Retain checklist'},
+  ];
+  const aoa=[EXTO_REV21_COLUMNS.map(c=>c.header).concat('Unmapped custom metadata'),...records.map((record,i)=>EXTO_REV21_COLUMNS.map(c=>record[c.field]||'').concat(`Keep custom ${i}`))];
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+  const bytes=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'})),original=bytes.slice(),snapshot=await auditSnapshotFromWorkbook(XLSX.read(bytes,{type:'array'}),'');
+  const issue=runSsmAudit(snapshot).findings.find(f=>f.rule.id==='parent.cross-upn');
+  const proposal=auditProposeCorrection(issue,auditRecommendationContext(snapshot));assert.ok(proposal);
+  const draft=auditApplyCorrections(snapshot,proposal.changes),output=await buildUpdatedRegistryBytes(bytes,snapshot,proposal.changes),restored=XLSX.read(output,{type:'array',cellStyles:true});
+  const changes=new Map(proposal.changes.map(c=>[addressOf(c),c.value]));
+  for(let r=0;r<aoa.length;r++)for(let c=0;c<aoa[r].length;c++){
+    const address=XLSX.utils.encode_cell({r,c}),cell=restored.Sheets.Registry[address];
+    assert.equal(cell?.v??'',changes.has(address)?changes.get(address):aoa[r][c],`metadata ${address}`);
+    if(changes.has(address))assert.equal(cell.s.fgColor.rgb,'FFF2CC');
+    else assert.notEqual(cell?.s?.fgColor?.rgb,'FFF2CC',`untouched ${address} is not highlighted`);
+  }
+  const reimported=await auditSnapshotFromWorkbook(restored,'');
+  assert.deepEqual(reimported.rows.map(r=>EXTO_REV21_COLUMNS.map(c=>r[c.field])),draft.rows.map(r=>EXTO_REV21_COLUMNS.map(c=>r[c.field])));
+  assert.deepEqual(new Uint8Array(bytes),original);
+});
+
+packageTest('a workbook without a styles part gets a valid yellow style without losing metadata',async()=>{
+  const {bytes,snapshot,change}=syntheticPackage(),entries=packageEntries(bytes);
+  entries.delete('xl/styles.xml');
+  const rels=xmlDocument(entries.get('xl/_rels/workbook.xml.rels'));
+  for(const relation of Array.from(rels.getElementsByTagNameNS('*','Relationship')))if(relation.getAttribute('Type').endsWith('/styles'))relation.parentNode.removeChild(relation);
+  entries.set('xl/_rels/workbook.xml.rels',xmlBytes(rels));
+  const types=xmlDocument(entries.get('[Content_Types].xml'));
+  for(const node of Array.from(types.getElementsByTagNameNS('*','Override')))if(node.getAttribute('PartName')==='/xl/styles.xml')node.parentNode.removeChild(node);
+  entries.set('[Content_Types].xml',xmlBytes(types));
+  for(const [path,bytes] of entries)if(path.startsWith('xl/worksheets/')&&path.endsWith('.xml')){
+    const document=xmlDocument(bytes);for(const cell of Array.from(document.getElementsByTagNameNS('*','c')))cell.removeAttribute('s');entries.set(path,xmlBytes(document));
+  }
+  const output=await buildUpdatedRegistryBytes(packageBytes(entries),snapshot,[change]);
+  const restored=XLSX.read(output,{type:'array',cellStyles:true});
+  assert.equal(restored.Sheets.Registry[addressOf(change)].v,change.value);assert.equal(restored.Sheets.Registry[addressOf(change)].s.fgColor.rgb,'FFF2CC');
+});
 
 packageTest('updated-registry session export uses the immutable baseline and never downloads a partial correction', async t => {
   const { downloads } = captureExportDownloads(t), { bytes, snapshot, change } = syntheticPackage(), original = bytes.slice()

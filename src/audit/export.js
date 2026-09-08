@@ -786,6 +786,22 @@ function auditPackageRelationships(document){
   return map;
 }
 function auditPackageElement(parent,name){return parent.ownerDocument.createElementNS(parent.namespaceURI,parent.prefix?`${parent.prefix}:${name}`:name);}
+function auditYellowStyleFactory(document){
+  const root=document.documentElement,fills=auditPackageChildren(root,'fills'),formats=auditPackageChildren(root,'cellXfs');
+  if(root.localName!=='styleSheet'||root.namespaceURI!==AUDIT_SHEET_NS||fills.length!==1||formats.length!==1)auditCorrectionFail('STYLE','The workbook styles cannot be safely highlighted.');
+  const original=auditPackageChildren(formats[0],'xf'),fillId=auditPackageChildren(fills[0],'fill').length,cache=new Map();
+  const fill=auditPackageElement(fills[0],'fill'),pattern=auditPackageElement(fill,'patternFill'),color=auditPackageElement(pattern,'fgColor');
+  pattern.setAttribute('patternType','solid');color.setAttribute('rgb','FFFFF2CC');pattern.appendChild(color);fill.appendChild(pattern);fills[0].appendChild(fill);fills[0].setAttribute('count',String(fillId+1));
+  // Clone each original cell format, replacing only its fill. Fonts, borders,
+  // number formats, alignment and protection retain their original references.
+  return cell=>{
+    const value=cell?.getAttribute('s')||'0';
+    if(!/^\d+$/.test(value)||!original[Number(value)])auditCorrectionFail('STYLE','A corrected cell has an invalid style reference.');
+    const base=Number(value);if(cache.has(base))return cache.get(base);
+    const format=original[base].cloneNode(true),index=auditPackageChildren(formats[0],'xf').length;
+    format.setAttribute('fillId',String(fillId));format.setAttribute('applyFill','1');formats[0].appendChild(format);formats[0].setAttribute('count',String(index+1));cache.set(base,String(index));return String(index);
+  };
+}
 /* Only XLSX packages are supported: never silently downgrade a legacy, macro,
    signed, or unparseable workbook to a values-only copy. No source bytes mutate. */
 export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,changes,options={}){
@@ -808,7 +824,7 @@ export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,cha
   if(type.length!==1||type[0].getAttribute('ContentType')!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml')auditCorrectionFail('PACKAGE','Safe updated-registry export supports XLSX workbooks only.');
   const workbookXml=xmlAt(workbookPath),root=workbookXml.documentElement;
   if(root.localName!=='workbook'||root.namespaceURI!==AUDIT_SHEET_NS)auditCorrectionFail('PACKAGE','This workbook XML format is not supported for safe export.');
-  const slash=workbookPath.lastIndexOf('/'),relationships=auditPackageRelationships(xmlAt(`${workbookPath.slice(0,slash+1)}_rels/${workbookPath.slice(slash+1)}.rels`));
+  const slash=workbookPath.lastIndexOf('/'),relationshipPath=`${workbookPath.slice(0,slash+1)}_rels/${workbookPath.slice(slash+1)}.rels`,relationshipDocument=xmlAt(relationshipPath),relationships=auditPackageRelationships(relationshipDocument);
   const sheetPaths=new Map(),sheetNames=new Set(),worksheetParts=new Set();
   for(const node of workbookXml.getElementsByTagNameNS(AUDIT_SHEET_NS,'sheet')){
     const name=node.getAttribute('name'),relation=relationships.get(node.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'));
@@ -837,9 +853,29 @@ export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,cha
   }
   /* All physical cells and conflicts have now been checked. Only temporary DOMs
      are edited; no partially corrected workbook can escape on failure. */
-  for(const {target,row,cell:existing,cells} of patches.sort((left,right)=>left.target.column-right.target.column)){
+  let yellowStyle;
+  if(patches.length){
+    const styleRelations=[...relationships.values()].filter(relation=>relation.getAttribute('Type').endsWith('/styles'));
+    if(styleRelations.length>1||styleRelations[0]?.getAttribute('TargetMode')==='External')auditCorrectionFail('STYLE','The workbook style relationship is ambiguous.');
+    let stylePath,styleDocument;
+    if(styleRelations.length){stylePath=auditPackagePath(workbookPath,styleRelations[0].getAttribute('Target'));styleDocument=xmlAt(stylePath);}
+    else{
+      let name='audit-styles.xml',n=1;
+      while(parts.has(`${workbookPath.slice(0,slash+1)}${name}`))name=`audit-styles-${n++}.xml`;
+      stylePath=`${workbookPath.slice(0,slash+1)}${name}`;
+      styleDocument=auditPackageXml(new TextEncoder().encode(`<styleSheet xmlns="${AUDIT_SHEET_NS}"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>`));
+      const entry={name:stylePath,data:new Uint8Array()};entries.push(entry);parts.set(stylePath,entry);
+      const relation=auditPackageElement(relationshipDocument.documentElement,'Relationship');let id='rAuditStyles';n=1;while(relationships.has(id))id=`rAuditStyles${n++}`;
+      relation.setAttribute('Id',id);relation.setAttribute('Type','http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles');relation.setAttribute('Target',name);relationshipDocument.documentElement.appendChild(relation);documents.set(relationshipPath,relationshipDocument);
+      const override=auditPackageElement(types.documentElement,'Override');override.setAttribute('PartName',`/${stylePath}`);override.setAttribute('ContentType','application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml');types.documentElement.appendChild(override);documents.set('[Content_Types].xml',types);
+    }
+    yellowStyle=auditYellowStyleFactory(styleDocument);documents.set(stylePath,styleDocument);
+    for(const patch of patches)patch.style=yellowStyle(patch.cell);
+  }
+  for(const {target,row,cell:existing,cells,style} of patches.sort((left,right)=>left.target.column-right.target.column)){
     const cell=existing||auditPackageElement(row,'c');
     if(!existing){cell.setAttribute('r',target.address);row.insertBefore(cell,cells.find(candidate=>XLSX.utils.decode_cell(candidate.getAttribute('r')).c>target.column)||null);}
+    cell.setAttribute('s',style);
     for(const name of ['v','is'])for(const child of auditPackageChildren(cell,name))cell.removeChild(child);
     const isString=typeof target.value==='string';cell.setAttribute('t',isString?'inlineStr':typeof target.value==='boolean'?'b':'n');
     const value=auditPackageElement(cell,isString?'is':'v');
@@ -849,7 +885,7 @@ export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,cha
   }
   const encoder=new TextEncoder();for(const [path,document] of documents)parts.get(path).data=encoder.encode(new XMLSerializer().serializeToString(document));
   if(zipDeflateAvailable())return zipEntries(entries,options.onProgress);
-  for(const entry of entries){const file=XLSX.CFB.find(container,`/${entry.name}`);file.content=entry.data;file.size=entry.data.length;}
+  for(const entry of entries){const file=XLSX.CFB.find(container,`/${entry.name}`);if(file){file.content=entry.data;file.size=entry.data.length;}else XLSX.CFB.utils.cfb_add(container,entry.name,entry.data);}
   return new Uint8Array(XLSX.CFB.write(container,{fileType:'zip',type:'array',compression:true}));
 }
 export async function exportUpdatedRegistryXlsx(){

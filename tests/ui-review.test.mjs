@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import { clean, esc } from '../src/core/text.js'
-import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
+import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, auditReadReviewDocument, auditRegistryRevision, auditReviewDocument } from '../src/audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditProposeCorrection, auditRecommendationContext, auditCustomCorrection, auditMergeCorrections, auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, auditReadReviewDocument, auditRegistryRevision, auditReviewDocument } from '../src/audit/actions.js'
 import { auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES } from '../src/audit/references.js'
 import { validateAuditCorrections } from '../src/audit/export.js'
 import { resetSession } from '../src/state.js'
@@ -41,12 +41,14 @@ function reviewHarness(session) {
   const node = selector => {
     if (!nodes.has(selector)) {
       const classes = new Set()
-      nodes.set(selector, { innerHTML: '', disabled: false, setAttribute() {}, focus() {}, classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) } })
+      nodes.set(selector, { innerHTML: '', disabled: false, querySelector:()=>({value:'suggested'}), setAttribute() {}, focus() {}, classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name) } })
     }
     return nodes.get(selector)
   }
   const context = vm.createContext({
     S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,
+    crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
+    modifySuggestedFix:finding=>auditProposeCorrection(finding,auditRecommendationContext(session.snapshot,session.references)),
     auditApplyCorrections, auditCorrectionImpact, auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES, runSsmAudit,
     auditReadReviewDocument: async (...args) => { calls.readReview++; return auditReadReviewDocument(...args) },
     validateAuditCorrections: (...args) => { calls.preflight++; return validateAuditCorrections(...args) },
@@ -62,9 +64,31 @@ function reviewHarness(session) {
     },
   })
   vm.runInContext(reviewSource, context, { filename: 'audit-review-helpers.js' })
-  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,sessionAudit})', context)
+  vm.runInContext(ui.slice(end,ui.indexOf('\nfunction openChangesDialog(',end)),context)
+  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit})', context)
   return { context, api, calls, hooks, messages, node, lists }
 }
+
+test('Actions prefill the supported drive correction, preview it, then apply and re-audit the draft',async()=>{
+  const system101=extoRev21SystemsForUpn('101')[0],rows=[
+    {equipmentId:'DEMO-MAH101-01-00',building:'DEMO',upn:'101',systemName:system101,discipline:'MECHANICAL DRY',equipmentDescription:'MAH Makeup Air Handler'},
+    {equipmentId:'DEMO-VFD101-01-00',building:'DEMO',upn:'650',systemName:extoRev21SystemsForUpn('650')[0],discipline:'FACILITIES MONITORING SYSTEM',equipmentDescription:'Variable Frequency Drive',closestParent:'DEMO-MAH101-01-00'},
+  ];
+  const aoa=[headers,...rows.map(row=>EXTO_REV21_COLUMNS.map(c=>row[c.field]||''))],snapshot=auditSnapshotFromAoa(aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+  const session={...registry(),baselineSnapshot:snapshot,snapshot,baselineResult:runSsmAudit(snapshot),rawResult:runSsmAudit(snapshot),sourceBytes:XLSX.write(book,{type:'array',bookType:'xlsx'})};
+  const h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='parent.cross-upn');
+  h.api.openActionDialog('Parent UPN mismatch',[issue]);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/UPN/);assert.match(h.node('#actionPreviewRows').innerHTML,/>101</);assert.match(h.node('#actionPreviewRows').innerHTML,/System Name/);
+  h.node('#actionPreviewRows').onchange({target:{closest:()=>({dataset:{proposal:'0'},checked:true})}});
+  await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[1].upn,'650','preview alone changes no data');
+  assert.equal(h.node('#actionApply').textContent,'Apply to draft');assert.equal(h.node('#actionApply').disabled,false);
+  await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[1].upn,'101');assert.equal(session.snapshot.rows[1].systemName,system101);
+  assert.equal(session.baselineSnapshot.rows[1].upn,'650');assert.equal(session.changes.length,3);
+  assert.ok(session.draftResolved.has(issue.id));assert.equal(session.reviewHistory.at(-1).disposition,'corrected-draft');assert.equal(h.calls.refresh,1);
+});
 
 function pauseOnce() {
   let entered, release, paused = false

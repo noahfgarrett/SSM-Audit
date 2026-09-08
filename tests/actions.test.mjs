@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
+import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
 import { auditMakeCorrection, auditApplyCorrections, auditMergeCorrections, auditCorrectionImpact, auditRecommendationContext, auditProposeCorrection, auditRegistryRevision, auditReviewDocument, auditReadReviewDocument } from '../src/audit/actions.js'
@@ -81,4 +81,42 @@ test('optional references are excluded from checks-ran counts until supplied',()
   const after=sessionAudit(original);assert.equal(after.summary.checks,before.summary.checks+4);assert.equal(activeRules().length,baseCount+4);
   assert.ok(after.summary.source.reference>0);assert.equal(Object.values(after.summary.category).reduce((a,b)=>a+b,0),after.findings.length);
   resetSession();
+});
+
+function servedDrive({upn='101',child={},parent={}}={}){
+  return snapshot([
+    {equipmentId:`F77-MAH${upn}-01-00`,equipmentDescription:'Makeup Air Handler MAH',upn,systemName:extoRev21SystemsForUpn(upn)[0],discipline:'MECHANICAL DRY',closestParent:'',...parent},
+    {equipmentId:`F77-VFD${upn}-01-00`,equipmentDescription:'Variable Frequency Drive',upn:'650',systemName:extoRev21SystemsForUpn('650')[0],discipline:'FACILITIES MONITORING SYSTEM',closestParent:`F77-MAH${upn}-01-00`,dependencies:'SUPPLY-PANEL',...child},
+  ]);
+}
+for(const upn of ['101','104'])test(`tag and served equipment agree on UPN ${upn}: prefill coordinated corrections`,()=>{
+  const original=servedDrive({upn}),before=runSsmAudit(original),issue=before.findings.find(f=>f.rule.id==='parent.cross-upn');assert.ok(issue);
+  const proposal=auditProposeCorrection(issue,auditRecommendationContext(original));assert.ok(proposal);
+  assert.deepEqual(proposal.changes.map(c=>c.field),['UPN','System Name','Discipline']);
+  const draft=auditApplyCorrections(original,proposal.changes),row=draft.rows[1];
+  assert.equal(row.upn,upn);assert.equal(row.systemName,extoRev21SystemsForUpn(upn)[0]);assert.equal(row.discipline,'MECHANICAL DRY');
+  assert.equal(row.closestParent,original.rows[1].closestParent);assert.equal(row.dependencies,'SUPPLY-PANEL');
+  assert.ok(!runSsmAudit(draft).findings.some(f=>f.rule.id==='parent.cross-upn'));
+  assert.equal(auditCorrectionImpact(before,runSsmAudit(draft)).unsafe.length,0);
+});
+for(const child of [
+  {equipmentId:'F77-VFD650-01-00'},
+  {equipmentId:'F77-VFD-01-00'},
+  {equipmentId:'F77-VFD101-RIO650-01-00'},
+  {equipmentDescription:'Remote I/O Panel',equipmentId:'F77-RIO650-01-00'},
+  {discipline:'ELECTRICAL'},
+  {building:'OTHER'},
+])test(`uncertain or conflicting tag evidence has no UPN proposal: ${JSON.stringify(child)}`,()=>{
+  const original=servedDrive({child}),row=original.rows[1];
+  assert.equal(auditProposeCorrection(finding(row,'parent.cross-upn','Closest Parent'),auditRecommendationContext(original)),null);
+});
+test('tag and correct System Name repair the UPN instead of overwriting the correct system',()=>{
+  const original=servedDrive({child:{systemName:extoRev21SystemsForUpn('101')[0]}}),row=original.rows[1];
+  const issue=runSsmAudit(original).findings.find(f=>f.rule.id==='metadata.system-upn-mismatch'&&f.row===row._source.row);
+  const proposal=auditProposeCorrection(issue,auditRecommendationContext(original));
+  assert.deepEqual(proposal.changes.map(c=>[c.field,c.value]),[['UPN','101']]);
+});
+test('unknown non-electrical nomenclature does not select a System Name just from the current UPN',()=>{
+  const original=servedDrive({child:{equipmentId:'F77-UNKNOWN',systemName:extoRev21SystemsForUpn('101')[0]}}),row=original.rows[1];
+  assert.equal(auditProposeCorrection(finding(row),auditRecommendationContext(original)),null);
 });
