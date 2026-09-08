@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.39.1",
+    "date": "2026-09-08",
+    "type": "fix",
+    "notes": "- Improved in-app help and guidance\n- Fixed button and icon alignment"
+  },
+  {
     "version": "1.39.0",
     "date": "2026-09-08",
     "type": "feature",

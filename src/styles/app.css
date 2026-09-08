@@ -2195,9 +2195,22 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .review-toolbar{justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:10px}
 .review-totals span{display:grid;gap:3px;font-size:11px;color:var(--ink-2);padding-right:14px}
 .review-totals b{color:var(--ink);font-size:18px}
-.reference-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 0;border-bottom:1px solid var(--border)}
-.reference-row div{flex:1;min-width:150px}.reference-row small{display:block;margin-top:5px;color:var(--ink-2)}
-.reference-selection{padding:16px 0;display:grid;gap:10px}.reference-selection select{width:100%;min-width:0}
+.reference-row{display:grid;grid-template-columns:minmax(0,1fr) auto 36px;align-items:center;gap:10px;padding:16px 0;border-bottom:1px solid var(--border)}
+.reference-row>div{min-width:0;overflow-wrap:anywhere}.reference-row small{display:block;margin-top:5px;color:var(--ink-2)}
+.reference-selection{grid-column:1/-1;min-width:0;padding:6px 0 0;display:grid;gap:6px;font-size:12px}.reference-selection select{width:100%;min-width:0}
+.reference-title{display:flex;align-items:center;gap:8px;padding-right:38px;margin:6px 0 8px}
+.action-modal .reference-title h3{margin:0;padding:0;min-width:0}
+.reference-help{max-height:320px;overflow:auto;overscroll-behavior:contain;padding:0 14px;border-left:3px solid var(--accent);background:var(--surface-2);font-size:12px;line-height:1.6;color:var(--ink-2)}
+.reference-help[hidden]{display:none}
+.reference-help h4,.guide-copy h4{font-size:13px;line-height:1.4;margin:14px 0 6px;color:var(--ink)}
+.reference-help p{margin:8px 0}.reference-help ol{padding-left:20px}
+.action-modal .btn,.modify-shell .btn{justify-content:center;text-align:center}
+.action-modal .btn.icon-btn,.modify-shell .btn.icon-btn{width:36px;height:36px;min-width:36px;padding:0;gap:0;flex:0 0 36px;justify-content:center;line-height:0}
+.action-modal .btn.icon-btn>.ic,.modify-shell .btn.icon-btn>.ic{margin:0}
+.review-commands .btn{min-height:36px}
+@media(max-width:640px){.reference-row{grid-template-columns:minmax(0,1fr) 36px}.reference-row>div{grid-column:1/-1}.reference-row [data-reference-pick]{justify-self:stretch}.reference-help{max-height:260px}.review-commands{width:100%;justify-content:flex-start}}
+@media(pointer:coarse){.action-modal .btn.icon-btn,.modify-shell .btn.icon-btn{width:44px;height:44px;min-width:44px;flex-basis:44px}.reference-row{grid-template-columns:minmax(0,1fr) auto 44px}}
+@media(pointer:coarse) and (max-width:640px){.reference-row{grid-template-columns:minmax(0,1fr) 44px}}
 @media(max-width:640px){.action-review-fields{grid-template-columns:1fr}.action-preview{height:220px}.action-modal{max-height:calc(100dvh - 16px)}.review-commands{gap:6px}}
 .action-intro{margin:8px 0 14px;color:var(--ink-2);font-size:12px;line-height:1.55}
 .action-modes{display:grid;gap:8px}

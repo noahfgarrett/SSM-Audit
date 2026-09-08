@@ -16,6 +16,7 @@ export const MODULES=[
   'src/core/zip.js',
   'src/core/download.js',
   'src/ui/icons.js',
+  'src/ui/guide-content.js',
   'src/ui/feedback.js',
   'src/audit/export.js',
   'src/update/update.js',

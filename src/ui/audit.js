@@ -14,6 +14,7 @@ import { auditStatusFromWorkbook } from '../audit/status-report.js'
 import { AUDIT_ACTION_FIELDS, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditCustomCorrection, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
 import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { downloadBlob } from '../core/download.js'
+import { referenceHelpHtml } from './guide-content.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -560,11 +561,13 @@ export function sessionAudit(snapshot,references=S.session.references||{}){
 function openReferencesDialog(navigate){
   const pending={...S.session.references},workbooks={},names={},token={kind:'references'};
   const kinds=[['milestones','Milestone register'],['itemMasters','Item Master catalog']];
-  let busy=false;
+  let busy=false,helpOpen=false;
   const paint=()=>{
-    $('#actionModalBody').innerHTML=`<span class="eyebrow">Local references</span><h3 id="actionTitle">Reference workbooks</h3>
+    $('#actionModalBody').innerHTML=`<span class="eyebrow">Local references</span><div class="reference-title"><h3 id="actionTitle">Reference workbooks</h3><button class="btn ghost icon-btn" id="referencesHelp" type="button" title="How references work" aria-label="How references work" aria-controls="referencesHelpBody" aria-expanded="${helpOpen}">${ic('circle-help')}</button></div>
+      <section class="reference-help" id="referencesHelpBody" aria-label="How references work" ${helpOpen?'':'hidden'}>${referenceHelpHtml()}</section>
       ${kinds.map(([kind,label])=>`<section class="reference-row"><div><b>${label}</b><small>${pending[kind]?`${pending[kind].entries.length.toLocaleString()} entries selected`:'Not selected'}</small><small>${esc(pending[kind]?.warning||'')}</small></div><button class="btn" type="button" data-reference-pick="${kind}">${ic('folder-open')}Choose file</button><button class="icon-btn btn ghost" type="button" data-reference-remove="${kind}" ${pending[kind]?'':'disabled'} title="Remove reference" aria-label="Remove ${label}">${ic('x')}</button><input type="file" data-reference-file="${kind}" accept=".xlsx,.xls" hidden>${workbooks[kind]?`<label class="reference-selection">Sheet<select data-reference-sheet="${kind}" aria-label="${label} sheet">${names[kind].map(name=>`<option value="${esc(name)}" ${pending[kind]?.sheetName===name?'selected':''}>${esc(name)}</option>`).join('')}</select></label>`:''}</section>`).join('')}
       <footer class="export-foot"><span>Session only. Original workbooks unchanged.</span><div><button class="btn ghost" id="referencesCancel" type="button">Cancel</button><button class="btn primary" id="referencesApply" type="button">Apply references</button></div></footer>`;
+    $('#referencesHelp').onclick=()=>{helpOpen=!helpOpen;$('#referencesHelpBody').hidden=!helpOpen;$('#referencesHelp').setAttribute('aria-expanded',String(helpOpen));};
     $('#referencesCancel').onclick=closeActionDialog;
     $$('[data-reference-pick]').forEach(button=>button.onclick=()=>document.querySelector(`[data-reference-file="${button.dataset.referencePick}"]`).click());
     $$('[data-reference-remove]').forEach(button=>button.onclick=()=>{delete pending[button.dataset.referenceRemove];delete workbooks[button.dataset.referenceRemove];paint();});

@@ -10,6 +10,7 @@ import { auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, audi
 import { auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES } from '../src/audit/references.js'
 import { validateAuditCorrections } from '../src/audit/export.js'
 import { resetSession } from '../src/state.js'
+import { referenceHelpHtml } from '../src/ui/guide-content.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js', import.meta.url), 'utf8'), { filename: 'sheetjs.js' })
 const ui = readFileSync(new URL('../src/ui/audit.js', import.meta.url), 'utf8')
@@ -50,7 +51,7 @@ function reviewHarness(session) {
     auditReadReviewDocument: async (...args) => { calls.readReview++; return auditReadReviewDocument(...args) },
     validateAuditCorrections: (...args) => { calls.preflight++; return validateAuditCorrections(...args) },
     auditReviewDocument, modifyRecommendationContext: null, currentNavigate() {},
-    $: node, $$: selector => lists.get(selector) || [], ic: () => '',
+    $: node, $$: selector => lists.get(selector) || [], ic: () => '', referenceHelpHtml,
     document: { activeElement: null, contains: () => false },
     animateOpen: element => element.classList.add('show'), animateClose: element => element.classList.remove('show'),
     activateFocusTrap: () => () => {}, readArrayBuffer: async file => file.bytes,
@@ -245,3 +246,31 @@ for (const kind of ['itemMasters', 'milestones']) {
     assert.equal(harness.calls.render, 1)
   })
 }
+
+test('reference help is a reversible disclosure and preserves sheet selection through repaint', async () => {
+  const session = registry(), harness = reviewHarness(session)
+  const book = XLSX.utils.book_new()
+  for (const [sheet, id] of [['Current', 'L2-DEMO-1'], ['Alternate', 'L2-DEMO-2']]) {
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['L2 ID', 'L1 ID'], [id, 'L1-DEMO-1']]), sheet)
+  }
+  const input = { dataset: { referenceFile: 'milestones' }, files: [{ bytes: XLSX.write(book, { type: 'array', bookType: 'xlsx' }) }] }
+  const select = { dataset: { referenceSheet: 'milestones' }, value: 'Alternate' }
+  harness.lists.set('[data-reference-file]', [input]); harness.lists.set('[data-reference-sheet]', [select])
+  harness.api.openReferencesDialog()
+  const before = structuredClone(session), attributes = {}
+  harness.node('#referencesHelp').setAttribute = (key, value) => { attributes[key] = value }
+  assert.match(harness.node('#actionModalBody').innerHTML, /aria-controls="referencesHelpBody" aria-expanded="false"/)
+  harness.node('#referencesHelp').onclick()
+  assert.equal(harness.node('#referencesHelpBody').hidden, false)
+  assert.equal(attributes['aria-expanded'], 'true')
+  await input.onchange(); select.onchange()
+  assert.match(harness.node('#actionModalBody').innerHTML, /aria-expanded="true"/)
+  assert.match(harness.node('#actionModalBody').innerHTML, /value="Alternate" selected/)
+  harness.node('#referencesHelp').onclick()
+  assert.equal(harness.node('#referencesHelpBody').hidden, true)
+  assert.equal(attributes['aria-expanded'], 'false')
+  assert.deepEqual(structuredClone(session), before, 'help and pending selections do not alter the active review')
+  await harness.node('#referencesApply').onclick()
+  assert.equal(session.references.milestones.sheetName, 'Alternate')
+  assert.equal(harness.calls.refresh, 1)
+})
