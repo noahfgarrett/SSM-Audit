@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.40.3",
+    "date": "2026-09-09",
+    "type": "fix",
+    "notes": "- Updated interface wording and guidance"
+  },
+  {
     "version": "1.40.2",
     "date": "2026-09-09",
     "type": "fix",

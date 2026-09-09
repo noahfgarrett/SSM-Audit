@@ -38,7 +38,7 @@ test('setting aside one pattern leaves its sibling active and preserves registry
   assert.equal(h.calls.refresh,1);assert.equal(h.calls.counts,1);assert.equal(h.session.reviewDirty,true);
   h.api.setModifyPatternAside(group.key,false);
   assert.equal(h.session.excluded.size,0);assert.equal(h.node(`[data-mod-action-group="${group.key}"]`).disabled,false);
-  assert.match(h.node(`[data-mod-aside-group="${group.key}"]`).innerHTML,/Set aside/);
+  assert.match(h.node(`[data-mod-aside-group="${group.key}"]`).innerHTML,/Dismiss/);
   assert.equal(JSON.stringify([h.session.snapshot,h.session.changes]),before);
 });
 
@@ -56,6 +56,8 @@ test('set-aside controls cannot change review state while an action is being pre
 });
 
 test('pattern button and filtered batch action handlers preserve set-aside scope',()=>{
+  assert.doesNotMatch(source,/Set (?:all |matches )?aside/);
+  assert.match(source,/Dismiss all/);assert.match(source,/Dismiss matches/);
   assert.match(source,/data-mod-aside-group/);
   assert.match(source,/modifyActiveFindings\(collectMatches\(\)\)/);
   assert.match(source,/modifyActiveFindings\(modifyPatternMap\.get\(actionGroup\.dataset\.modActionGroup\)\|\|\[\]\)/);

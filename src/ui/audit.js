@@ -38,7 +38,7 @@ let drawerTrapCleanup=null,searchDebounceTimer=0;
 const NAV_SECTIONS=[
   {id:'dashboard',icon:'layout-dashboard',label:'Dashboard',hint:'Everything this registry turned up, at a glance'},
   {id:'audit',icon:'check-check',label:'Audit Findings',hint:'Every issue found in this registry'},
-  {id:'modify',icon:'sliders-horizontal',label:'Actions',hint:'Action findings in bulk, or set aside ones you disagree with'},
+  {id:'modify',icon:'sliders-horizontal',label:'Actions',hint:'Action findings in bulk, or dismiss ones you disagree with'},
   {id:'completed',icon:'circle-check',label:'Completed Equipment',hint:'Equipment finished on site per the Equipment Status Report'},
   {id:'hierarchy',icon:'list-tree',label:'SSM Hierarchy',hint:'Browse the registry as a tree'},
   {id:'compare',icon:'square-stack',label:'Compare Projects',hint:'Line this registry up beside a finished one'},
@@ -71,7 +71,7 @@ function navBadges(id){
     const blockers=result.summary.severity.blocker;
     return `${navCountHtml(result.summary.findings,'','findings')}${blockers?navCountHtml(blockers,'blocker',SEVERITY_LABELS.blocker.toLowerCase()):''}`;
   }
-  if(id==='modify'&&S.session&&S.session.rawResult){const aside=excludedInBase();return aside?navCountHtml(aside,'','set aside'):'';}
+  if(id==='modify'&&S.session&&S.session.rawResult){const aside=excludedInBase();return aside?navCountHtml(aside,'','dismissed'):'';}
   if(id==='completed'&&S.session&&S.session.status)return navCountHtml(S.session.status.equipment.length,'','completed on the report');
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return navCountHtml(S.session.snapshot.rows.length,'','rows');
   if(id==='compare'&&comparison)return navCountHtml(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems,'','systems with differences');
@@ -216,8 +216,8 @@ function loadChanges(){
   S.session.changes=[];S.session.changesRev=0;
 }
 function saveChanges(){S.session.reviewDirty=true;}
-/* ---- modifications: findings set aside ----
-   The user's per-finding overrides. A set-aside finding disappears from every
+/* ---- modifications: findings dismissed ----
+   The user's per-finding overrides. A dismissed finding disappears from every
    metric -- findings list, dashboard, hierarchy badges, export -- until it is
    restored on the Actions screen or explicitly loaded from a review file. */
 function loadExcluded(){
@@ -231,7 +231,7 @@ function setExcluded(id,on){
   S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
 }
 /* The Modifications screen works from the result BEFORE exclusions (but after
-   switched-off checks), so set-aside findings stay visible to restore. */
+   switched-off checks), so dismissed findings stay visible to restore. */
 function modifyBaseResult(){
   const raw=sessionEffectiveRaw();if(!raw)return null;
   return applyRulePreferences(raw,S.rules.disabled);
@@ -433,7 +433,7 @@ function showOnlyRule(ruleId,navigate,keepScope){
 
 /* ------------------------------------------------------ modifications screen */
 /* Every fired check, grouped by topic, with each match individually ticked.
-   Unticking sets the finding aside: it leaves every metric until restored here.
+   Unticking dismisses the finding: it leaves every metric until restored here.
    Long lists render in chunks so a 20k-findings registry stays responsive. */
 const MODIFY_CHUNK=300;
 function modifyQueryNorm(){return auditNormId(clean(S.session&&S.session.modifySearch));}
@@ -514,7 +514,7 @@ function modifyItemMasterCatalogStatus(rule){
   return `<small class="modify-im-status">${catalog?count?`VF catalog loaded · ${count.toLocaleString()} names`:'Catalog loaded · no VF names found':'No local VF catalog loaded · using built-in list'}</small>`;
 }
 /* Findings with the same explanation are one pattern -- "row on UPN 603, parent
-   on UPN RR" -- so a whole family of matches is kept or set aside with a single
+   on UPN RR" -- so a whole family of matches is kept or dismissed with a single
    box. Explanations unique to one row stay as plain rows. The map lets the
    delegated handlers find a pattern's findings without re-deriving the groups. */
 let modifyPatternMap=new Map();
@@ -538,7 +538,7 @@ function modifyPatternHtml(group){
   const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
   const severity=group.findings[0].severity;
   return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
-    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Set aside only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Set aside':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
     ${modifyItemMasterSwap(group.findings[0])}<div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
@@ -801,7 +801,7 @@ function syncModifyPatternBox(key){
   box.checked=kept===findings.length;box.indeterminate=kept>0&&kept<findings.length;
   const count=$(`[data-mod-group-count="${key}"]`);if(count)count.textContent=modifyPatternCountText(findings);
   const wrap=$(`[data-mod-pattern="${key}"]`);if(wrap)wrap.classList.toggle('is-excluded',!kept);
-  const button=$(`[data-mod-aside-group="${key}"]`);if(button){button.innerHTML=`${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Set aside':'Restore'}`;button.title=kept?'Set aside only this pattern without changing registry data':'Restore this pattern to active findings';}
+  const button=$(`[data-mod-aside-group="${key}"]`);if(button){button.innerHTML=`${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}`;button.title=kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings';}
   const action=$(`[data-mod-action-group="${key}"]`);if(action)action.disabled=!kept;
 }
 function syncAllModifyPatternBoxes(){for(const key of modifyPatternMap.keys())syncModifyPatternBox(key);}
@@ -811,7 +811,7 @@ function setModifyPatternAside(key,on,navigate){
   const wrap=$(`[data-mod-pattern="${key}"]`);
   if(wrap)$$('[data-mod-finding]',wrap).forEach(row=>{row.checked=!on;row.closest('.modify-row').classList.toggle('is-excluded',on);});
   syncModifyPatternBox(key);updateModifyCounts(navigate);
-  toast(`${findings.length.toLocaleString()} findings ${on?'set aside':'restored'}. Registry values unchanged.`);
+  toast(`${findings.length.toLocaleString()} findings ${on?'dismissed':'restored'}. Registry values unchanged.`);
 }
 function setExcludedMany(ids,on){
   if(!S.session.excluded)S.session.excluded=new Set();
@@ -854,7 +854,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
+    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Dismiss every match shown for this check':'Dismiss every finding of this check'}">${ic('circle-x')}Dismiss all</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -875,7 +875,7 @@ function updateModifyCounts(navigate){
   }
   const result=S.session.result,aside=excludedInBase();
   const included=$('#modifyIncluded');if(included&&result)included.textContent=`${result.summary.findings.toLocaleString()} counted`;
-  const asideChip=$('#modifyAside');if(asideChip)asideChip.textContent=`${aside.toLocaleString()} set aside`;
+  const asideChip=$('#modifyAside');if(asideChip)asideChip.textContent=`${aside.toLocaleString()} dismissed`;
   const restore=$('#modifyRestore');if(restore)restore.disabled=!aside;
   renderSideNav(navigate);
 }
@@ -949,7 +949,7 @@ export function renderModifications(navigate){
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div></div>
     ${milestoneMigrationControls()}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands"><button class="btn ghost sm" id="reviewReferences">${ic('file-spreadsheet')}References</button><button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding shown aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!filtered&&(S.session.modifyClosedCats||[]).includes(group.category);
       return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,filtered)).join('')}</div></section>`;
@@ -1039,7 +1039,7 @@ export function renderModifications(navigate){
     if(keep||asideAll){
       event.preventDefault();
       const ruleId=(keep||asideAll).dataset.modKeep||(keep||asideAll).dataset.modAside;
-      /* Scoped to the matches on screen -- with a search active, "Set all aside"
+      /* Scoped to the matches on screen -- with a search active, "Dismiss all"
          on a check touches only the findings the search surfaced. */
       const groupsNow=modifyGroups();let entry=null;
       for(const group of groupsNow){entry=group.rules.find(item=>item.rule.id===ruleId)||entry;}
@@ -1095,7 +1095,7 @@ export function renderModifications(navigate){
   const collectMatches=()=>{const list=[];for(const group of modifyGroups())for(const entry of group.rules)for(const finding of entry.matches)list.push(finding);return list;};
   const actionMatches=$('#modifyActionMatches');
   if(actionMatches)actionMatches.onclick=()=>{
-    const matches=modifyActiveFindings(collectMatches());if(!matches.length){toast('No active findings in this selection. Restore a set-aside group to action it.');return;}
+    const matches=modifyActiveFindings(collectMatches());if(!matches.length){toast('No active findings in this selection. Restore a dismissed group to action it.');return;}
     const milestone=S.session.modifyMilestone,discipline=S.session.modifyDiscipline;
     const label=[milestone&&milestone!=='all'?(milestone==='none'?'No L2 milestone':milestone):'',discipline&&discipline!=='all'?(discipline==='none'?'No discipline':discipline):'',clean(S.session.modifySearch)].filter(Boolean).join(' · ')||'Everything shown';
     openActionDialog(label,matches,navigate);
@@ -1106,7 +1106,7 @@ export function renderModifications(navigate){
   const asideMatches=$('#modifyAsideMatches');
   if(asideMatches)asideMatches.onclick=()=>{
     const ids=collectMatchIds();setExcludedMany(ids,true);rerenderModifications(navigate);
-    toast(`${ids.length.toLocaleString()} finding${ids.length===1?'':'s'} set aside`);
+    toast(`${ids.length.toLocaleString()} finding${ids.length===1?'':'s'} dismissed`);
   };
   $('#view').scrollTop=scrollTop;
   $('#view').onscroll=()=>{if(S.screen==='modify')S.session.modifyScrollTop=$('#view').scrollTop;};
@@ -1889,7 +1889,7 @@ function relationshipDiagramHtml(finding){
   return `<section class="finding-section rel-section"><h4>How these are linked</h4>${body}<p class="rel-legend">Reading this: ${esc(RELATIONSHIP_LEGENDS[kind]||'')}</p></section>`;
 }
 function openFinding(id,opener){
-  /* Set-aside findings are not in the session result, but the Modifications
+  /* Dismissed findings are not in the session result, but the Modifications
      screen still opens them -- the raw engine result is the fallback. */
   const finding=S.session.result.findings.find(item=>item.id===id)||(S.session.rawResult&&S.session.rawResult.findings.find(item=>item.id===id));if(!finding)return;
   const list=filteredFindings(),position=list.findIndex(item=>item.id===id);
@@ -1906,7 +1906,7 @@ function openFinding(id,opener){
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
     <div class="finding-evidence">${ic('file-spreadsheet')}${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}${finding.field?' &middot; '+esc(finding.field):''}</div>
-    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Reviewed - click to undo':'Review finding'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is set aside — click to have it count again':'Disagree with this finding? Set it aside — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Set aside — click to restore':'Set aside'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
+    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Reviewed - click to undo':'Review finding'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is dismissed — click to have it count again':'Disagree with this finding? Dismiss it — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Dismissed — click to restore':'Dismiss'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
     <div class="finding-steps"><button class="btn ghost sm" type="button" id="findingPrev" ${position>0?'':'disabled'}>${ic('chevron-left')}Previous</button><span>${position>=0?`${(position+1).toLocaleString()} of ${list.length.toLocaleString()}`:''}</span><button class="btn ghost sm" type="button" id="findingNext" ${position>=0&&position<list.length-1?'':'disabled'}>Next${ic('chevron-right')}</button></div>
   </div>`;
   wireCopyTags($('#drawerBody'));
@@ -1930,7 +1930,7 @@ function openFinding(id,opener){
     }
     closeDrawer();
     if(S.screen==='audit'&&currentNavigate)renderAuditResult(currentNavigate);else if(currentNavigate)renderSideNav(currentNavigate);
-    toast(on?'Set aside — restore it on the Modifications screen':'This finding counts again');
+    toast(on?'Dismissed — restore it on the Modifications screen':'This finding counts again');
   };
   const backdrop=$('#drawerBack');animateOpen(backdrop);backdrop.setAttribute('aria-hidden','false');
   drawerTrapCleanup?.();drawerTrapCleanup=activateFocusTrap(backdrop,closeDrawer);$('#drawer').focus();
