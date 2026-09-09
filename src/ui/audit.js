@@ -519,6 +519,7 @@ function modifyItemMasterCatalogStatus(rule){
    delegated handlers find a pattern's findings without re-deriving the groups. */
 let modifyPatternMap=new Map();
 function modifyPatternKey(ruleId,why){return auditFingerprint(ruleId+'|'+(why||''));}
+function modifyActiveFindings(findings){return findings.filter(finding=>!isExcludedId(finding.id));}
 function modifyPatterns(entry){
   const byWhy=new Map();
   for(const finding of entry.matches){const why=finding.why||'',key=['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule.id)?JSON.stringify([why,finding.actual,finding.expected]):why;const list=byWhy.get(key)||[];list.push(finding);byWhy.set(key,list);}
@@ -537,7 +538,7 @@ function modifyPatternHtml(group){
   const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
   const severity=group.findings[0].severity;
   return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
-    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action every finding of this pattern">${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Set aside only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Set aside':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
     ${modifyItemMasterSwap(group.findings[0])}<div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
@@ -800,8 +801,18 @@ function syncModifyPatternBox(key){
   box.checked=kept===findings.length;box.indeterminate=kept>0&&kept<findings.length;
   const count=$(`[data-mod-group-count="${key}"]`);if(count)count.textContent=modifyPatternCountText(findings);
   const wrap=$(`[data-mod-pattern="${key}"]`);if(wrap)wrap.classList.toggle('is-excluded',!kept);
+  const button=$(`[data-mod-aside-group="${key}"]`);if(button){button.innerHTML=`${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Set aside':'Restore'}`;button.title=kept?'Set aside only this pattern without changing registry data':'Restore this pattern to active findings';}
+  const action=$(`[data-mod-action-group="${key}"]`);if(action)action.disabled=!kept;
 }
 function syncAllModifyPatternBoxes(){for(const key of modifyPatternMap.keys())syncModifyPatternBox(key);}
+function setModifyPatternAside(key,on,navigate){
+  const findings=modifyPatternMap.get(key);if(!findings||S.session.reviewBusy)return;
+  setExcludedMany(findings.map(finding=>finding.id),on);
+  const wrap=$(`[data-mod-pattern="${key}"]`);
+  if(wrap)$$('[data-mod-finding]',wrap).forEach(row=>{row.checked=!on;row.closest('.modify-row').classList.toggle('is-excluded',on);});
+  syncModifyPatternBox(key);updateModifyCounts(navigate);
+  toast(`${findings.length.toLocaleString()} findings ${on?'set aside':'restored'}. Registry values unchanged.`);
+}
 function setExcludedMany(ids,on){
   if(!S.session.excluded)S.session.excluded=new Set();
   for(const id of ids){if(on)S.session.excluded.add(id);else S.session.excluded.delete(id);}
@@ -950,11 +961,7 @@ export function renderModifications(navigate){
   body.onchange=event=>{
     const groupBox=event.target.closest('[data-mod-group]');
     if(groupBox){
-      const key=groupBox.dataset.modGroup,findings=modifyPatternMap.get(key);if(!findings)return;
-      setExcludedMany(findings.map(finding=>finding.id),!groupBox.checked);
-      const wrap=$(`[data-mod-pattern="${key}"]`);
-      if(wrap)$$('[data-mod-finding]',wrap).forEach(row=>{row.checked=groupBox.checked;row.closest('.modify-row').classList.toggle('is-excluded',!groupBox.checked);});
-      syncModifyPatternBox(key);updateModifyCounts(navigate);
+      setModifyPatternAside(groupBox.dataset.modGroup,!groupBox.checked,navigate);
       return;
     }
     const input=event.target.closest('[data-mod-finding]');if(!input)return;
@@ -964,6 +971,8 @@ export function renderModifications(navigate){
     updateModifyCounts(navigate);
   };
   body.onclick=event=>{
+    const asideGroup=event.target.closest('[data-mod-aside-group]');
+    if(asideGroup){event.preventDefault();const key=asideGroup.dataset.modAsideGroup,findings=modifyPatternMap.get(key)||[];setModifyPatternAside(key,findings.some(finding=>!isExcludedId(finding.id)),navigate);return;}
     const review=event.target.closest('[data-mod-review]');
     if(review){event.preventDefault();const finding=S.session.rawResult.findings.find(item=>item.id===review.dataset.modReview);if(finding)openActionDialog(finding.rule.title,[finding],navigate);return;}
     const pct=event.target.closest('[data-mod-pct]');
@@ -990,7 +999,7 @@ export function renderModifications(navigate){
     const actionGroup=event.target.closest('[data-mod-action-group]');
     if(actionGroup){
       event.preventDefault();
-      const findings=modifyPatternMap.get(actionGroup.dataset.modActionGroup)||[];
+      const findings=modifyActiveFindings(modifyPatternMap.get(actionGroup.dataset.modActionGroup)||[]);
       if(findings.length)openActionDialog(findings[0].why,findings,navigate);
       return;
     }
@@ -1086,7 +1095,7 @@ export function renderModifications(navigate){
   const collectMatches=()=>{const list=[];for(const group of modifyGroups())for(const entry of group.rules)for(const finding of entry.matches)list.push(finding);return list;};
   const actionMatches=$('#modifyActionMatches');
   if(actionMatches)actionMatches.onclick=()=>{
-    const matches=collectMatches();if(!matches.length)return;
+    const matches=modifyActiveFindings(collectMatches());if(!matches.length){toast('No active findings in this selection. Restore a set-aside group to action it.');return;}
     const milestone=S.session.modifyMilestone,discipline=S.session.modifyDiscipline;
     const label=[milestone&&milestone!=='all'?(milestone==='none'?'No L2 milestone':milestone):'',discipline&&discipline!=='all'?(discipline==='none'?'No discipline':discipline):'',clean(S.session.modifySearch)].filter(Boolean).join(' · ')||'Everything shown';
     openActionDialog(label,matches,navigate);

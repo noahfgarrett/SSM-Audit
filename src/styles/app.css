@@ -2109,6 +2109,8 @@ tr.is-actioned td:first-child{opacity:1}
 .modify-pattern-why{min-width:0;flex:1 1 auto;color:var(--ink);font-size:11px;line-height:1.45}
 .modify-pattern-count{color:var(--ink-3);font:650 10px var(--mono);white-space:nowrap}
 .modify-pattern-expand{white-space:nowrap}
+.modify-pattern-aside{white-space:nowrap;min-width:86px;justify-content:center}
+@media(max-width:1000px){.modify-pattern-head{flex-wrap:wrap}.modify-pattern-why{flex-basis:calc(100% - 110px)}.modify-pattern-head>.btn{flex-shrink:0}}
 .modify-pattern-expand .ic{transition:transform var(--t-fast,120ms) ease}
 .modify-pattern-expand.open .ic{transform:rotate(180deg)}
 .modify-pattern-rows{display:grid;border-top:1px dashed var(--border);background:var(--surface-2)}

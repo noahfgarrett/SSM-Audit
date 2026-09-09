@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.40.2",
+    "date": "2026-09-09",
+    "type": "fix",
+    "notes": "- Improved review controls and guidance"
+  },
+  {
     "version": "1.40.1",
     "date": "2026-09-09",
     "type": "fix",
