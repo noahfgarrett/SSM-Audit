@@ -2189,6 +2189,12 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-simple .action-preview th:not(:first-child){width:30%}
 .action-simple [hidden]{display:none!important}
 .action-simple .action-impact:empty{display:none}
+.action-target{border:0;padding:0;margin:12px 0 18px;min-width:0}
+.action-target legend{font-size:12px;color:var(--ink-2);margin-bottom:6px}
+.action-target-options{display:inline-flex;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.action-target-options label{display:flex;align-items:center;justify-content:center;gap:8px;min-width:100px;min-height:36px;padding:0 12px;cursor:pointer;font-size:13px}
+.action-target-options label:has(input:checked){background:var(--surface-2);font-weight:600}
+.action-target-options input{margin:0;accent-color:var(--accent)}
 .action-simple .action-impact{color:var(--ink);padding:10px;background:var(--surface-2)}
 .action-simple .action-empty{margin:18px 0;color:var(--ink-2);font-size:14px}
 .action-fields{margin:0;padding:0;border:0;min-width:0}

@@ -16,7 +16,7 @@ function classicScript(source,path){
 function replaceOnce(source,marker,value){const count=source.split(marker).length-1;if(count!==1)throw new Error(`Expected one ${marker}, found ${count}`);return source.replace(marker,()=>value);}
 
 const app=MODULES.map(path=>classicScript(read(path),path)).join('');
-const workerModules=['src/core/text.js','src/io/workbook.js','src/exto/rev21-contract.js','src/exto/vf-item-masters.js','src/audit/model.js','src/audit/engine.js','src/audit/status-report.js','src/io/import-worker.js'];
+const workerModules=['src/core/text.js','src/io/workbook.js','src/exto/rev21-contract.js','src/exto/vf-item-masters.js','src/audit/model.js','src/audit/engine.js','src/audit/references.js','src/audit/milestone-migration.js','src/audit/actions.js','src/core/zip.js','src/core/download.js','src/audit/export.js','src/audit/review.js','src/audit/status-report.js','src/io/import-worker.js'];
 const workerSource=workerModules.map(path=>classicScript(read(path),path)).join('');
 const changelog=JSON.parse(read('src/changelog.json'));
 let html=read('src/index.html');

@@ -1,7 +1,8 @@
 import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S, resetSession } from '../state.js'
 import { readArrayBuffer } from '../io/workbook.js'
-import { importAuditWorkbook } from '../io/import-client.js'
+import { importAuditWorkbook, prepareAuditReview } from '../io/import-client.js'
+import { auditSessionResult } from '../audit/review.js'
 import { auditNormId, auditSplitReferences, auditFingerprint } from '../audit/model.js'
 import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
@@ -11,7 +12,7 @@ import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, expor
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { AUDIT_ACTION_FIELDS, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
 import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
@@ -301,21 +302,26 @@ function renderExportOptions(){
   }).join('');
   const layout=plan.layout==='level'?'level':'milestone';
   const kind=S.session.exportKind||'actionable';
+  const trackerSignOffBy=S.session.trackerSignOffBy==='discipline'?'discipline':'milestone';
   const changesCount=(S.session.changes||[]).length;
   const kindTabs=`<div class="export-kinds" role="tablist">
       <button class="export-kind ${kind==='actionable'?'on':''}" type="button" data-export-kind="actionable"><b>Actionable Export</b><small>Findings beside the equipment tree — the working report.</small></button>
       <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>The original workbook with your ${changesCount.toLocaleString()} staged fix${changesCount===1?'':'es'} written into a separate XLSX copy.</small></button>
       <button class="export-kind ${kind==='corrections'?'on':''}" type="button" data-export-kind="corrections"><b>Correction Log</b><small>Before-and-after values and review decisions.</small></button>
-      <button class="export-kind ${kind==='tracker'?'on':''}" type="button" data-export-kind="tracker"><b>Tracker</b><small>One shareable tab — progress by milestone and discipline.</small></button>
+      <button class="export-kind ${kind==='tracker'?'on':''}" type="button" data-export-kind="tracker"><b>Tracker</b><small>Manual team sign-off by milestone or discipline.</small></button>
     </div>`;
   if(kind!=='actionable'){
     $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose the export</h3>${kindTabs}
       ${kind==='updated'
         ?`<p class="export-intro">Writes validated corrections into a separate XLSX copy while retaining the workbook structure and untouched content. Formula and merged cells are not replaced. Review the copy before uploading; Excel may need to recalculate dependent formulas. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
-        :kind==='corrections'?`<p class="export-intro">Current corrections and review history, including reviewer, note, source row, and before-and-after values. Draft corrections have not been verified in an uploaded registry.</p>`:`<p class="export-intro">A single tab to share: a big progress bar driven by the "Milestone actioned?" ticks, one row per L2 milestone with the actioned share prefilled from this app, and a column per discipline showing its progress inside each milestone.</p>`}
+        :kind==='corrections'?`<p class="export-intro">Current corrections and review history, including reviewer, note, source row, and before-and-after values. Draft corrections have not been verified in an uploaded registry.</p>`:`<div class="export-layout"><b>Sign off whole groups</b>
+          <label class="export-layout-choice ${trackerSignOffBy==='milestone'?'on':''}"><input type="radio" name="tracker-signoff" value="milestone" ${trackerSignOffBy==='milestone'?'checked':''}><span><b>By L2 milestone</b><small>One checkmark signs off a milestone across all disciplines.</small></span></label>
+          <label class="export-layout-choice ${trackerSignOffBy==='discipline'?'on':''}"><input type="radio" name="tracker-signoff" value="discipline" ${trackerSignOffBy==='discipline'?'checked':''}><span><b>By discipline</b><small>One checkmark signs off a discipline across all milestones.</small></span></label>
+          </div><p class="export-intro">A separate, shareable workbook. All checkmarks start empty, including work already actioned in the app. Progress follows only your team's workbook checkmarks; nothing syncs back to the app. Export once, then maintain that shared copy.</p>`}
       <footer class="export-foot"><span></span><div><button class="btn primary" type="button" id="exportGo" ${kind==='updated'&&(!changesCount||!S.session.sourceBytes)?'disabled':''}>${ic('file-down')}Export</button></div></footer>`;
     $$('[data-export-kind]').forEach(button=>button.onclick=()=>{S.session.exportKind=button.dataset.exportKind;renderExportOptions();});
-    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='updated')await exportUpdatedRegistryXlsx();else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx();};
+    $$('input[name="tracker-signoff"]').forEach(input=>input.onchange=()=>{S.session.trackerSignOffBy=input.value;renderExportOptions();});
+    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='updated')await exportUpdatedRegistryXlsx();else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx(trackerSignOffBy);};
     return;
   }
   $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>${kindTabs}
@@ -549,14 +555,7 @@ function modifySuggestedFix(finding){
   return auditProposeCorrection(finding,modifyRecommendationContext);
 }
 export function sessionAudit(snapshot,references=S.session.references||{},migration=S.session.milestoneMigration){
-  references=auditMigrationReferences(references,migration);
-  const catalog=references.itemMasters;
-  const raw=runSsmAudit(snapshot,catalog?{itemMasterVocabulary:catalog.entries.map(entry=>entry.name||entry.value).filter(Boolean)}:{});
-  const extra=auditReferenceFindings(snapshot,references);if(!references.milestones)return raw;
-  const findings=[...raw.findings,...extra],severity={blocker:0,error:0,warning:0,info:0},category={...raw.summary.category},source={...raw.summary.source,reference:extra.length};
-  for(const finding of extra)category[finding.category]=(category[finding.category]||0)+1;
-  for(const finding of findings)severity[finding.severity]++;
-  return {...raw,findings,summary:{...raw.summary,checks:raw.summary.checks+Object.values(SSM_AUDIT_REFERENCE_RULES).length,findings:findings.length,severity,category,source,status:severity.blocker?'blocked':severity.error||severity.warning||raw.summary.unverified||extra.length?'review':'ready'}};
+  return auditSessionResult(snapshot,references,migration);
 }
 function openReferencesDialog(navigate){
   const pending={...S.session.references},workbooks={},names={},token={kind:'references'};
@@ -607,7 +606,7 @@ function reviewInstallDraft(prepared){
   const session=S.session;
   if(prepared.milestoneMigration){session.milestoneMigration=prepared.milestoneMigration;session.baselineResult=prepared.baselineResult;}
   session.snapshot=prepared.snapshot;session.rawResult=prepared.result;session.changes=prepared.changes;
-  session.draftResolved=new Set(auditCorrectionImpact(session.baselineResult,prepared.result).resolved.map(finding=>finding.id));
+  session.draftResolved=new Set(prepared.draftResolvedIds||auditCorrectionImpact(session.baselineResult,prepared.result).resolved.map(finding=>finding.id));
   session.actioned=new Set([...(session.reviewedIds||[]),...session.draftResolved]);
   session.changesRev++;session.actionedRev++;session.auditedAt=Date.now();session.reviewDirty=true;
   modifyRecommendationContext=null;S.comparison.targetSnapshot=session.snapshot;S.comparison.result=null;refreshSessionResult();
@@ -615,18 +614,11 @@ function reviewInstallDraft(prepared){
 async function reviewPrepare(changes,migration){
   const session=S.session,revision=session.changesRev;let prepared;
   await runWithProgress('Checking the draft','Original workbook unchanged',async(checkpoint,report)=>{
-    report(.15,'Validating source rows');await checkpoint();const snapshot=auditApplyCorrections(session.baselineSnapshot,changes);
-    let exportCheck={cellCount:0,sheetCount:0};
-    if(changes.length){
-      const bytes=session.sourceBytes&&new Uint8Array(session.sourceBytes);
-      if(!bytes||bytes[0]!==0x50||bytes[1]!==0x4b)throw new Error('Draft corrections require an original XLSX registry. Review decisions and reports remain available.');
-      session.reviewSourceWorkbook=session.reviewSourceWorkbook||XLSX.read(bytes,{type:'array',cellStyles:true});
-      exportCheck=validateAuditCorrections(session.reviewSourceWorkbook,session.baselineSnapshot,changes);
-    }
-    report(.45,'Running audit checks');await checkpoint();const settings=migration===undefined?session.milestoneMigration:auditReadMigrationSettings(migration),result=sessionAudit(snapshot,session.references,settings);
+    report(.05,'Preparing background review');await checkpoint();
+    const settings=migration===undefined?session.milestoneMigration:auditReadMigrationSettings(migration);
     const migrationChanged=migration!==undefined&&JSON.stringify(settings)!==JSON.stringify(session.milestoneMigration||{enabled:false,profile:null});
-    const before=migrationChanged?sessionAudit(session.snapshot,session.references,settings):session.rawResult;
-    prepared={snapshot,result,changes,revision,exportCheck,impact:auditMigrationImpact(auditCorrectionImpact(before,result),session.snapshot,snapshot,settings),...(!migrationChanged?{}:{milestoneMigration:settings,baselineResult:sessionAudit(session.baselineSnapshot,session.references,settings)})};report(1,'Preview ready');
+    const result=await prepareAuditReview(session,changes,settings,migrationChanged,report);await checkpoint();
+    prepared={...result,changes,revision};report(1,'Preview ready');
   });
   if(S.session!==session||session.changesRev!==revision)throw new Error('The draft changed. Preview the corrections again.');
   return prepared;
@@ -672,12 +664,21 @@ function paintActionDialog(){
   const cells=scope.incoming?.length||0,cleared=scope.prepared?.impact.resolved.length||0;
   $('#actionModalBody').innerHTML=`<section class="action-simple"><span class="eyebrow">${success?'Completed in working draft':editing?'1. Review and edit':'2. Confirm changes'}</span><h3 id="actionTitle">${success?'Changes applied':esc(scope.label)}</h3>
     ${success?`<div class="action-success" role="status">${ic('circle-check')}<div><b>${cells.toLocaleString()} ${cells===1?'cell':'cells'} updated</b><span>${cleared.toLocaleString()} findings cleared. ${scope.prepared.impact.introduced.length.toLocaleString()} new findings.</span></div></div>`:`<p class="action-summary">${editing?`${scope.findings.length.toLocaleString()} findings${scope.unsupported?`; ${scope.unsupported.toLocaleString()} need a verified value`:''}`:`${cells.toLocaleString()} cells will change; ${cleared.toLocaleString()} findings will clear`}</p>`}
-    ${!scope.suggestions.length?'<p class="action-empty">No editable correction is available for this finding.</p>':''}
+    ${editing&&scope.canTarget?`<fieldset class="action-target" ${scope.session.reviewBusy?'disabled':''}><legend>Edit metadata on</legend><div class="action-target-options">${['child','parent'].map(target=>`<label><input type="radio" name="actionTarget" value="${target}" ${scope.target===target?'checked':''}>${target==='child'?'Child':'Parent'}</label>`).join('')}</div></fieldset>`:''}
+    ${!scope.suggestions.length?`<p class="action-empty">${scope.canTarget&&scope.target==='parent'?'The parent must resolve to one unique registry row before its metadata can be edited.':'This issue needs an engineering decision or source-row correction. No automatic cell edit is offered.'}</p>`:''}
+    ${editing&&scope.findings.every(f=>f.rule.id==='dependency.project-not-needed')?`<button class="btn ghost sm" id="actionClearProject">${ic('eraser')}Clear Dependency Project</button>`:''}
     <fieldset id="actionFields" class="action-fields"><div class="action-preview" ${scope.suggestions.length?'':'hidden'}><table><thead><tr><th>Equipment / ${editing?'issue':'field'}</th><th>Current</th><th>${editing?'Suggested / your value':success?'Applied':'New value'}</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div></fieldset>
     <div class="action-pager" id="actionPager"><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous changes" title="Previous changes">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next changes" title="Next changes">${ic('chevron-right')}</button></div>
     <div id="actionImpact" class="action-impact" role="status" aria-live="polite">${!editing&&scope.prepared.impact.migrationConflicts?.length?`${scope.prepared.impact.migrationConflicts.length} L1/L2 pairing conflicts remain flagged after these project-approved replacements. L2 assignments will not be changed.`:!editing&&!success&&scope.prepared.impact.introduced.length?`${scope.prepared.impact.introduced.length} new findings need review. No new errors were introduced.`:''}</div>
     <footer class="export-foot"><span>${success?'Changed cells are highlighted yellow in Updated Registry.':'Original workbook unchanged'}</span><div>${!editing&&!success?'<button class="btn ghost" id="actionBack">Edit values</button>':''}<button class="btn ghost" id="actionCancel">${success?'Done':'Cancel'}</button><button class="btn primary" id="actionApply" ${scope.suggestions.length?'':'hidden disabled'}>${success?'View all changes':editing?'Review changes':'Apply changes'}</button></div></footer></section>`;
   $('#actionCancel').onclick=closeActionDialog;
+  if($('#actionClearProject'))$('#actionClearProject').onclick=()=>{if(scope.session.reviewBusy)return;for(const entry of scope.suggestions)for(const change of entry.changes)if(change.prop==='dependencyProject')change.value='';renderActionPreview();};
+  $$('input[name="actionTarget"]').forEach(input=>input.onchange=()=>{
+    if(scope.session.reviewBusy||scope.stage!=='edit')return;
+    scope.drafts.set(scope.target,scope.suggestions);scope.target=input.value;
+    scope.suggestions=scope.drafts.get(scope.target)||actionSuggestions(scope.findings,scope.context,scope.target);
+    scope.unsupported=scope.findings.length-scope.suggestions.length;scope.offset=0;paintActionDialog();
+  });
   if($('#actionBack'))$('#actionBack').onclick=()=>{scope.stage='edit';scope.offset=0;scope.prepared=null;paintActionDialog();};
   $('#actionPrevious').onclick=()=>{scope.offset=Math.max(0,scope.offset-80);renderActionPreview();};
   $('#actionNext').onclick=()=>{scope.offset+=80;renderActionPreview();};
@@ -718,22 +719,17 @@ async function processActionDialog(scope){
   }catch(error){if(actionScope===scope)$('#actionImpact').textContent=error.message||'No changes applied. The corrections could not be checked.';}
   finally{session.reviewBusy=false;if(actionScope===scope&&scope.stage==='edit'){button.disabled=false;button.textContent='Review changes';$('#actionFields').disabled=false;}}
 }
-function openActionDialog(label,findings,navigate,provided){
-  findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
-  modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
-  let unsupported=0;
-  const proposed=findings.map(finding=>{
-    const suggested=provided?provided.get(finding.id):modifySuggestedFix(finding);if(suggested)return {...suggested,changes:suggested.changes.map(change=>({...change}))};
-    unsupported++;
-    const row=auditFindingRow(finding,modifyRecommendationContext.index);if(!row)return null;
-    const fields=finding.rule.id==='parent.cross-upn'?['UPN','System Name']:[finding.field];
-    const changes=fields.filter(field=>AUDIT_ACTION_FIELDS[field]&&row._source.columns?.[AUDIT_ACTION_FIELDS[field]]!=null).map(field=>auditMakeCorrection(row,field,row[AUDIT_ACTION_FIELDS[field]],finding));
-    return changes.length?{row,finding,changes,reason:'No reliable suggestion. Enter a verified value or cancel.'}:null;
-  }),seen=new Set(),suggestions=proposed.filter(entry=>{
+function actionSuggestions(findings,context,target,provided){
+  const seen=new Set();return findings.map(finding=>provided?.get(finding.id)||auditActionEntry(finding,context,target)).filter(entry=>{
     if(!entry)return false;const key=JSON.stringify(entry.changes.map(change=>[auditCorrectionKey(change),change.value]).sort());
     if(seen.has(key))return false;seen.add(key);return true;
-  });
-  actionScope={label,findings,navigate,unsupported,suggestions,stage:'edit',offset:0,session:S.session,revision:S.session.changesRev};
+  }).map(entry=>({...entry,changes:entry.changes.map(change=>({...change}))}));
+}
+function openActionDialog(label,findings,navigate,provided){
+  findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
+  modifyRecommendationContext||=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
+  const context=modifyRecommendationContext,suggestions=actionSuggestions(findings,context,'child',provided);
+  actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
   paintActionDialog();
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
   actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;

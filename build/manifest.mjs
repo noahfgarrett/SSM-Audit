@@ -21,6 +21,7 @@ export const MODULES=[
   'src/ui/guide-content.js',
   'src/ui/feedback.js',
   'src/audit/export.js',
+  'src/audit/review.js',
   'src/update/update.js',
   'src/ui/audit.js',
   'src/boot.js',

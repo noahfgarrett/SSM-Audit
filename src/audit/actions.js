@@ -7,7 +7,7 @@ import { auditReferenceRecommendation } from './references.js'
 import { auditReadMigrationSettings } from './milestone-migration.js'
 
 export const AUDIT_ACTION_FIELDS=Object.freeze({
-  'UPN':'upn','Discipline':'discipline','System Name':'systemName','Closest Parent':'closestParent',
+  'UPN':'upn','Discipline':'discipline','Building':'building','System Name':'systemName','Closest Parent':'closestParent',
   'Dependencies':'dependencies','Dependency Project':'dependencyProject','L2 Milestone':'milestone',
   'L1 Milestone Parent':'milestoneParent','Milestone Parent':'milestoneParent',
   'Item Master Unique Identifier':'itemMaster','Equipment Classification':'equipmentClassification',
@@ -108,10 +108,52 @@ export async function auditReadReviewDocument(document,baseline,references={}){
 }
 
 export function auditRecommendationContext(snapshot,references={}){
-  const index=auditActionIndex(snapshot),cohorts=new Map(),branches=new Map();
-  for(const candidate of auditMilestoneCohortCandidates(snapshot.rows))cohorts.set(auditSourceKey(candidate.row),candidate);
-  for(const candidate of auditMilestoneBranchCandidates(snapshot.rows))branches.set(auditSourceKey(candidate.row),candidate);
-  return {snapshot,index,references,cohorts,branches};
+  const index=auditActionIndex(snapshot);let cohorts,branches;
+  return {snapshot,index,references,
+    get cohorts(){return cohorts||=new Map(auditMilestoneCohortCandidates(snapshot.rows).map(candidate=>[auditSourceKey(candidate.row),candidate]));},
+    get branches(){return branches||=new Map(auditMilestoneBranchCandidates(snapshot.rows).map(candidate=>[auditSourceKey(candidate.row),candidate]));}};
+}
+const AUDIT_METADATA_TARGETS=Object.freeze({'parent.cross-building':['Building'],'parent.cross-discipline':['Discipline'],'parent.cross-upn':['UPN','System Name','Discipline']});
+const AUDIT_RULE_FIELDS=new Map();
+for(const [ids,fields] of [
+  ['parent.blank parent.self parent.unresolved parent.generated-header-review structure.system-without-root logic.drive-parent-unexpected logic.heat-trace-chain-missing sop.lcp-placement sop.untied-instrument-rollup sop.control-valve-parent sop.room-sensor-parent',['Closest Parent','Dependencies']],
+  ['dependency.self dependency.duplicate dependency.same-upn-bottom-up dependency.parent-also-listed dependency.on-header header.has-dependency logic.control-link-missing logic.driven-electrical-path-missing logic.control-electrical-path-missing logic.rio-control-path-missing sop.vfd-dependencies logic.fdu-supported-equipment-missing logic.vesda-fire-alarm-missing',['Dependencies']],
+  ['dependency.unresolved',['Dependencies','Dependency Project']],
+  ['dependency.project-not-needed',['Dependency Project']],
+  ['metadata.upn-not-approved metadata.misc-upn-review metadata.system-upn-mismatch metadata.upn-inconsistent metadata.ic-discipline',['UPN','System Name','Discipline']],
+  ['milestone.incomplete-pair milestone.l2-upn-mismatch milestone.l2-upn-unknown milestone.intent-mismatch milestone.parent-inconsistent milestone.local-cohort-outlier milestone.level-field-mismatch milestone.branch-outlier reference.milestone-parent-missing reference.milestone-parent-mismatch reference.milestone-unknown reference.milestone-ambiguous',['L1 Milestone Parent','L2 Milestone']],
+  ['item-master.standardized-assignment item-master.migration-advisory header.item-master-not-blank',['Item Master Unique Identifier']],
+  ['metadata.classification-not-in-list',['Equipment Classification']],
+  ['sop.fms-io-under-vfd',['Closest Parent','Dependencies']],
+  ['sop.instrument-parent-upn',['UPN','System Name','Closest Parent']],
+  ['parent.cycle dependency.precedence-cycle',['Closest Parent','Dependencies']],
+  ['logic.external-path-unverified',['Dependencies','Dependency Project']],
+  ['identity.duplicate-equipment-id identity.tag-looks-like-description header.unused',[]],
+])for(const id of ids.split(' '))AUDIT_RULE_FIELDS.set(id,Object.freeze(fields));
+export function auditActionPolicy(finding){
+  const metadata=AUDIT_METADATA_TARGETS[finding.rule.id];
+  if(metadata)return {fields:metadata,targets:true};
+  if(finding.rule.id==='sop.instrument-parent-upn'&&finding.field==='Equipment ID')return {fields:[],targets:false};
+  return {fields:AUDIT_RULE_FIELDS.get(finding.rule.id)||[],targets:false,known:AUDIT_RULE_FIELDS.has(finding.rule.id)};
+}
+export function auditActionEntry(finding,context,target='child'){
+  const child=auditFindingRow(finding,context.index),policy=auditActionPolicy(finding);if(!child||!policy.fields.length)return null;
+  const parents=context.index.byTag.get(auditNormId(child.closestParent)),parent=parents?.length===1?parents[0]:null;
+  if(policy.targets&&target==='parent'&&(!parent||parent===child))return null;
+  const row=policy.targets&&target==='parent'?parent:child;
+  let proposed=target==='child'?auditProposeCorrection(finding,context):null;
+  const changes=new Map((proposed?.changes||[]).map(c=>[c.prop,c]));
+  for(const field of policy.fields){
+    const prop=AUDIT_ACTION_FIELDS[field];if(row._source.columns?.[prop]==null||changes.has(prop))continue;
+    let value=row[prop];
+    if(policy.targets&&['Building','Discipline'].includes(field)&&finding.rule.id!=='parent.cross-upn'){
+      const other=(target==='parent'?child:parent)?.[prop];value=(field==='Discipline'?extoRev21Canonical('discipline',other):clean(other))||value;
+    }
+    changes.set(prop,auditMakeCorrection(row,field,value,finding));
+  }
+  if(!changes.size)return null;
+  const contextLabel=policy.targets?`Child: ${child.equipmentId} | Parent: ${child.closestParent||'(not found)'}`:'';
+  return {row,finding,changes:[...changes.values()],contextLabel,reason:(contextLabel?`${contextLabel}. `:'')+(proposed?.reason||(policy.targets?`Editing ${target} metadata. Confirm which equipment has the correct values. Parent and dependency links stay unchanged.`:'No reliable suggestion. Enter verified values or cancel.')),confidence:proposed?.confidence||'Engineer review'};
 }
 function auditActionSuffix(row){return auditNormId(row.equipmentId).split('-').slice(-2).join('-');}
 function auditActionTagUpn(row){
@@ -142,6 +184,7 @@ export function auditProposeCorrection(finding,context){
   const changes=[],add=(field,value)=>{if(clean(row[AUDIT_ACTION_FIELDS[field]])!==clean(value))changes.push(auditMakeCorrection(row,field,value,finding));};
   let reason='',confidence='Review';
   try{
+    if(['parent.cross-building','parent.cross-discipline','parent.cycle','dependency.precedence-cycle','logic.external-path-unverified'].includes(finding.rule.id))return null;
     const reference=auditReferenceRecommendation(row,finding.field,context.references);
     if(reference){add(finding.field,reference.value);reason=reference.reason;confidence=reference.confidence||'Reference';}
     else if(finding.rule.id==='parent.cross-upn'){
@@ -193,7 +236,7 @@ export function auditProposeCorrection(finding,context){
     }else if(finding.rule.id==='item-master.standardized-assignment'){
       const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,VF_ITEM_MASTER_NAMES);if(candidates.length!==1)return null;
       add('Item Master Unique Identifier',candidates[0]);reason='One standardized name has the same functional name. Confirm checklist compatibility; the site prefix alone is not an error.';
-    }else if(finding.field==='Closest Parent'){
+    }else if(finding.field==='Closest Parent'&&auditActionPolicy(finding).fields.includes('Closest Parent')){
       const parents=auditParentRecommendations(row,context);if(parents.length!==1)return null;
       return auditCustomCorrection(finding,parents[0].tag,context,parents[0].reason+' Confirm the served equipment.');
     }

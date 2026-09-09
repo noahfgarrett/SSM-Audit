@@ -12,6 +12,8 @@ import { validateAuditCorrections } from '../src/audit/export.js'
 import { resetSession } from '../src/state.js'
 import { referenceHelpHtml } from '../src/ui/guide-content.js'
 import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
+import { auditActionEntry, auditActionPolicy } from '../src/audit/actions.js'
+import { auditSessionResult, auditPrepareInWorker } from '../src/audit/review.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js', import.meta.url), 'utf8'), { filename: 'sheetjs.js' })
 const ui = readFileSync(new URL('../src/ui/audit.js', import.meta.url), 'utf8')
@@ -37,6 +39,7 @@ function registry(overrides = {}, additional = []) {
 // Run production helpers unchanged. Only rendering and async checkpoints are
 // substituted; workbook parsing, correction validation, digests and audits are real.
 function reviewHarness(session) {
+  const reviewCache={};
   const nodes = new Map(), lists = new Map(), hooks = {}, messages = []
   const calls = { checkpoints: 0, preflight: 0, progress: 0, refresh: 0, render: 0, readReview: 0 }
   const node = selector => {
@@ -47,7 +50,11 @@ function reviewHarness(session) {
     return nodes.get(selector)
   }
   const context = vm.createContext({
-    S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,
+    S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,auditSessionResult,auditActionEntry,auditActionPolicy,
+    prepareAuditReview:async(s,changes,migration,migrationChanged,report)=>{
+      if(changes.length)calls.preflight++;
+      return auditPrepareInWorker(reviewCache,{changes,previousChanges:s.changes||[],references:s.references||{},migration,migrationChanged,...(!reviewCache.baseline?{baseline:s.baselineSnapshot,file:new Blob([s.sourceBytes||new Uint8Array()])}:{})},report);
+    },
     crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
     auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,auditMilestoneMigrationRows,auditMigrationImpact,
     modifySuggestedFix:finding=>auditProposeCorrection(finding,auditRecommendationContext(session.snapshot,session.references)),
@@ -90,6 +97,21 @@ test('project milestone replacement previews and applies only L1, then restores 
   await h.api.reviewUndoLast();
   assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
   assert.equal(session.milestoneMigration.enabled,true);
+});
+
+test('metadata target switch preserves edits and applies to the chosen parent row',async()=>{
+  const session=registry({systemName:system,building:'DEMO-A',closestParent:'PARENT'},[{equipmentId:'PARENT',building:'DEMO-B',upn:'602',systemName:system,discipline:'ELECTRICAL',closestParent:system}]);
+  const h=reviewHarness(session),child={value:'child'},parent={value:'parent'};h.lists.set('input[name="actionTarget"]',[child,parent]);
+  const issue=session.rawResult.findings.find(f=>f.rule.id==='parent.cross-building');assert.ok(issue);
+  h.api.openActionDialog('Building mismatch',[issue]);
+  assert.match(h.node('#actionModalBody').innerHTML,/Edit metadata on/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/Building/);assert.doesNotMatch(h.node('#actionPreviewRows').innerHTML,/aria-label="Closest Parent/);
+  h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'0',actionCell:'0'},value:'DEMO-C'})}});
+  parent.onchange();assert.match(h.node('#actionPreviewRows').innerHTML,/<b>PARENT<\/b>/);
+  child.onchange();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-C"/);
+  parent.onchange();await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].building,'DEMO-A');assert.equal(session.snapshot.rows[1].building,'DEMO-A');assert.equal(session.changes[0].tag,'PARENT');
+  assert.equal(session.snapshot.rows[0].closestParent,'PARENT');assert.match(h.node('#actionModalBody').innerHTML,/Changes applied/);
 });
 
 test('Actions show the issue and editable drive corrections, preview all cells, then confirm success',async()=>{
@@ -186,7 +208,7 @@ for(const cancelDuringValidation of [false,true])test(`Cancel leaves suggestions
 
 test('one-click apply blocks a suggestion that introduces a new hierarchy error',async()=>{
   const session=registry(),h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='metadata.system-upn-mismatch');
-  h.context.modifySuggestedFix=()=>({row:session.snapshot.rows[0],finding:issue,reason:'Synthetic unsafe suggestion',changes:[auditMakeCorrection(session.snapshot.rows[0],'Closest Parent','EQ-1',issue)]});
+  h.context.auditActionEntry=()=>({row:session.snapshot.rows[0],finding:issue,reason:'Synthetic unsafe suggestion',changes:[auditMakeCorrection(session.snapshot.rows[0],'Closest Parent','EQ-1',issue)]});
   h.api.openActionDialog('Test correction',[issue]);await h.node('#actionApply').onclick();
   assert.match(h.node('#actionImpact').textContent,/No changes applied/);
   assert.equal(session.changes.length,0);assert.equal(session.reviewHistory.length,0);assert.equal(h.calls.refresh,0);

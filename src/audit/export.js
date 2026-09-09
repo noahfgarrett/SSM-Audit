@@ -956,11 +956,10 @@ export async function exportAuditCorrectionsXlsx(){
 }
 
 /* ---- Tracker Export ----
-   A single shareable tab: one big bar at the top driven by the manual
-   "Milestone actioned?" ticks, one row per L2 milestone (progress prefilled
-   from in-app actioning), and one column per discipline showing that
-   discipline's actioned share within the milestone. */
+   App review state defines scope only. Workbook ticks are the sole source of
+   completion, so teams can maintain the exported tracker independently. */
 export function buildAuditTrackerWorkbook(currentResult,sessionName,options={}){
+  const byDiscipline=options.signOffBy==='discipline',groupLabel=byDiscipline?'Discipline':'L2 Milestone';
   const result=options.baselineResult||currentResult,actioned=new Set([...(options.actionedIds||[]),...(options.draftResolvedIds||[])]);
   const disabled=new Set(options.disabledRules||[]),excluded=new Set(options.excludedIds||[]),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
   const inScope=finding=>!disabled.has(finding.rule?.id)&&!completed.has(auditNormId(finding.equipmentId))&&(!excluded.has(finding.id)||actioned.has(finding.id));
@@ -971,79 +970,74 @@ export function buildAuditTrackerWorkbook(currentResult,sessionName,options={}){
   for(const row of bySource.values()){const key=auditNormId(row.equipmentId),rows=byId.get(key)||[];rows.push(row);byId.set(key,rows);}
   const findingKey=finding=>JSON.stringify([finding.sheet||'',finding.row||0,finding.rule?.id||finding.ruleId||'',finding.row?'':auditNormId(finding.equipmentId)]);
   const baselineFindings=result&&result.findings||[],findings=baselineFindings.filter(inScope),baselineKeys=new Set(baselineFindings.map(findingKey));
-  const baselineCounts=new Map();for(const finding of baselineFindings){const key=findingKey(finding);baselineCounts.set(key,(baselineCounts.get(key)||0)+1);}
-  const doneKeys=new Set((currentResult&&currentResult.findings||[]).filter(finding=>actioned.has(finding.id)).map(findingKey));
   for(const finding of currentResult&&currentResult.findings||[])if(inScope(finding)&&!baselineKeys.has(findingKey(finding))){findings.push(finding);baselineKeys.add(findingKey(finding));}
-  const groups=new Map(),discSet=new Set();
+  const groups=new Map();
   for(const finding of findings){
     const candidates=byId.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditCorrectionSourceKey(finding))||(candidates.length===1?candidates[0]:null);
     const milestone=clean(row&&row.milestone)||'No L2 milestone';
     const discipline=clean(row&&row.discipline)||'No discipline';
-    discSet.add(discipline);
-    const group=groups.get(milestone)||{total:0,done:0,disc:new Map()};
-    const key=findingKey(finding),done=actioned.has(finding.id)||baselineCounts.get(key)===1&&doneKeys.has(key);group.total++;if(done)group.done++;
-    const cell=group.disc.get(discipline)||{total:0,done:0};cell.total++;if(done)cell.done++;group.disc.set(discipline,cell);
-    groups.set(milestone,group);
+    const name=byDiscipline?discipline:milestone;
+    groups.set(name,(groups.get(name)||0)+1);
   }
-  const disciplines=[...discSet].sort(natCmp),milestones=[...groups.keys()].sort(natCmp);
-  const headerSheetRow=8,firstRow=9,lastRow=8+milestones.length;
-  const fixedHeaders=['L2 Milestone','Findings','Actioned in app','%','Progress','Milestone actioned?'];
+  const names=[...groups.keys()].sort(natCmp);
+  const headerSheetRow=8,firstRow=9,lastRow=8+names.length;
+  const fixedHeaders=[groupLabel,'Findings','Signed off','%','Progress','Signed off?'];
   const aoa=[
     ['SSM Audit — Tracker','','','','',''],
     [`${clean(sessionName)} — generated ${(options.generatedAt||new Date()).toLocaleDateString()}`,'','','','',''],
-    [`Action findings in the SSM Audit app, then tick "Milestone actioned?" (${AUDIT_EXPORT_TICK}) here when a whole milestone is closed out. The big bar follows the ticks.`,'','','','',''],
+    [`Tick "Signed off?" (${AUDIT_EXPORT_TICK}) when the whole ${byDiscipline?'discipline':'milestone'} is complete. All progress follows these workbook checkmarks only.`,'','','','',''],
     ['','','','','',''],
-    ['MILESTONES ACTIONED','','','','',''],
+    [byDiscipline?'DISCIPLINES SIGNED OFF':'MILESTONES SIGNED OFF','','','','',''],
     [auditExportEmptyBar(),'','','','',''],
     ['','','','','',''],
-    [...fixedHeaders,...disciplines],
+    fixedHeaders,
   ];
-  for(const milestone of milestones){
-    const group=groups.get(milestone);
-    const discCells=disciplines.map(discipline=>{const cell=group.disc.get(discipline);return cell?cell.done/cell.total:'';});
-    aoa.push([milestone,group.total,group.done,0,auditExportEmptyBar(),group.total&&group.done===group.total?AUDIT_EXPORT_TICK:AUDIT_EXPORT_UNTICKED,...discCells]);
-  }
+  for(const name of names)aoa.push([name,groups.get(name),0,0,auditExportEmptyBar(),AUDIT_EXPORT_UNTICKED]);
+  if(!names.length)aoa.push(['No findings in scope','','','','','']);
   const sheet=XLSX.utils.aoa_to_sheet(aoa);
-  sheet['!cols']=[{wch:42},{wch:10},{wch:13},{wch:8},{wch:18},{wch:17},...disciplines.map(()=>({wch:14}))];
-  sheet['!rows']=[{hpt:28},{hpt:16},{hpt:16},{hpt:8},{hpt:14},{hpt:34},{hpt:8},{hpt:30}];
+  sheet['!cols']=[{wch:62},{wch:10},{wch:12},{wch:8},{wch:18},{wch:15}];
+  sheet['!rows']=[{hpt:28},{hpt:24},{hpt:32},{hpt:8},{hpt:14},{hpt:34},{hpt:8},{hpt:30}];
+  sheet['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}},{s:{r:2,c:0},e:{r:2,c:5}}];
   sheetStyleCell(sheet,'A1',AUDIT_EXPORT_STYLES.title);
   sheetStyleCell(sheet,'A2',AUDIT_EXPORT_STYLES.subtitle);
   sheetStyleCell(sheet,'A3',AUDIT_EXPORT_STYLES.note);
   sheetStyleCell(sheet,'A5',AUDIT_EXPORT_STYLES.overallLabel);
-  const tickRange=milestones.length?`F${firstRow}:F${lastRow}`:'';
-  const overallFormula=milestones.length?`COUNTIF(${tickRange},"${AUDIT_EXPORT_TICK}")/${milestones.length}`:'';
+  const tickRange=names.length?`F${firstRow}:F${lastRow}`:'';
+  const overallFormula=names.length?`COUNTIF(${tickRange},"${AUDIT_EXPORT_TICK}")/${names.length}`:'';
   if(overallFormula)sheetSetCell(sheet,'E6',sheetFormulaCell(overallFormula,0,AUDIT_EXPORT_STYLES.overallPercent));else sheetStyleCell(sheet,'E6',AUDIT_EXPORT_STYLES.overallPercent);
   if(overallFormula)sheetSetCell(sheet,'A6',auditExportBarCell('E6',AUDIT_EXPORT_STYLES.overallBar));else sheetStyleCell(sheet,'A6',AUDIT_EXPORT_STYLES.overallBar);
   for(const column of ['B','C','D'])sheetStyleCell(sheet,`${column}6`,AUDIT_EXPORT_STYLES.overallBar);
-  auditExportHeaderRow(sheet,headerSheetRow,[...fixedHeaders,...disciplines],['left','right','right','right','left','center',...disciplines.map(()=>'right')]);
-  milestones.forEach((milestone,offset)=>{
+  auditExportHeaderRow(sheet,headerSheetRow,fixedHeaders,['left','right','right','center','center','center']);
+  names.forEach((name,offset)=>{
     const rowIndex=firstRow+offset,band=offset%2===1;
-    sheet['!rows'][rowIndex-1]={hpt:22};
-    sheetStyleCell(sheet,`A${rowIndex}`,band?AUDIT_EXPORT_STYLES.labelBand:AUDIT_EXPORT_STYLES.label);
+    sheet['!rows'][rowIndex-1]={hpt:Math.max(24,Math.ceil(name.length/58)*15)};
+    const labelStyle=band?AUDIT_EXPORT_STYLES.labelBand:AUDIT_EXPORT_STYLES.label;
+    sheetStyleCell(sheet,`A${rowIndex}`,{...labelStyle,alignment:{...labelStyle.alignment,wrapText:true}});
     sheetStyleCell(sheet,`B${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
-    sheetStyleCell(sheet,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid);
+    sheetSetCell(sheet,`C${rowIndex}`,sheetFormulaCell(`IF(F${rowIndex}="${AUDIT_EXPORT_TICK}",B${rowIndex},0)`,0,band?AUDIT_EXPORT_STYLES.numberMidBand:AUDIT_EXPORT_STYLES.numberMid));
     sheetSetCell(sheet,`D${rowIndex}`,auditExportPercentCell(`B${rowIndex}`,`C${rowIndex}`,band?AUDIT_EXPORT_STYLES.percentBand:AUDIT_EXPORT_STYLES.percent));
     sheetSetCell(sheet,`E${rowIndex}`,auditExportBarCell(`D${rowIndex}`,band?AUDIT_EXPORT_STYLES.barBand:AUDIT_EXPORT_STYLES.bar));
     sheetStyleCell(sheet,`F${rowIndex}`,AUDIT_EXPORT_STYLES.actioned);
-    disciplines.forEach((discipline,at)=>{
-      const address=`${auditColumnName(6+at)}${rowIndex}`;
-      sheetStyleCell(sheet,address,band?AUDIT_EXPORT_STYLES.percentBand:AUDIT_EXPORT_STYLES.percent);
-    });
   });
   const extras={conditionalFormatting:[auditExportDataBar('A6:A6',1)]};
-  if(milestones.length){
+  if(names.length){
     extras.conditionalFormatting.push(auditExportDataBar(`E${firstRow}:E${lastRow}`,2));
     extras.dataValidations=[auditExportTickValidation(tickRange)];
   }
   sheetXmlExtras(sheet,extras);
   sheetFreezeRows(sheet,headerSheetRow);
+  const range=XLSX.utils.decode_range(sheet['!ref']);
+  for(let row=0;row<=range.e.r;row++)for(let column=0;column<=range.e.c;column++){
+    const address=XLSX.utils.encode_cell({r:row,c:column}),style=sheet[address]?.s||{};
+    if(!style.fill)sheetStyleCell(sheet,address,{...style,fill:{patternType:'solid',fgColor:{rgb:'FFFFFF'},bgColor:{rgb:'FFFFFF'}}});
+  }
   const workbook=XLSX.utils.book_new();
   addSheet(workbook,sheet,'Tracker');
   return workbook;
 }
-export async function exportTrackerXlsx(){
+export async function exportTrackerXlsx(signOffBy='milestone'){
   const session=S.session,result=session&&(session.rawResult||session.result);if(!result){toast('Run an SSM Audit first');return;}
-  const workbook=buildAuditTrackerWorkbook(result,session.name,{baselineResult:session.baselineResult,actionedIds:session.actioned,draftResolvedIds:session.draftResolved,disabledRules:S.rules.disabled,excludedIds:session.excluded,completedEquipmentIds:session.status&&session.status.completed});
+  const workbook=buildAuditTrackerWorkbook(result,session.name,{signOffBy,baselineResult:session.baselineResult,actionedIds:session.actioned,draftResolvedIds:session.draftResolved,disabledRules:S.rules.disabled,excludedIds:session.excluded,completedEquipmentIds:session.status&&session.status.completed});
   const base=clean(session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
   try{
     const blob=await workbookBlobCompact(workbook,{});

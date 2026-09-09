@@ -1,12 +1,19 @@
 import { auditSnapshotFromWorkbook, auditNormId } from '../audit/model.js'
 import { auditStatusFromWorkbook } from '../audit/status-report.js'
 import { runSsmAudit } from '../audit/engine.js'
+import { auditPrepareInWorker } from '../audit/review.js'
+
+const auditReviewWorkerCache={};
 
 // Keep the workbook and temporary sheet arrays off the UI thread. Only the
 // compact audit model and the untouched original bytes return to the app.
 self.onmessage=async({data})=>{
   const report=(fraction,label)=>self.postMessage({type:'progress',fraction,label});
   try{
+    if(data.kind==='review'){
+      const prepared=await auditPrepareInWorker(auditReviewWorkerCache,data,report);
+      self.postMessage({type:'result',prepared});return;
+    }
     report(.02,'Reading workbook');
     const bytes=new Uint8Array(await data.file.arrayBuffer());
     report(.06,'Opening workbook');

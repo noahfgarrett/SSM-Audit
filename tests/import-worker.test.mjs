@@ -14,7 +14,7 @@ const vendor=html.match(/<script id="sheetjs-runtime">([\s\S]*?)<\/script>/)[1];
 const workerSource=JSON.parse(html.match(/const AUDIT_IMPORT_WORKER_SOURCE=("(?:[^"\\]|\\.)*");/)[1]);
 const runtime=vm.createContext({});vm.runInContext(vendor,runtime);
 globalThis.XLSX=runtime.XLSX;
-const client=readFileSync(new URL('src/io/import-client.js',root),'utf8').replace('export function','function');
+const client=readFileSync(new URL('src/io/import-client.js',root),'utf8').replaceAll('export function','function');
 
 function fixture(count=32,withStatus=true,bookType='xlsx'){
   const rows=[EXTO_REV21_COLUMNS.map(column=>column.header)];
@@ -122,7 +122,7 @@ function clientHarness(mode){
   const context=vm.createContext({Worker:mode==='unavailable'?undefined:FakeWorker,Blob,AUDIT_IMPORT_WORKER_SOURCE:workerSource,
     document:{getElementById:()=>({textContent:vendor})},URL:{createObjectURL:()=>{events.push('url');return 'blob:local';},revokeObjectURL:()=>events.push('revoked')}});
   vm.runInContext(client,context);
-  return {run:context.importAuditWorkbook,events,callbacks};
+  return {run:context.importAuditWorkbook,review:context.prepareAuditReview,events,callbacks};
 }
 
 test('client forwards progress, returns results and frees worker resources once',async()=>{
@@ -132,6 +132,15 @@ test('client forwards progress, returns results and frees worker resources once'
   worker.onmessage({data:{type:'result'}});
   assert.deepEqual(progress,[[.2,'Reading']]);assert.ok((await pending).snapshot);
   assert.equal(h.events.filter(event=>event==='terminated').length,1);assert.equal(h.events.filter(event=>event==='revoked').length,1);
+});
+
+test('review client reuses the worker and releases it with the registry session',async()=>{
+ const h=clientHarness(),session={baselineSnapshot:{rows:[]},sourceBytes:new Uint8Array([80,75]),changes:[],references:{}};
+ const first=h.review(session,[],{},false),worker=h.callbacks[0];worker.onmessage({data:{type:'result',prepared:{snapshot:{rows:[]}}}});await first;
+ const second=h.review(session,[],{},false);assert.equal(h.callbacks.length,1);const posted=h.events.filter(e=>e?.kind==='review');assert.ok(posted[0].baseline);assert.equal(posted[1].baseline,undefined);
+ const competing=h.review(session,[],{},false);await assert.rejects(competing,/current review/);
+ session.disposeReviewWorker();await assert.rejects(second,/registry changed/);
+ assert.equal(h.events.filter(e=>e==='terminated').length,1);assert.equal(h.events.filter(e=>e==='revoked').length,1);assert.equal(session.reviewWorker,null);
 });
 
 for(const mode of ['construct','post','unavailable','error','messageerror','reported'])test(`client safely rejects ${mode} failures`,async()=>{

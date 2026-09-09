@@ -24,3 +24,31 @@ export function importAuditWorkbook(file,{audit=true,report=()=>{}}={}){
     }catch(error){finish(error);}
   });
 }
+
+export function prepareAuditReview(session,changes,migration,migrationChanged,report=()=>{}){
+  return new Promise((resolve,reject)=>{
+    let connection=session.reviewWorker,initial=false;
+    try{
+      if(!connection){
+        if(typeof Worker==='undefined')throw new Error('Background review is unavailable. Open this HTML in a current browser with local workers enabled.');
+        const vendor=document.getElementById('sheetjs-runtime')?.textContent;
+        if(!vendor)throw new Error('The workbook reader is missing. Download a fresh copy of the app.');
+        const url=URL.createObjectURL(new Blob([vendor,'\n',AUDIT_IMPORT_WORKER_SOURCE],{type:'text/javascript'}));
+        let worker;try{worker=new Worker(url);}catch(error){URL.revokeObjectURL(url);throw error;}
+        connection={worker,url,pending:null};session.reviewWorker=connection;initial=true;
+        session.disposeReviewWorker=()=>{worker.terminate();URL.revokeObjectURL(url);const pending=connection.pending;connection.pending=null;session.reviewWorker=null;session.disposeReviewWorker=null;pending?.reject(new Error('The registry changed. No review was applied.'));};
+        worker.onmessage=({data})=>{
+          const pending=connection.pending;if(!pending)return;
+          if(data.type==='progress'){pending.report(data.fraction,data.label);return;}
+          connection.pending=null;
+          if(data.type==='result')pending.resolve(data.prepared);else pending.reject(new Error(data.message||'The changes could not be checked.'));
+        };
+        worker.onerror=event=>{event.preventDefault?.();session.disposeReviewWorker?.();};
+        worker.onmessageerror=()=>session.disposeReviewWorker?.();
+      }
+      if(connection.pending)throw new Error('Wait for the current review to finish.');
+      connection.pending={resolve,reject,report};
+      connection.worker.postMessage({kind:'review',changes,previousChanges:session.changes||[],references:session.references||{},migration,migrationChanged,...(initial?{baseline:session.baselineSnapshot,file:new Blob([session.sourceBytes||new Uint8Array()])}:{})});
+    }catch(error){if(connection?.pending?.reject===reject){connection.pending=null;session.disposeReviewWorker?.();}reject(error);}
+  });
+}

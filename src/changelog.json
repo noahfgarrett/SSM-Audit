@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.39.7",
+    "date": "2026-09-09",
+    "type": "fix",
+    "notes": "- Improved action editing and responsiveness\n- Updated tracker exports and guidance"
+  },
+  {
     "version": "1.39.6",
     "date": "2026-09-09",
     "type": "fix",

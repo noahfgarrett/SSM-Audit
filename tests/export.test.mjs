@@ -861,12 +861,15 @@ test('tracker retains resolved and reviewed baseline findings and adds new draft
   const current = { rows: snapshot.rows.map(row => ({ ...row, milestone: 'Changed draft milestone' })), findings: [finding('after-review', 1, 'rule-b'), finding('open', 1, 'rule-c'), finding('new', 0, 'rule-new')] }
   const sheet = buildAuditTrackerWorkbook(current, '', { baselineResult: baseline, actionedIds: new Set(['reviewed']), draftResolvedIds: new Set(['resolved']) }).Sheets.Tracker
   const lines = grid(sheet).slice(8)
-  assert.deepEqual(lines.map(row => row.slice(0, 3)), [['Phase A', 2, 1], ['Phase B', 2, 1]])
+  assert.deepEqual(lines.map(row => row.slice(0, 3)), [['Phase A', 2, 0], ['Phase B', 2, 0]])
   assert.equal(sheet.E6.f, `COUNTIF(F9:F10,"${AUDIT_EXPORT_TICK}")/2`, 'the overall bar still follows manual milestone ticks')
   assert.match(sheet['!xmlExtras'].dataValidations[0], /sqref="F9:F10"/)
-  assert.deepEqual(grid(sheet)[7].slice(6), ['Electrical', 'Mechanical'])
+  assert.deepEqual(grid(sheet)[7], ['L2 Milestone', 'Findings', 'Signed off', '%', 'Progress', 'Signed off?'])
+  assert.equal(sheet.C9.f, `IF(F9="${AUDIT_EXPORT_TICK}",B9,0)`)
+  assert.equal(sheet.D9.f, 'IF(B9=0,0,C9/B9)')
+  assert.equal(sheet.E9.f, 'D9')
   const completed = buildAuditTrackerWorkbook({ rows: snapshot.rows, findings: [] }, '', { baselineResult: baseline, actionedIds: ['reviewed', 'open'], draftResolvedIds: ['resolved'] }).Sheets.Tracker
-  assert.deepEqual(grid(completed).slice(8).map(row => [row[1], row[2], row[5]]), [[1, 1, AUDIT_EXPORT_TICK], [2, 2, AUDIT_EXPORT_TICK]])
+  assert.deepEqual(grid(completed).slice(8).map(row => [row[1], row[2], row[5]]), [[1, 0, '☐'], [2, 0, '☐']], 'app actioning never pre-ticks manual sign-off')
 })
 
 test('tracker honors rule and completed-equipment scope while retaining explicitly reviewed exceptions', () => {
@@ -874,14 +877,41 @@ test('tracker honors rule and completed-equipment scope while retaining explicit
   const finding = (id, at, rule) => ({ id, equipmentId: snapshot.rows[at].equipmentId, sheet: 'Registry', row: at + 2, rule: { id: rule } })
   const baseline = { rows: snapshot.rows, findings: [finding('exception', 0, 'rule-a'), finding('excluded', 0, 'rule-b'), finding('disabled', 0, 'rule-c'), finding('site-complete', 1, 'rule-a')] }
   const sheet = buildAuditTrackerWorkbook(baseline, '', { baselineResult: baseline, actionedIds: ['exception'], excludedIds: ['exception', 'excluded'], disabledRules: ['rule-c'], completedEquipmentIds: ['eq-2'] }).Sheets.Tracker
-  assert.deepEqual(grid(sheet).slice(8).map(row => row.slice(0, 3)), [['Phase A', 1, 1]])
+  assert.deepEqual(grid(sheet).slice(8).map(row => row.slice(0, 3)), [['Phase A', 1, 0]])
 })
 
 test('tracker does not complete sibling baseline findings of the same rule when only one was reviewed', () => {
   const { snapshot } = correctionFixture()
   const baseline = { rows: snapshot.rows, findings: ['one', 'two'].map(id => ({ id, equipmentId: 'EQ-1', sheet: 'Registry', row: 2, rule: { id: 'shared-rule' } })) }
   const sheet = buildAuditTrackerWorkbook(baseline, '', { baselineResult: baseline, actionedIds: ['one'] }).Sheets.Tracker
-  assert.deepEqual(grid(sheet)[8].slice(0, 3), ['Phase A', 2, 1])
+  assert.deepEqual(grid(sheet)[8].slice(0, 3), ['Phase A', 2, 0])
+})
+
+test('tracker discipline sign-off combines milestones and has no frozen cross-discipline percentages', () => {
+  const { snapshot } = correctionFixture()
+  const rows = snapshot.rows.map((row, index) => ({ ...row, discipline: 'Electrical', milestone: `Phase ${index + 1}` }))
+  const result = { rows, findings: rows.map(row => ({ id: row.equipmentId, equipmentId: row.equipmentId, sheet: row._source.sheet, row: row._source.row, rule: { id: 'test' } })) }
+  const sheet = buildAuditTrackerWorkbook(result, '', { signOffBy: 'discipline', actionedIds: result.findings.map(f => f.id) }).Sheets.Tracker
+  assert.deepEqual(grid(sheet)[7], ['Discipline', 'Findings', 'Signed off', '%', 'Progress', 'Signed off?'])
+  assert.deepEqual(grid(sheet)[8], ['Electrical', rows.length, 0, 0, 0, '☐'])
+  assert.equal(sheet.E6.f, `COUNTIF(F9:F9,"${AUDIT_EXPORT_TICK}")/1`)
+  assert.equal(sheet.C9.f, `IF(F9="${AUDIT_EXPORT_TICK}",B9,0)`)
+  assert.equal(sheet['!ref'], 'A1:F9', 'a large milestone list cannot create a spreadsheet hundreds of columns wide')
+})
+
+test('tracker safely handles empty scope and missing grouping metadata in either mode', () => {
+  for (const signOffBy of ['milestone', 'discipline']) {
+    const empty = buildAuditTrackerWorkbook({ rows: [], findings: [] }, '', { signOffBy }).Sheets.Tracker
+    assert.equal(empty.A9.v, 'No findings in scope')
+    assert.equal(empty.E6?.f, undefined)
+    assert.deepEqual(empty['!xmlExtras'].dataValidations, [])
+    const { snapshot } = correctionFixture()
+    const row = { ...snapshot.rows[0], milestone: '', discipline: '' }
+    const result = { rows: [row], findings: [{ id: 'missing', equipmentId: row.equipmentId, sheet: row._source.sheet, row: row._source.row, rule: { id: 'test' } }] }
+    const sheet = buildAuditTrackerWorkbook(result, '', { signOffBy }).Sheets.Tracker
+    assert.equal(sheet.A9.v, signOffBy === 'discipline' ? 'No discipline' : 'No L2 milestone')
+    assert.equal(sheet.F9.v, '☐')
+  }
 })
 
 test('large review batches use separate finding rows instead of overflowing a joined-ID cell', () => {
@@ -1121,6 +1151,17 @@ packageTest('recommended drive corrections round-trip with every metadata cell i
   const reimported=await auditSnapshotFromWorkbook(restored,'');
   assert.deepEqual(reimported.rows.map(r=>EXTO_REV21_COLUMNS.map(c=>r[c.field])),draft.rows.map(r=>EXTO_REV21_COLUMNS.map(c=>r[c.field])));
   assert.deepEqual(new Uint8Array(bytes),original);
+});
+
+packageTest('cleared Dependency Project and changed Building stay yellow without losing dependencies',async()=>{
+  const rows=[{equipmentId:'CHILD',building:'BLDG-A',closestParent:'PARENT',dependencies:'PARENT',dependencyProject:'Old project',equipmentDescription:'Keep description'},{equipmentId:'PARENT',building:'BLDG-B'}];
+  const aoa=[EXTO_REV21_COLUMNS.map(c=>c.header),...rows.map(r=>EXTO_REV21_COLUMNS.map(c=>r[c.field]||''))];
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+  const bytes=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'})),snapshot=await auditSnapshotFromWorkbook(XLSX.read(bytes,{type:'array'}),'');
+  const changes=[auditMakeCorrection(snapshot.rows[0],'Dependency Project',''),auditMakeCorrection(snapshot.rows[1],'Building','BLDG-A')];
+  const restored=XLSX.read(await buildUpdatedRegistryBytes(bytes,snapshot,changes),{type:'array',cellStyles:true});
+  for(const change of changes){const cell=restored.Sheets.Registry[addressOf(change)];assert.equal(cell.v,change.value);assert.equal(cell.s.fgColor.rgb,'FFF2CC');}
+  const result=await auditSnapshotFromWorkbook(restored,'');assert.equal(result.rows[0].dependencies,'PARENT');assert.equal(result.rows[0].equipmentDescription,'Keep description');assert.equal(result.rows[0].closestParent,'PARENT');
 });
 
 packageTest('a workbook without a styles part gets a valid yellow style without losing metadata',async()=>{
