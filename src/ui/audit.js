@@ -15,6 +15,7 @@ import { AUDIT_ACTION_FIELDS, auditFindingRow, auditMakeCorrection, auditApplyCo
 import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
+import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../audit/milestone-migration.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -544,10 +545,11 @@ function modifyListHtml(entry){
    changes for the Updated Registry Export. */
 let modifyRecommendationContext=null;
 function modifySuggestedFix(finding){
-  if(!modifyRecommendationContext)modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,S.session.references);
+  if(!modifyRecommendationContext)modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
   return auditProposeCorrection(finding,modifyRecommendationContext);
 }
-export function sessionAudit(snapshot,references=S.session.references||{}){
+export function sessionAudit(snapshot,references=S.session.references||{},migration=S.session.milestoneMigration){
+  references=auditMigrationReferences(references,migration);
   const catalog=references.itemMasters;
   const raw=runSsmAudit(snapshot,catalog?{itemMasterVocabulary:catalog.entries.map(entry=>entry.name||entry.value).filter(Boolean)}:{});
   const extra=auditReferenceFindings(snapshot,references);if(!references.milestones)return raw;
@@ -598,18 +600,19 @@ function openReferencesDialog(navigate){
   actionScope=token;paint();const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;modal.onclick=event=>{if(event.target===modal&&!busy)closeActionDialog();};
 }
 function reviewRememberUndo(){
-  S.session.reviewUndo.push({changes:[...(S.session.changes||[])],actioned:[...(S.session.actioned||[])],reviewed:[...(S.session.reviewedIds||[])],excluded:[...(S.session.excluded||[])],history:[...S.session.reviewHistory],filterViews:[...(S.session.filterViews||[])]});
+  S.session.reviewUndo.push({changes:[...(S.session.changes||[])],actioned:[...(S.session.actioned||[])],reviewed:[...(S.session.reviewedIds||[])],excluded:[...(S.session.excluded||[])],history:[...S.session.reviewHistory],filterViews:[...(S.session.filterViews||[])],milestoneMigration:S.session.milestoneMigration||{enabled:false,profile:null}});
   if(S.session.reviewUndo.length>20)S.session.reviewUndo.shift();
 }
 function reviewInstallDraft(prepared){
   const session=S.session;
+  if(prepared.milestoneMigration){session.milestoneMigration=prepared.milestoneMigration;session.baselineResult=prepared.baselineResult;}
   session.snapshot=prepared.snapshot;session.rawResult=prepared.result;session.changes=prepared.changes;
   session.draftResolved=new Set(auditCorrectionImpact(session.baselineResult,prepared.result).resolved.map(finding=>finding.id));
   session.actioned=new Set([...(session.reviewedIds||[]),...session.draftResolved]);
   session.changesRev++;session.actionedRev++;session.auditedAt=Date.now();session.reviewDirty=true;
   modifyRecommendationContext=null;S.comparison.targetSnapshot=session.snapshot;S.comparison.result=null;refreshSessionResult();
 }
-async function reviewPrepare(changes){
+async function reviewPrepare(changes,migration){
   const session=S.session,revision=session.changesRev;let prepared;
   await runWithProgress('Checking the draft','Original workbook unchanged',async(checkpoint,report)=>{
     report(.15,'Validating source rows');await checkpoint();const snapshot=auditApplyCorrections(session.baselineSnapshot,changes);
@@ -620,15 +623,17 @@ async function reviewPrepare(changes){
       session.reviewSourceWorkbook=session.reviewSourceWorkbook||XLSX.read(bytes,{type:'array',cellStyles:true});
       exportCheck=validateAuditCorrections(session.reviewSourceWorkbook,session.baselineSnapshot,changes);
     }
-    report(.45,'Running audit checks');await checkpoint();const result=sessionAudit(snapshot);
-    prepared={snapshot,result,changes,revision,exportCheck,impact:auditCorrectionImpact(session.rawResult,result)};report(1,'Preview ready');
+    report(.45,'Running audit checks');await checkpoint();const settings=migration===undefined?session.milestoneMigration:auditReadMigrationSettings(migration),result=sessionAudit(snapshot,session.references,settings);
+    const migrationChanged=migration!==undefined&&JSON.stringify(settings)!==JSON.stringify(session.milestoneMigration||{enabled:false,profile:null});
+    const before=migrationChanged?sessionAudit(session.snapshot,session.references,settings):session.rawResult;
+    prepared={snapshot,result,changes,revision,exportCheck,impact:auditMigrationImpact(auditCorrectionImpact(before,result),session.snapshot,snapshot,settings),...(!migrationChanged?{}:{milestoneMigration:settings,baselineResult:sessionAudit(session.baselineSnapshot,session.references,settings)})};report(1,'Preview ready');
   });
   if(S.session!==session||session.changesRev!==revision)throw new Error('The draft changed. Preview the corrections again.');
   return prepared;
 }
 async function reviewUndoLast(navigate){
   const session=S.session,undo=session.reviewUndo.pop();if(!undo)return;
-  try{const prepared=await reviewPrepare(undo.changes);S.session.actioned=new Set(undo.actioned);S.session.reviewedIds=new Set(undo.reviewed);S.session.excluded=new Set(undo.excluded);S.session.reviewHistory=undo.history;S.session.filterViews=undo.filterViews||[];reviewInstallDraft(prepared);closeActionDialog();rerenderModifications(navigate||currentNavigate);toast('Previous review state restored');}
+  try{const prepared=await reviewPrepare(undo.changes,undo.milestoneMigration);S.session.actioned=new Set(undo.actioned);S.session.reviewedIds=new Set(undo.reviewed);S.session.excluded=new Set(undo.excluded);S.session.reviewHistory=undo.history;S.session.filterViews=undo.filterViews||[];reviewInstallDraft(prepared);closeActionDialog();rerenderModifications(navigate||currentNavigate);toast('Previous review state restored');}
   catch(error){if(S.session===session)session.reviewUndo.push(undo);toast(error.message);}
 }
 async function saveReviewFile(){
@@ -643,7 +648,7 @@ async function loadReviewFile(file,navigate){
     if(file.size>25000000)throw new Error('This review file is too large.');
     const content=await file.text();checkSession();
     const restored=await auditReadReviewDocument(JSON.parse(content),session.baselineSnapshot,session.references);checkSession();
-    const prepared=await reviewPrepare(restored.changes);checkSession();
+    const prepared=await reviewPrepare(restored.changes,restored.milestoneMigration);checkSession();
     if(prepared.impact.unsafe.length)throw new Error('The saved corrections now introduce errors. No changes were loaded.');
     const known=new Set([...S.session.baselineResult.findings,...prepared.result.findings].map(finding=>finding.id));
     reviewRememberUndo();S.session.actioned=new Set([...restored.actioned].filter(id=>known.has(id)));S.session.reviewedIds=new Set([...restored.reviewed].filter(id=>known.has(id)));S.session.excluded=new Set([...restored.excluded].filter(id=>known.has(id)));S.session.reviewHistory=restored.history;S.session.filterViews=restored.filterViews||[];reviewInstallDraft(prepared);rerenderModifications(navigate);toast('Review restored and draft re-audited');
@@ -670,7 +675,7 @@ function paintActionDialog(){
     ${!scope.suggestions.length?'<p class="action-empty">No editable correction is available for this finding.</p>':''}
     <fieldset id="actionFields" class="action-fields"><div class="action-preview" ${scope.suggestions.length?'':'hidden'}><table><thead><tr><th>Equipment / ${editing?'issue':'field'}</th><th>Current</th><th>${editing?'Suggested / your value':success?'Applied':'New value'}</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div></fieldset>
     <div class="action-pager" id="actionPager"><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous changes" title="Previous changes">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next changes" title="Next changes">${ic('chevron-right')}</button></div>
-    <div id="actionImpact" class="action-impact" role="status" aria-live="polite">${!editing&&!success&&scope.prepared.impact.introduced.length?`${scope.prepared.impact.introduced.length} new findings need review. No new errors were introduced.`:''}</div>
+    <div id="actionImpact" class="action-impact" role="status" aria-live="polite">${!editing&&scope.prepared.impact.migrationConflicts?.length?`${scope.prepared.impact.migrationConflicts.length} L1/L2 pairing conflicts remain flagged after these project-approved replacements. L2 assignments will not be changed.`:!editing&&!success&&scope.prepared.impact.introduced.length?`${scope.prepared.impact.introduced.length} new findings need review. No new errors were introduced.`:''}</div>
     <footer class="export-foot"><span>${success?'Changed cells are highlighted yellow in Updated Registry.':'Original workbook unchanged'}</span><div>${!editing&&!success?'<button class="btn ghost" id="actionBack">Edit values</button>':''}<button class="btn ghost" id="actionCancel">${success?'Done':'Cancel'}</button><button class="btn primary" id="actionApply" ${scope.suggestions.length?'':'hidden disabled'}>${success?'View all changes':editing?'Review changes':'Apply changes'}</button></div></footer></section>`;
   $('#actionCancel').onclick=closeActionDialog;
   if($('#actionBack'))$('#actionBack').onclick=()=>{scope.stage='edit';scope.offset=0;scope.prepared=null;paintActionDialog();};
@@ -713,12 +718,12 @@ async function processActionDialog(scope){
   }catch(error){if(actionScope===scope)$('#actionImpact').textContent=error.message||'No changes applied. The corrections could not be checked.';}
   finally{session.reviewBusy=false;if(actionScope===scope&&scope.stage==='edit'){button.disabled=false;button.textContent='Review changes';$('#actionFields').disabled=false;}}
 }
-function openActionDialog(label,findings,navigate){
+function openActionDialog(label,findings,navigate,provided){
   findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
-  modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,S.session.references);
+  modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
   let unsupported=0;
   const proposed=findings.map(finding=>{
-    const suggested=modifySuggestedFix(finding);if(suggested)return {...suggested,changes:suggested.changes.map(change=>({...change}))};
+    const suggested=provided?provided.get(finding.id):modifySuggestedFix(finding);if(suggested)return {...suggested,changes:suggested.changes.map(change=>({...change}))};
     unsupported++;
     const row=auditFindingRow(finding,modifyRecommendationContext.index);if(!row)return null;
     const fields=finding.rule.id==='parent.cross-upn'?['UPN','System Name']:[finding.field];
@@ -829,6 +834,36 @@ function updateModifyCounts(navigate){
   const restore=$('#modifyRestore');if(restore)restore.disabled=!aside;
   renderSideNav(navigate);
 }
+function milestoneMigrationControls(){
+  const settings=S.session.milestoneMigration||{enabled:false,profile:null},count=auditMilestoneMigrationRows(S.session.snapshot,settings).length;
+  return `<div class="milestone-migration"><label><input id="newMilestones" type="checkbox" role="switch" ${settings.enabled?'checked':''} ${settings.profile?'':'disabled'}>New Milestones</label><span>${settings.profile?`${esc(settings.profile.project)}: ${settings.enabled?`${count.toLocaleString()} rows to update across the registry`:'mapping loaded'}`:'Load a project milestone mapping'}</span><button class="btn ghost sm" id="migrationLoad">${ic('folder-open')}Load mapping</button><button class="btn ghost sm" id="migrationPreview" ${count?'':'disabled'}>Review replacements</button><input type="file" id="migrationFile" accept=".json" hidden></div>`;
+}
+async function setMilestoneMigration(settings,navigate){
+  const session=S.session;if(session.reviewBusy)return;
+  try{session.reviewBusy=true;const prepared=await reviewPrepare(session.changes,auditReadMigrationSettings(settings));
+    if(S.session!==session)return;reviewRememberUndo();reviewInstallDraft(prepared);rerenderModifications(navigate);
+    toast('Milestone mapping updated. Registry values change only after you review and apply replacements.');
+  }catch(error){toast(error.message||'The mapping could not be loaded.');if(S.session===session)rerenderModifications(navigate);}
+  finally{session.reviewBusy=false;}
+}
+function previewMilestoneMigration(navigate){
+  const entries=auditMilestoneMigrationRows(S.session.snapshot,S.session.milestoneMigration),provided=new Map();
+  const findings=entries.map(({row,mapping},index)=>{
+    const finding={id:`milestone-migration:${index}`,sheet:row._source.sheet,row:row._source.row,equipmentId:row.equipmentId,field:'Milestone Parent',severity:'info',rule:{id:'project.milestone-replacement',title:'Milestone has a project-approved replacement'},why:`${mapping.from} is replaced by ${mapping.to} in the loaded project mapping.`};
+    provided.set(finding.id,{row,finding,reason:'Project-approved replacement. The existing L2 milestone is unchanged.',changes:[auditMakeCorrection(row,'Milestone Parent',mapping.label,finding)]});return finding;
+  });
+  if(!findings.length){toast('No milestone replacements remain.');return;}
+  openActionDialog(`New Milestones: ${S.session.milestoneMigration.profile.project}`,findings,navigate,provided);
+}
+function wireMilestoneMigration(navigate){
+  $('#newMilestones').onchange=event=>setMilestoneMigration({...S.session.milestoneMigration,enabled:event.target.checked},navigate);
+  $('#migrationLoad').onclick=()=>$('#migrationFile').click();
+  $('#migrationFile').onchange=async event=>{const file=event.target.files[0],session=S.session;if(!file||session.reviewBusy)return;
+    try{if(file.size>2000000)throw new Error('This mapping file is too large.');const text=await file.text();if(S.session!==session)return;const profile=auditReadMilestoneMigration(JSON.parse(text));await setMilestoneMigration({enabled:false,profile},navigate);}
+    catch(error){toast(error.message||'Select a valid milestone mapping JSON.');}
+  };
+  $('#migrationPreview').onclick=()=>previewMilestoneMigration(navigate);
+}
 export function renderModifications(navigate){
   if(!(S.session&&S.session.rawResult)){navigate('upload');return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='modify';S.homeMode='audit';
@@ -842,6 +877,7 @@ export function renderModifications(navigate){
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div></div>
+    ${milestoneMigrationControls()}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands"><button class="btn ghost sm" id="reviewReferences">${ic('file-spreadsheet')}References</button><button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} set aside</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Set every finding shown aside">${ic('circle-x')}Set matches aside</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
     <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
@@ -850,6 +886,7 @@ export function renderModifications(navigate){
     }).join(''):`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No findings match those filters':'Nothing to action'}</b><span>${filtered?'Try a different search, milestone, or discipline.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
   $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
+  wireMilestoneMigration(navigate);
   const body=$('#modifyBody');
   body.onchange=event=>{
     const groupBox=event.target.closest('[data-mod-group]');

@@ -2192,6 +2192,9 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-simple .action-impact{color:var(--ink);padding:10px;background:var(--surface-2)}
 .action-simple .action-empty{margin:18px 0;color:var(--ink-2);font-size:14px}
 .action-fields{margin:0;padding:0;border:0;min-width:0}
+.milestone-migration{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--border);font-size:13px}
+.milestone-migration label{display:flex;align-items:center;gap:8px;font-weight:600}
+.milestone-migration>span{color:var(--ink-2);flex:1;min-width:180px}
 .action-edit-field{display:block;margin:0 0 12px;font-size:11px;color:var(--ink-2)}
 .action-edit-field:last-child{margin-bottom:0}
 .action-value-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:16px;margin-top:4px}

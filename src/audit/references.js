@@ -260,7 +260,7 @@ function auditRefRule(id,title,statement,confidence='strong'){
 export const SSM_AUDIT_REFERENCE_RULES=Object.freeze({
   milestoneUnknown:auditRefRule('reference.milestone-unknown','Milestone not found in the selected register','A milestone not found in the selected register needs confirmation; absence alone does not prove an incorrect assignment.'),
   milestoneAmbiguous:auditRefRule('reference.milestone-ambiguous','Milestone matches more than one register entry','The milestone must identify one register entry before its parent can be verified.'),
-  milestoneParentMissing:auditRefRule('reference.milestone-parent-missing','Milestone Parent is missing','A uniquely verified L2 milestone has the L1 parent explicitly listed in the selected register.'),
+  milestoneParentMissing:auditRefRule('reference.milestone-parent-missing','Milestone Parent is missing','A uniquely verified L2 milestone requires the L1 parent explicitly listed in the selected register.','required'),
   milestoneParentMismatch:auditRefRule('reference.milestone-parent-mismatch','Milestone Parent differs from the register','The L1 parent must agree with the explicit parent of the uniquely verified L2 milestone in the selected register.','required'),
 });
 function auditRefFinding(rule,severity,row,details){
@@ -300,7 +300,7 @@ export function auditReferenceFindings(snapshot,references){
     const entry=match.entry,current=auditRefValue(row.milestoneParent);
     if(!auditRefValue(entry.parentId)||auditRefMilestoneParts(entry.parentId)?.level==='L2'||auditRefParentMatches(current,entry,parentIndex))continue;
     const missing=!current,contradiction=!missing&&auditRefParentContradiction(current,entry,parentIndex),expected=auditRefJoin(entry.parentId,entry.parentTitle);
-    findings.push(auditRefFinding(missing?SSM_AUDIT_REFERENCE_RULES.milestoneParentMissing:SSM_AUDIT_REFERENCE_RULES.milestoneParentMismatch,contradiction?'error':'info',row,{
+    findings.push(auditRefFinding(missing?SSM_AUDIT_REFERENCE_RULES.milestoneParentMissing:SSM_AUDIT_REFERENCE_RULES.milestoneParentMismatch,missing||contradiction?'error':'info',row,{
       field:'L1 Milestone Parent',actual:clean(row.milestoneParent),expected,
       why:missing?'This L2 milestone is uniquely verified, but its L1 parent is blank.':contradiction?'This L2 milestone is uniquely verified, and its assigned L1 contradicts the parent explicitly recorded in the selected register.':'This L2 milestone is uniquely verified, but the L1 text cannot be verified as its recorded parent. Confirm any local alias before changing it.',
       recommendation:'Confirm the L2 assignment, then use its explicit L1 parent from the selected register.'}));

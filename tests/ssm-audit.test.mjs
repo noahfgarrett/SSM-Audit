@@ -279,7 +279,7 @@ test('legacy Item Masters get optional migration advice only with one clear VF e
   assert.deepEqual(equipmentIdsForRule(shipped, 'itemMasterStandard'), ['B1-VF'], 'the invented VF_ELEC_PANEL is not a real Rev14 name')
 })
 
-test('milestone rules are enabled as review-grade checks', () => {
+test('milestone completeness is required while uncertain assignments remain review-grade', () => {
   for (const ruleKey of ['milestonePair', 'milestoneIntent', 'milestoneInconsistent', 'milestoneCohort', 'milestoneLevel', 'milestoneBranch', 'milestoneUpn']) {
     assert.equal(SSM_AUDIT_RULES[ruleKey].enabled, true, ruleKey)
   }
@@ -292,7 +292,8 @@ test('milestone rules are enabled as review-grade checks', () => {
   const result = runSsmAudit(snapshot)
   assert.deepEqual(equipmentIdsForRule(result, 'milestonePair'), ['MISSING-L1', 'MISSING-L2'])
   assert.deepEqual(equipmentIdsForRule(result, 'milestoneIntent'), ['PAIR-CONFLICT'])
-  assert.ok(result.findings.filter(f => f.category === 'milestones').every(f => f.severity !== 'blocker' && f.severity !== 'error'), 'milestone checks are review-grade, never blocking')
+  assert.ok(result.findings.filter(f => f.rule.id === SSM_AUDIT_RULES.milestonePair.id).every(f => f.severity === 'error'))
+  assert.ok(result.findings.filter(f => f.category === 'milestones' && f.rule.id !== SSM_AUDIT_RULES.milestonePair.id).every(f => f.severity !== 'blocker' && f.severity !== 'error'), 'uncertain assignments remain review-grade')
 })
 
 test('the L2 milestone should name the row UPN; a different UPN is flagged for review', () => {

@@ -9,6 +9,7 @@ export const MODULES=[
   'src/audit/model.js',
   'src/audit/engine.js',
   'src/audit/references.js',
+  'src/audit/milestone-migration.js',
   'src/audit/actions.js',
   'src/audit/status-report.js',
   'src/audit/examples.js',

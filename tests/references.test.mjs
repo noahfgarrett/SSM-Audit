@@ -311,7 +311,7 @@ test('optional findings are engine-shaped and distinguish absence, ambiguity, an
   ].map((row,index)=>({...row,_source:{sheet:'Synthetic registry',row:index+3}}));
   const snapshot=frozen({rows}),references=frozen({milestones:parsed,itemMasters:null}),before=JSON.stringify({snapshot,references});
   const findings=auditReferenceFindings(snapshot,references);
-  assert.deepEqual(findings.map(finding=>[finding.equipmentId,finding.severity]),[['UNKNOWN','info'],['AMBIGUOUS','info'],['CONTRADICTION','error'],['MISSING-PARENT','info'],['LOCAL-ALIAS','info']]);
+  assert.deepEqual(findings.map(finding=>[finding.equipmentId,finding.severity]),[['UNKNOWN','info'],['AMBIGUOUS','info'],['CONTRADICTION','error'],['MISSING-PARENT','error'],['LOCAL-ALIAS','info']]);
   assert.equal(findings[0].rule,SSM_AUDIT_REFERENCE_RULES.milestoneUnknown);
   assert.equal(findings[1].rule,SSM_AUDIT_REFERENCE_RULES.milestoneAmbiguous);
   assert.equal(findings[2].expected,'DEMO-L1-M8 Phase Alpha parent');

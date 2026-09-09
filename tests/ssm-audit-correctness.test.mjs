@@ -158,7 +158,7 @@ test('external power and control checks produce at most one informational unknow
 })
 
 test('external-heavy registries remain reviewable without hard missing-path errors', () => {
-  const rows = Array.from({ length: 1200 }, (_, index) => equipment(`RIO-${index}`, { equipmentDescription: 'Remote I/O Panel', dependencies: 'EXT-CONTROL', dependencyProject: 'Synthetic Project' }, controls))
+  const rows = Array.from({ length: 1200 }, (_, index) => equipment(`RIO-${index}`, { equipmentDescription: 'Remote I/O Panel', dependencies: 'EXT-CONTROL', dependencyProject: 'Synthetic Project', milestoneParent: 'L1 Readiness', milestone: 'L2 UPN 650 Readiness' }, controls))
   const result = engine.runSsmAudit(snapshot(rows))
   assert.equal(result.summary.unverified, rows.length)
   assert.equal(result.findings.length, rows.length)

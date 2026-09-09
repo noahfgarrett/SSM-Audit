@@ -43,8 +43,8 @@ export const SSM_AUDIT_RULES=Object.freeze({
   systemUpn:auditRule('metadata.system-upn-mismatch','registry','metadata','System Name does not match the UPN','System Name must be one of the approved VF Exto Upload Template System Names for the row’s UPN. Numeric UPNs normally lead the name (602 Medium Voltage); letter codes such as RR map to their own approved names.'),
   icDiscipline:auditRule('metadata.ic-discipline','registry','metadata','I&C is not an available Discipline option','Instrumentation and controls rows use the approved controls discipline, and their UPN comes from the tag.'),
   upnInconsistent:auditRule('metadata.upn-inconsistent','sop','metadata','UPN mixes systems or disciplines','Every row on a UPN should carry the same System Name and Discipline.'),
-  /* milestones — enabled as review-grade checks; engineers decide */
-  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','L1 or L2 milestone missing','When a project uses milestones, each row carries both an L1 Milestone Parent and an L2 Milestone.',{confidence:'strong'}),
+  /* Completeness is required; inferred milestone assignments still need review. */
+  milestonePair:auditRule('milestone.incomplete-pair','sop','milestones','L1 or L2 milestone missing','Each row requires both an L1 Milestone Parent and an L2 Milestone for SSM readiness. Blank or placeholder values do not satisfy this requirement.',{confidence:'required'}),
   milestoneUpn:auditRule('milestone.l2-upn-mismatch','sop','milestones','L2 milestone points at another UPN','An L2 milestone points at its UPN — an explicit UPN marker, a UPN in parentheses, a standalone three-digit UPN, or the system\u2019s name or abbreviation. When it points at a different UPN the assignment needs review.',{confidence:'strong'}),
   milestoneUpnUnknown:auditRule('milestone.l2-upn-unknown','sop','milestones','L2 milestone UPN cannot be verified','When an L2 milestone name identifies no UPN or system, its assignment needs confirmation; this is not evidence that it belongs to another UPN.',{confidence:'strong'}),
   milestoneIntent:auditRule('milestone.intent-mismatch','sop','milestones','L1 and L2 describe different phases','L1 and L2 milestones on one row should describe the same phase — not, for example, 30% capacity on one and 100% on the other.',{confidence:'strong'}),
@@ -262,7 +262,6 @@ export function runSsmAudit(snapshot,options={}){
   const children=new Map(),parentEdges=new Map(),precedenceEdges=new Map(),generatedHeaders=new Map(),nodes=new Set(rowsById.keys());
   const addEdge=(map,from,to)=>{if(!from||!to)return;const set=map.get(from)||new Set();set.add(to);map.set(from,set);};
   const upnGroups=new Map(),milestoneGroups=new Map();
-  const projectUsesMilestones=SSM_AUDIT_RULES.milestonePair.enabled&&rows.some(row=>clean(row.milestone)||clean(row.milestoneParent));
   const rowUpn=row=>auditNormId(row&&row.upn);
   const isHeaderRow=row=>headerIds.has(auditNormId(row&&row.equipmentId));
   for(const row of rows){
@@ -292,9 +291,10 @@ export function runSsmAudit(snapshot,options={}){
       }
     }
     /* --- milestones --- */
-    /* Info, not warning: real registries roll milestones out gradually, and
-       thousands of not-yet-assigned rows must not bury the actionable list. */
-    if(projectUsesMilestones){checks++;if(!clean(row.milestone)||!clean(row.milestoneParent))add(SSM_AUDIT_RULES.milestonePair,'info',row,{field:'Milestones',why:'This project uses milestones, but this row is missing its L1 or L2.',actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone filled in',recommendation:'Assign the governing L1 milestone and its L2 milestone.'});}
+    if(SSM_AUDIT_RULES.milestonePair.enabled){
+      checks++;const missing=['milestoneParent','milestone'].map(field=>!clean(row[field])||/^(?:N\/?A|NOT APPLICABLE|TBD|TBC|NONE|NULL|-+)$/i.test(clean(row[field])));
+      if(missing.some(Boolean))add(SSM_AUDIT_RULES.milestonePair,'error',row,{field:'Milestones',why:`${missing[0]&&missing[1]?'L1 Milestone Parent and L2 Milestone are':missing[0]?'L1 Milestone Parent is':'L2 Milestone is'} missing. Both are required for SSM readiness.`,actual:`L1: ${row.milestoneParent||'blank'}; L2: ${row.milestone||'blank'}`,expected:'Both L1 Milestone Parent and L2 Milestone filled in',recommendation:'Assign the governing L1 milestone and its verified L2 milestone; do not guess an assignment.'});
+    }
     /* Letter-code rows (RR / SEC / MISC) are cross-cutting -- rooms and areas
        ride the milestone of the system they serve -- so only numeric-UPN rows
        are held to the milestone's UPN. */

@@ -4,6 +4,7 @@ import { auditNormId, auditSourceKey, auditSplitReferences } from './model.js'
 import { auditCommissioningRole, auditIsBlankItemMaster, auditMilestoneBranchCandidates, auditMilestoneCohortCandidates, auditItemMasterCanonicalCandidates } from './engine.js'
 import { VF_ITEM_MASTER_NAMES } from '../exto/vf-item-masters.js'
 import { auditReferenceRecommendation } from './references.js'
+import { auditReadMigrationSettings } from './milestone-migration.js'
 
 export const AUDIT_ACTION_FIELDS=Object.freeze({
   'UPN':'upn','Discipline':'discipline','System Name':'systemName','Closest Parent':'closestParent',
@@ -78,7 +79,7 @@ async function auditReviewDigest(value){
 export async function auditReviewDocument(session){
   return {format:'ssm-audit-review',version:1,baselineRevision:await auditRegistryRevision(session.baselineSnapshot||session.snapshot),
     referencesRevision:await auditReviewReferenceRevision(session.references),changes:session.changes||[],actioned:[...(session.actioned||[])],reviewed:[...(session.reviewedIds||session.actioned||[])],excluded:[...(session.excluded||[])],history:session.reviewHistory||[],filterViews:session.filterViews||[],
-    createdAt:new Date().toISOString()};
+    milestoneMigration:session.milestoneMigration||{enabled:false,profile:null},createdAt:new Date().toISOString()};
 }
 function auditReviewReferenceRevision(references={}){return auditReviewDigest(['milestones','itemMasters'].map(kind=>[kind,references[kind]||null]));}
 function auditReviewFilterViews(views=[]){
@@ -103,7 +104,7 @@ export async function auditReadReviewDocument(document,baseline,references={}){
   const ids=value=>{if(!Array.isArray(value)||value.length>1000000||value.some(id=>typeof id!=='string'||id.length>100))throw new Error('The review file contains invalid decisions.');return new Set(value);};
   const history=Array.isArray(document.history)?document.history:[];
   if(history.length>10000||history.some(entry=>!entry||typeof entry.id!=='string'||entry.id.length>100||!Number.isFinite(Date.parse(entry.at))||!['corrected-draft','reviewed','exception'].includes(entry.disposition)||typeof entry.reason!=='string'||entry.reason.length>4000||typeof entry.owner!=='string'||entry.owner.length>200||!Array.isArray(entry.findingIds)||entry.findingIds.length>1000000||entry.findingIds.some(id=>typeof id!=='string'||id.length>100)||!Array.isArray(entry.changes)||entry.changes.some(change=>!change||!AUDIT_ACTION_FIELDS[change.field]||typeof change.before!=='string'||typeof change.value!=='string'||change.before.length>32767||change.value.length>32767)))throw new Error('The review history is invalid.');
-  return {snapshot,changes:document.changes,actioned:ids(document.actioned),reviewed:ids(document.reviewed||document.actioned),excluded:ids(document.excluded),history,filterViews:auditReviewFilterViews(document.filterViews)};
+  return {snapshot,changes:document.changes,actioned:ids(document.actioned),reviewed:ids(document.reviewed||document.actioned),excluded:ids(document.excluded),history,filterViews:auditReviewFilterViews(document.filterViews),milestoneMigration:auditReadMigrationSettings(document.milestoneMigration)};
 }
 
 export function auditRecommendationContext(snapshot,references={}){

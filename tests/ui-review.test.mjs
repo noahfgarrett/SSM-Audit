@@ -11,6 +11,7 @@ import { auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindin
 import { validateAuditCorrections } from '../src/audit/export.js'
 import { resetSession } from '../src/state.js'
 import { referenceHelpHtml } from '../src/ui/guide-content.js'
+import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js', import.meta.url), 'utf8'), { filename: 'sheetjs.js' })
 const ui = readFileSync(new URL('../src/ui/audit.js', import.meta.url), 'utf8')
@@ -48,6 +49,7 @@ function reviewHarness(session) {
   const context = vm.createContext({
     S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,
     crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
+    auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,auditMilestoneMigrationRows,auditMigrationImpact,
     modifySuggestedFix:finding=>auditProposeCorrection(finding,auditRecommendationContext(session.snapshot,session.references)),
     auditApplyCorrections, auditCorrectionImpact, auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES, runSsmAudit,
     auditReadReviewDocument: async (...args) => { calls.readReview++; return auditReadReviewDocument(...args) },
@@ -65,9 +67,30 @@ function reviewHarness(session) {
   })
   vm.runInContext(reviewSource, context, { filename: 'audit-review-helpers.js' })
   vm.runInContext(ui.slice(end,ui.indexOf('\nfunction syncModifyPatternBox(',end)),context)
-  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit})', context)
+  vm.runInContext(ui.slice(ui.indexOf('function milestoneMigrationControls('),ui.indexOf('export function renderModifications(')),context)
+  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit,setMilestoneMigration,previewMilestoneMigration})', context)
   return { context, api, calls, hooks, messages, node, lists }
 }
+
+test('project milestone replacement previews and applies only L1, then restores with undo',async()=>{
+  const session=registry({systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope',milestone:'DEMO-L2-M1-20 Equipment scope'}),h=reviewHarness(session);
+  const profile=auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Demo',mappings:[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 New scope'}]});
+  await h.api.setMilestoneMigration({enabled:true,profile});
+  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
+  assert.equal(session.milestoneMigration.enabled,true);
+  h.api.previewMilestoneMigration();
+  assert.match(h.node('#actionPreviewRows').innerHTML,/Milestone Parent/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/DEMO-L1-M1-02 New scope/);
+  await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
+  await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');
+  assert.equal(session.snapshot.rows[0].milestone,'DEMO-L2-M1-20 Equipment scope');
+  assert.equal(session.changes.length,1);
+  await h.api.reviewUndoLast();
+  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
+  assert.equal(session.milestoneMigration.enabled,true);
+});
 
 test('Actions show the issue and editable drive corrections, preview all cells, then confirm success',async()=>{
   const system101=extoRev21SystemsForUpn('101')[0],rows=[
