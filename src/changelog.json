@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.40.1",
+    "date": "2026-09-09",
+    "type": "fix",
+    "notes": "- Simplified milestone updates and review"
+  },
+  {
     "version": "1.40.0",
     "date": "2026-09-09",
     "type": "feature",

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationValue, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
+import { auditSparrowMilestoneMigration, auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationValue, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
 import { auditReviewDocument, auditReadReviewDocument } from '../src/audit/actions.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
@@ -8,6 +8,20 @@ import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 const snapshotOf=rows=>auditSnapshotFromAoa([EXTO_REV21_COLUMNS.map(c=>c.header),...rows.map(row=>EXTO_REV21_COLUMNS.map(c=>row[c.field]||''))],{sheet:'Registry'});
 
 const map=(mappings=[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 Approved scope',aliases:['Old scope']}])=>({format:'ssm-audit-milestone-map',version:1,project:'Demonstration',mappings});
+test('built-in replacements use full project codes and independent settings without description-only matching',()=>{
+ const profile=auditSparrowMilestoneMigration();assert.equal(profile.mappings.length,13);
+ for(const entry of profile.mappings){
+   assert.equal(auditMigrationValue(entry.from+' Previous title',profile).to,entry.to);
+   assert.equal(auditMigrationValue(entry.from.replace(/^[^-]+/,'OTHER')+' Previous title',profile),null);
+   assert.equal(auditMigrationValue(entry.from.replace('-L1-','-L2-'),profile),null);
+   assert.equal(auditMigrationValue(entry.from+'_99',profile),null);
+   assert.equal(auditMigrationValue(entry.label,profile),null);
+   assert.deepEqual(entry.aliases,[]);
+ }
+ const first=profile.mappings[0];profile.mappings[0].label='Edited';
+ assert.notEqual(auditSparrowMilestoneMigration().mappings[0].label,'Edited');
+ assert.equal(auditMigrationValue(first.label.replace(/^.*? - /,''),auditSparrowMilestoneMigration()),null);
+});
 test('migration matches complete L1 identities, not numeric fragments or L2 values',()=>{
  const profile=auditReadMilestoneMigration(map());
  assert.equal(auditMigrationValue('DEMO-L1-M1-01 Old label',profile).to,'DEMO-L1-M1-02');
@@ -55,4 +69,15 @@ test('explicit L1 migrations retain pairing flags but never waive unrelated erro
  assert.equal(auditMigrationImpact(impact,before,after,{enabled:false,profile}),impact);
  const wrong=snapshotOf([{equipmentId:'DEMO-1',milestoneParent:'DEMO-L1-M1-99 Other',milestone:'DEMO-L2-M1-10'}]);
  assert.deepEqual(auditMigrationImpact(impact,before,wrong,settings).unsafe,[flag,other]);
+});
+
+test('an unchanged missing L2 remains flagged without blocking an approved L1 rename',()=>{
+ const profile=auditReadMilestoneMigration(map()),settings={enabled:true,profile};
+ const before=snapshotOf([{equipmentId:'DEMO-1',milestoneParent:'DEMO-L1-M1-01 Old label'}]);
+ const after=snapshotOf([{equipmentId:'DEMO-1',milestoneParent:profile.mappings[0].label}]);
+ const flag={rule:{id:'milestone.incomplete-pair'},sheet:'Registry',row:before.rows[0]._source.row,severity:'error'};
+ const impact={unsafe:[flag],introduced:[flag],changed:[],resolved:[]},result=auditMigrationImpact(impact,before,after,settings);
+ assert.deepEqual(result.unsafe,[]);assert.deepEqual(result.introduced,[]);assert.deepEqual(result.changed,[flag]);assert.deepEqual(result.resolved,[]);
+ const hadL2=snapshotOf([{equipmentId:'DEMO-1',milestoneParent:'DEMO-L1-M1-01 Old label',milestone:'DEMO-L2-M1-10'}]);
+ assert.deepEqual(auditMigrationImpact(impact,hadL2,after,settings).unsafe,[flag]);
 });

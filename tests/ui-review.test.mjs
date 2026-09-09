@@ -61,6 +61,7 @@ function reviewHarness(session) {
     },
     crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
     auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,auditMilestoneMigrationRows,auditMigrationImpact,
+    auditSparrowMilestoneMigration:()=>auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Demo',mappings:[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 New scope'}]}),
     modifySuggestedFix:finding=>auditProposeCorrection(finding,auditRecommendationContext(session.snapshot,session.references)),
     auditApplyCorrections, auditCorrectionImpact, auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES, runSsmAudit,
     auditReadReviewDocument: async (...args) => { calls.readReview++; return auditReadReviewDocument(...args) },
@@ -118,14 +119,24 @@ test('milestone mapping summary works while off and reviews every affected row b
   assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');assert.equal(session.snapshot.rows[0].milestone,'DEMO-L2-M1-20 Equipment scope');
 });
 
-test('missing milestone mapping offers setup instead of a dead checkbox even with both references',()=>{
-  const session=registry(),h=reviewHarness(session);
-  session.references={milestones:{entries:[]},itemMasters:{entries:[]}};
-  assert.doesNotMatch(h.api.milestoneMigrationControls(),/disabled/);
-  h.api.wireMilestoneMigration();const target={checked:true};h.node('#newMilestones').onchange({target});
-  assert.equal(target.checked,false);assert.equal(session.changes.length,0);
-  assert.match(h.node('#actionModalBody').innerHTML,/do not define these replacements/);
-  let picked=false;h.node('#migrationFile').click=()=>{picked=true;};h.node('#migrationReviewLoad').onclick();assert.equal(picked,true);
+test('built-in milestone replacements activate without reference or mapping files and start with a preview',async()=>{
+  const session=registry({systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope'}),h=reviewHarness(session);
+  const controls=h.api.milestoneMigrationControls();assert.doesNotMatch(controls,/disabled|checked|migrationFile|Load mapping/);assert.match(controls,/1 rows with replacements/);
+  h.api.wireMilestoneMigration();await h.node('#newMilestones').onchange({target:{checked:true}});
+  assert.equal(session.milestoneMigration.enabled,true);assert.equal(session.changes.length,0);
+  assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-01/);assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-02/);
+  await h.node('#migrationReviewApply').onclick();await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');
+  assert.equal(session.snapshot.rows[0].milestone,'');assert.ok(session.rawResult.findings.some(finding=>finding.rule.id==='milestone.incomplete-pair'));
+  h.api.wireMilestoneMigration();await h.node('#newMilestones').onchange({target:{checked:false}});
+  assert.equal(session.milestoneMigration.enabled,false);assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');
+});
+
+test('built-in milestone preview with no matching equipment cannot apply replacements',()=>{
+  const session=registry({milestoneParent:'OTHER-L1-M1-01 Scope'}),h=reviewHarness(session);
+  h.api.reviewMilestoneMappings();assert.match(h.node('#actionModalBody').innerHTML,/0 equipment rows/);
+  assert.match(h.node('#actionModalBody').innerHTML,/id="migrationReviewApply" disabled/);
+  assert.equal(session.changes.length,0);assert.equal(session.milestoneMigration,undefined);
 });
 
 test('metadata target switch preserves edits and applies to the chosen parent row',async()=>{

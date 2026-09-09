@@ -38,11 +38,24 @@ test('single-file build is offline-ready and pinned to its own updater',()=>{
   assert.match(html,/SSM-Audit-v\$\{String\(version\)/)
 })
 
-test('committed source and fixtures contain no confidential audit target names',()=>{
+test('source and fixtures exclude confidential targets apart from the explicitly approved milestone mapping',()=>{
   const paths=[];const walk=directory=>{for(const entry of readdirSync(directory,{withFileTypes:true})){const path=resolve(directory,entry.name);if(entry.isDirectory()&&entry.name!=='.git')walk(path);else if(entry.isFile())paths.push(path);}};walk(root)
   const confidentialNames=new RegExp([['Spar','row'].join(''),['Exto-Cx-Registry','_SP'].join('')].join('|'),'i')
   assert.equal(paths.filter(path=>/\.xlsx$/i.test(path)).map(path=>relative(root,path)).join(','),'tests/fixtures/synthetic-registry.xlsx')
   assert.equal(createHash('sha256').update(readFileSync(resolve(root,'tests/fixtures/synthetic-registry.xlsx'))).digest('hex'),'e6d75eec5f5f8fb20ba8bb8b6d96c4fadd024a46f7adf988f7d7aea951c419da')
-  const text=paths.filter(path=>!/\.xlsx$|sheetjs\.js$|SSM-Audit\.html$/.test(path)).map(path=>readFileSync(path,'utf8')).join('\n')
-  assert.doesNotMatch(text,confidentialNames)
+  const siteName=['Spar','row'].join(''),factory=`audit${siteName}MilestoneMigration`;
+  for(const path of paths.filter(path=>!/\.xlsx$|sheetjs\.js$|SSM-Audit\.html$/.test(path))){
+    const name=relative(root,path);let text=readFileSync(path,'utf8');
+    // Publication approval is limited to the photo's exact replacement table.
+    if(name==='src/audit/milestone-migration.js'){
+      const start=text.indexOf(`export function ${factory}`),end=text.indexOf('function auditMigrationCode');
+      assert.ok(start>=0&&end>start);
+      const approved=text.slice(start,end);
+      assert.equal(createHash('sha256').update(approved).digest('hex'),'10ddd0111dd4855007074b7edecd162cf31f553616d64dcd05175c5a17c4ebbd');
+      text=text.slice(0,start)+text.slice(end);
+    }
+    if(name==='src/ui/guide-content.js')text=text.replace(`built-in ${siteName} L1 replacements`,'built-in replacements').replace(`complete ${siteName} L1 codes`,'complete project L1 codes');
+    text=text.replaceAll(factory,'approvedMilestoneMapping');
+    assert.equal(confidentialNames.test(text),false,`Unapproved target reference in ${name}`);
+  }
 })

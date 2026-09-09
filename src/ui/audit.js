@@ -15,7 +15,7 @@ import { AUDIT_ACTION_FIELDS, auditActionPolicy, auditActionEntry, auditFindingR
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
-import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../audit/milestone-migration.js'
+import { auditSparrowMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../audit/milestone-migration.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -869,8 +869,12 @@ function updateModifyCounts(navigate){
   renderSideNav(navigate);
 }
 function milestoneMigrationControls(){
-  const settings=S.session.milestoneMigration||{enabled:false,profile:null},count=auditMilestoneMigrationRows(S.session.snapshot,{...settings,enabled:true}).length;
-  return `<div class="milestone-migration"><label><input id="newMilestones" type="checkbox" role="switch" aria-describedby="migrationStatus" ${settings.enabled?'checked':''}>New Milestones</label><button class="btn ghost sm" id="migrationPreview">Review replacements</button><span id="migrationStatus">${settings.profile?`${esc(settings.profile.project)}: ${count.toLocaleString()} rows with replacements`:'Requires an approved old-to-new L1 mapping, separate from reference workbooks.'}</span><button class="btn ghost sm" id="migrationLoad">${ic('folder-open')}Load mapping</button><input type="file" id="migrationFile" accept=".json" hidden></div>`;
+  const settings=currentMilestoneMigration(),count=auditMilestoneMigrationRows(S.session.snapshot,{...settings,enabled:true}).length;
+  return `<div class="milestone-migration"><label><input id="newMilestones" type="checkbox" role="switch" aria-describedby="migrationStatus" ${settings.enabled?'checked':''}>New Milestones</label><button class="btn ghost sm" id="migrationPreview">Review replacements</button><span id="migrationStatus">${esc(settings.profile.project)} only: ${count.toLocaleString()} rows with replacements</span></div>`;
+}
+function currentMilestoneMigration(){
+  const settings=S.session.milestoneMigration;
+  return settings?.profile?settings:{enabled:false,profile:auditSparrowMilestoneMigration()};
 }
 async function setMilestoneMigration(settings,navigate){
   const session=S.session;if(session.reviewBusy)return;
@@ -881,18 +885,17 @@ async function setMilestoneMigration(settings,navigate){
   finally{session.reviewBusy=false;}
 }
 function reviewMilestoneMappings(navigate){
-  const session=S.session,settings=session.milestoneMigration||{enabled:false,profile:null};if(session.reviewBusy)return;
+  const session=S.session,settings=currentMilestoneMigration();if(session.reviewBusy)return;
   const token={kind:'milestone-map-review'},entries=auditMilestoneMigrationRows(session.snapshot,{...settings,enabled:true}),counts=new Map();
   for(const {mapping} of entries)counts.set(mapping.from,(counts.get(mapping.from)||0)+1);
   const mappings=settings.profile?.mappings||[];
   actionScope=token;
   $('#actionModalBody').innerHTML=`<span class="eyebrow">New Milestones</span><h3 id="actionTitle">Review L1 replacements</h3>
-    <p>${settings.profile?`${esc(settings.profile.project)}: ${entries.length.toLocaleString()} equipment rows have replacements, including rows hidden by filters. Only Milestone Parent (L1) changes; L2 stays unchanged.`:'Load an approved project mapping to specify which old L1 becomes which new L1. The milestone register and VF catalog do not define these replacements.'}</p>
+    <p>${esc(settings.profile.project)}: ${entries.length.toLocaleString()} equipment rows have replacements, including rows hidden by filters. Only Milestone Parent (L1) changes; L2 stays unchanged. Matching uses the complete L1 code.</p>
     ${mappings.length?`<div class="action-preview"><table><thead><tr><th>Current L1</th><th>Replacement L1</th><th>Equipment rows</th></tr></thead><tbody>${mappings.map(mapping=>`<tr><td>${esc(mapping.from)}</td><td><b>${esc(mapping.to)}</b><small>${esc(mapping.label)}</small></td><td>${(counts.get(mapping.from)||0).toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:''}
-    <footer class="export-foot"><span>No registry values have changed.</span><div><button class="btn ghost" id="migrationReviewCancel">Cancel</button>${settings.profile?`<button class="btn primary" id="migrationReviewApply" ${entries.length?'':'disabled'}>Review equipment changes</button>`:'<button class="btn primary" id="migrationReviewLoad">Load mapping</button>'}</div></footer>`;
+    <footer class="export-foot"><span>No registry values have changed.</span><div><button class="btn ghost" id="migrationReviewCancel">Cancel</button><button class="btn primary" id="migrationReviewApply" ${entries.length?'':'disabled'}>Review equipment changes</button></div></footer>`;
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
   $('#actionModalClose').onclick=closeActionDialog;$('#migrationReviewCancel').onclick=closeActionDialog;modal.onclick=event=>{if(event.target===modal&&!session.reviewBusy)closeActionDialog();};
-  if(!settings.profile){$('#migrationReviewLoad').onclick=()=>{closeActionDialog();$('#migrationFile').click();};return;}
   const revision=session.changesRev;
   $('#migrationReviewApply').onclick=async()=>{
     if(S.session!==session||actionScope!==token||session.reviewBusy)return;
@@ -912,16 +915,11 @@ function previewMilestoneMigration(navigate){
   openActionDialog(`New Milestones: ${S.session.milestoneMigration.profile.project}`,findings,navigate,provided);
 }
 function wireMilestoneMigration(navigate){
-  $('#newMilestones').onchange=event=>{
-    const settings=S.session.milestoneMigration||{enabled:false,profile:null};
+  $('#newMilestones').onchange=async event=>{
+    const settings=currentMilestoneMigration();
     if(S.session.reviewBusy){event.target.checked=settings.enabled;return;}
-    if(!settings.profile){event.target.checked=false;reviewMilestoneMappings(navigate);return;}
-    setMilestoneMigration({...settings,enabled:event.target.checked},navigate);
-  };
-  $('#migrationLoad').onclick=()=>$('#migrationFile').click();
-  $('#migrationFile').onchange=async event=>{const file=event.target.files[0],session=S.session;if(!file||session.reviewBusy)return;
-    try{if(file.size>2000000)throw new Error('This mapping file is too large.');const text=await file.text();if(S.session!==session)return;const profile=auditReadMilestoneMigration(JSON.parse(text));if(await setMilestoneMigration({enabled:false,profile},navigate))reviewMilestoneMappings(navigate);}
-    catch(error){toast(error.message||'Select a valid milestone mapping JSON.');}
+    const enabled=event.target.checked;
+    if(await setMilestoneMigration({...settings,enabled},navigate)&&enabled)reviewMilestoneMappings(navigate);
   };
   $('#migrationPreview').onclick=()=>reviewMilestoneMappings(navigate);
 }

@@ -7,6 +7,7 @@
 - The governing sources are the SSM SOP, the approved Exto upload contract, and explicitly approved golden reference logic.
 - Keep the audit rule engine behavior aligned with SSManagement. When changing a rule, deliberately update and test both applications.
 - Never include confidential registry names, filenames, values, screenshots, or workbook contents in source, fixtures, commits, releases, or release notes. The source is public, so this applies to git history as well: commit nothing that would need removing later.
+- The user explicitly approved publishing the built-in project L1 replacement table from their photo on 2026-09-09. This narrow exception covers only that mapping and its UI identification, not any registry, reference workbook, photo, or other project data. The deployment test pins the approved table.
 - Use synthetic fixtures for committed tests. Confidential workbooks may be used only for local, uncommitted verification.
 - The source repository is public (made public 2026-08-19). Every release is published twice with the same versioned single-file HTML and gzip artifacts: on `noahfgarrett/SSM-Audit-Releases` (the updater's source of truth, with `latest.json`) and as a GitHub release on `noahfgarrett/SSM-Audit` itself (tag `vX.Y.Z`) so the source repo's Releases page carries the file too. Never publish a bare tag without the release.
 - The updater must use only `noahfgarrett/SSM-Audit-Releases`; it must never consume SSManagement or SSM Builder releases.
