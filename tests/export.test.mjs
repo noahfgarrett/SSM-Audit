@@ -7,7 +7,7 @@ import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-co
 import { auditMergeSnapshots, auditSnapshotFromAoa, auditSnapshotFromWorkbook } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
 import { auditMakeCorrection, auditRecommendationContext, auditProposeCorrection, auditApplyCorrections } from '../src/audit/actions.js'
-import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx } from '../src/audit/export.js'
+import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, buildAuditUpdateRowsBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx } from '../src/audit/export.js'
 import { S, resetSession } from '../src/state.js'
 
 // Package tests use the browser's XML DOM, or @xmldom/xmldom supplied by this
@@ -959,6 +959,39 @@ function packageEntries(bytes) {
   })
   return entries
 }
+
+test('partial updates retain every metadata column, exclude completed rows and highlight cleared cells',async()=>{
+ const {book,snapshot}=correctionFixture();
+ const extra=headers.length;
+ book.Sheets.Registry[XLSX.utils.encode_cell({r:0,c:extra})]={t:'s',v:'Record UID'};
+ book.Sheets.Registry[XLSX.utils.encode_cell({r:1,c:extra})]={t:'s',v:'KEEP-UID-1'};
+ book.Sheets.Registry['!ref']=`A1:${XLSX.utils.encode_col(extra)}3`;
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Equipment Name','Status'],['EQ-2','Completed']]),'Equipment Status Report');
+ const source=XLSX.write(book,{type:'array',bookType:'xlsx'}),original=new Uint8Array(source).slice();
+ const changes=[auditMakeCorrection(snapshot.rows[0],'System Name',''),auditMakeCorrection(snapshot.rows[1],'System Name','Changed')];
+ const output=await buildAuditUpdateRowsBytes(source,snapshot,changes,{completedEquipmentIds:['eq-2']});
+ const result=XLSX.read(output,{type:'array',cellStyles:true}),sheet=result.Sheets['Upload Template'];
+ assert.deepEqual(result.SheetNames,['Upload Template']);assert.equal(grid(sheet).length,2);
+ assert.equal(sheet.J2.v,'');assert.equal(sheet.J2.s.fgColor.rgb,'FFF2CC');
+ assert.equal(sheet[XLSX.utils.encode_cell({r:1,c:extra})].v,'KEEP-UID-1');
+ for(let c=0;c<headers.length;c++)if(c!==index.systemName)assert.equal(sheet[XLSX.utils.encode_cell({r:1,c})]?.v,book.Sheets.Registry[XLSX.utils.encode_cell({r:1,c})]?.v);
+ assert.deepEqual(new Uint8Array(source),original);
+ await assert.rejects(buildAuditUpdateRowsBytes(source,snapshot,changes,{completedEquipmentIds:['EQ-1','EQ-2']}),/No changed, incomplete equipment/);
+});
+test('partial updates retain cached metadata values and reject unavailable formula results',async()=>{
+ const {book,snapshot}=correctionFixture(),column=headers.length,address=XLSX.utils.encode_cell({r:1,c:column});
+ book.Sheets.Registry[XLSX.utils.encode_cell({r:0,c:column})]={t:'s',v:'Calculated metadata'};
+ book.Sheets.Registry[address]={t:'n',v:7,f:'3+4',z:'000'};
+ book.Sheets.Registry['!ref']=`A1:${XLSX.utils.encode_col(column)}3`;
+ const source=XLSX.write(book,{type:'array',bookType:'xlsx'}),changes=[auditMakeCorrection(snapshot.rows[0],'System Name','Changed')];
+ const output=await buildAuditUpdateRowsBytes(source,snapshot,changes,{sourceWorkbook:book});
+ const cell=XLSX.read(output,{type:'array',cellNF:true}).Sheets['Upload Template'][address];
+ assert.equal(cell.v,7);assert.equal(XLSX.utils.format_cell(cell),'007');assert.equal(cell.f,undefined);
+ delete book.Sheets.Registry[address].v;
+ await assert.rejects(buildAuditUpdateRowsBytes(source,snapshot,changes,{sourceWorkbook:book}),/no cached value/);
+ book.Sheets.Registry[address]={t:'e',v:7};
+ await assert.rejects(buildAuditUpdateRowsBytes(source,snapshot,changes,{sourceWorkbook:book}),/Excel error/);
+});
 function packageBytes(entries) {
   const container = XLSX.CFB.utils.cfb_new()
   for (const [path, data] of entries) XLSX.CFB.utils.cfb_add(container, path, data)
@@ -1184,10 +1217,15 @@ packageTest('a workbook without a styles part gets a valid yellow style without 
 packageTest('updated-registry session export uses the immutable baseline and never downloads a partial correction', async t => {
   const { downloads } = captureExportDownloads(t), { bytes, snapshot, change } = syntheticPackage(), original = bytes.slice()
   S.session.sourceBytes = bytes; S.session.baselineSnapshot = snapshot; S.session.changes = [change]
+  const connection={pending:null,worker:{postMessage:async data=>{
+    try{const bytes=await buildAuditUpdateRowsBytes(S.session.sourceBytes,S.session.baselineSnapshot,data.changes);const p=connection.pending;connection.pending=null;p.resolve({bytes});}
+    catch(error){const p=connection.pending;connection.pending=null;p.reject(error);}
+  }}};S.session.reviewWorker=connection;
   S.session.snapshot = { ...snapshot, rows: snapshot.rows.map(row => ({ ...row, systemName: 'Corrected working draft' })) }
   assert.equal(await exportUpdatedRegistryXlsx(), true)
   const output = XLSX.read(await downloads[0].arrayBuffer(), { type: 'array' })
-  assert.equal(output.Sheets.Registry[addressOf(change)].v, 'After')
+  assert.equal(output.Sheets['Upload Template'][addressOf(change)].v, 'After')
+  assert.deepEqual(output.SheetNames,['Upload Template'])
   S.session.changes = [change, { ...correction(snapshot, 1), before: 'Conflict' }]
   assert.equal(await exportUpdatedRegistryXlsx(), false)
   assert.equal(downloads.length, 1, 'no partial second download')

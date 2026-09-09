@@ -1,6 +1,5 @@
 import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S, resetSession } from '../state.js'
-import { readArrayBuffer } from '../io/workbook.js'
 import { importAuditWorkbook, prepareAuditReview } from '../io/import-client.js'
 import { auditSessionResult } from '../audit/review.js'
 import { auditNormId, auditSplitReferences, auditFingerprint } from '../audit/model.js'
@@ -13,9 +12,9 @@ import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
 import { AUDIT_ACTION_FIELDS, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
-import { auditReadReferenceWorkbook, auditReferenceSheets, auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
+import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../audit/milestone-migration.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
@@ -306,14 +305,14 @@ function renderExportOptions(){
   const changesCount=(S.session.changes||[]).length;
   const kindTabs=`<div class="export-kinds" role="tablist">
       <button class="export-kind ${kind==='actionable'?'on':''}" type="button" data-export-kind="actionable"><b>Actionable Export</b><small>Findings beside the equipment tree — the working report.</small></button>
-      <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>The original workbook with your ${changesCount.toLocaleString()} staged fix${changesCount===1?'':'es'} written into a separate XLSX copy.</small></button>
+      <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>Changed equipment rows with all metadata and highlighted corrections.</small></button>
       <button class="export-kind ${kind==='corrections'?'on':''}" type="button" data-export-kind="corrections"><b>Correction Log</b><small>Before-and-after values and review decisions.</small></button>
       <button class="export-kind ${kind==='tracker'?'on':''}" type="button" data-export-kind="tracker"><b>Tracker</b><small>Manual team sign-off by milestone or discipline.</small></button>
     </div>`;
   if(kind!=='actionable'){
     $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose the export</h3>${kindTabs}
       ${kind==='updated'
-        ?`<p class="export-intro">Writes validated corrections into a separate XLSX copy while retaining the workbook structure and untouched content. Formula and merged cells are not replaced. Review the copy before uploading; Excel may need to recalculate dependent formulas. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
+        ?`<p class="export-intro">A partial update workbook containing only changed equipment rows, with all original metadata columns and yellow corrected cells. Completed equipment and status/report tabs are omitted. Unchanged metadata formulas use their saved values. Your original workbook stays unchanged. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
         :kind==='corrections'?`<p class="export-intro">Current corrections and review history, including reviewer, note, source row, and before-and-after values. Draft corrections have not been verified in an uploaded registry.</p>`:`<div class="export-layout"><b>Sign off whole groups</b>
           <label class="export-layout-choice ${trackerSignOffBy==='milestone'?'on':''}"><input type="radio" name="tracker-signoff" value="milestone" ${trackerSignOffBy==='milestone'?'checked':''}><span><b>By L2 milestone</b><small>One checkmark signs off a milestone across all disciplines.</small></span></label>
           <label class="export-layout-choice ${trackerSignOffBy==='discipline'?'on':''}"><input type="radio" name="tracker-signoff" value="discipline" ${trackerSignOffBy==='discipline'?'checked':''}><span><b>By discipline</b><small>One checkmark signs off a discipline across all milestones.</small></span></label>
@@ -502,7 +501,17 @@ function modifyRowHtml(finding,compact){
   const tag=finding.equipmentId?`<button type="button" class="modify-tag" data-mod-open="${esc(finding.id)}" title="Open this finding's details">${modifyHighlight(finding.equipmentId)}</button>`:'<b class="modify-tag"><i>Registry-wide</i></b>';
   const action=`<button type="button" class="btn ghost sm" data-mod-review="${esc(finding.id)}">${ic('sliders-horizontal')}Review</button>`;
   if(compact)return `<div class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}>${tag}<span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span>${action}</div>`;
-  return `<div class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}</span><span class="modify-where">Row ${finding.row||'—'}</span>${action}</div>`;
+  return `<div class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}${modifyItemMasterSwap(finding)}</span><span class="modify-where">Row ${finding.row||'—'}</span>${action}</div>`;
+}
+function modifyItemMasterSwap(finding){
+  if(!['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule.id))return '';
+  const suggested=modifySuggestedFix(finding),change=suggested?.changes.find(change=>change.prop==='itemMaster'&&clean(change.value)!==clean(change.before));
+  return `<small class="modify-im-swap">${change?`<span>Current: <b>${esc(change.before)}</b></span><span>Suggested VF: <b>${esc(change.value)}</b></span><span>Confirm checklist compatibility.</span>`:'No unique VF replacement found. Enter a verified name in Action.'}</small>`;
+}
+function modifyItemMasterCatalogStatus(rule){
+  if(!['item-master.migration-advisory','item-master.standardized-assignment'].includes(rule.id))return '';
+  const catalog=S.session.references?.itemMasters,count=catalog?.entries.filter(entry=>/^VF\d*(?:_|\b)/i.test(clean(entry.name))).length||0;
+  return `<small class="modify-im-status">${catalog?count?`VF catalog loaded · ${count.toLocaleString()} names`:'Catalog loaded · no VF names found':'No local VF catalog loaded · using built-in list'}</small>`;
 }
 /* Findings with the same explanation are one pattern -- "row on UPN 603, parent
    on UPN RR" -- so a whole family of matches is kept or set aside with a single
@@ -512,9 +521,9 @@ let modifyPatternMap=new Map();
 function modifyPatternKey(ruleId,why){return auditFingerprint(ruleId+'|'+(why||''));}
 function modifyPatterns(entry){
   const byWhy=new Map();
-  for(const finding of entry.matches){const why=finding.why||'';const list=byWhy.get(why)||[];list.push(finding);byWhy.set(why,list);}
+  for(const finding of entry.matches){const why=finding.why||'',key=['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule.id)?JSON.stringify([why,finding.actual,finding.expected]):why;const list=byWhy.get(key)||[];list.push(finding);byWhy.set(key,list);}
   const groups=[],singles=[];
-  for(const [why,findings] of byWhy){if(findings.length>1)groups.push({why,findings,key:modifyPatternKey(entry.rule.id,why)});else singles.push(findings[0]);}
+  for(const [key,findings] of byWhy){if(findings.length>1)groups.push({why:findings[0].why||'',findings,key:modifyPatternKey(entry.rule.id,key)});else singles.push(findings[0]);}
   groups.sort((left,right)=>right.findings.length-left.findings.length);
   return {groups,singles};
 }
@@ -529,7 +538,7 @@ function modifyPatternHtml(group){
   const severity=group.findings[0].severity;
   return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
     <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action every finding of this pattern">${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
-    <div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
+    ${modifyItemMasterSwap(group.findings[0])}<div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
 function modifyFillPatternRows(pattern){
@@ -558,7 +567,7 @@ export function sessionAudit(snapshot,references=S.session.references||{},migrat
   return auditSessionResult(snapshot,references,migration);
 }
 function openReferencesDialog(navigate){
-  const pending={...S.session.references},workbooks={},names={},token={kind:'references'};
+  const session=S.session,pending={...session.references},workbooks={},names={},token={kind:'references'};
   const kinds=[['milestones','Milestone register'],['itemMasters','Item Master catalog']];
   let busy=false,helpOpen=false;
   const paint=()=>{
@@ -569,30 +578,35 @@ function openReferencesDialog(navigate){
     $('#referencesHelp').onclick=()=>{helpOpen=!helpOpen;$('#referencesHelpBody').hidden=!helpOpen;$('#referencesHelp').setAttribute('aria-expanded',String(helpOpen));};
     $('#referencesCancel').onclick=closeActionDialog;
     $$('[data-reference-pick]').forEach(button=>button.onclick=()=>document.querySelector(`[data-reference-file="${button.dataset.referencePick}"]`).click());
-    $$('[data-reference-remove]').forEach(button=>button.onclick=()=>{delete pending[button.dataset.referenceRemove];delete workbooks[button.dataset.referenceRemove];paint();});
+    $$('[data-reference-remove]').forEach(button=>button.onclick=()=>{if(busy)return;delete pending[button.dataset.referenceRemove];delete workbooks[button.dataset.referenceRemove];paint();});
     $$('[data-reference-file]').forEach(input=>input.onchange=async()=>{
       const file=input.files[0],kind=input.dataset.referenceFile;if(!file||busy)return;busy=true;
-      try{const bytes=await readArrayBuffer(file);if(actionScope!==token)return;const workbook=XLSX.read(bytes,{type:'array',dense:true});const sheets=auditReferenceSheets(workbook,kind);if(!sheets.length)throw new Error('No usable reference sheet was found.');
-        workbooks[kind]=workbook;names[kind]=sheets;
-        const candidates=sheets.map(name=>auditReadReferenceWorkbook(workbook,kind,name)).filter(parsed=>parsed.entries.length);
-        pending[kind]=(kind==='itemMasters'?candidates.find(parsed=>/\bVF\b/i.test(parsed.sheetName)):candidates.find(parsed=>parsed.entries.some(entry=>entry.parentId)))||candidates[0];
-        if(!pending[kind])throw new Error('No current reference entries were found.');paint();
+      try{let imported;
+        await runWithProgress('Loading local reference','Original workbook unchanged',async(checkpoint,report)=>{
+          await checkpoint();imported=await importAuditWorkbook(file,{audit:false,referenceKind:kind,report});await checkpoint();
+        });
+        if(actionScope!==token||S.session!==session)return;
+        const candidates=imported.references.filter(parsed=>parsed.entries.length);
+        const selected=(kind==='itemMasters'?candidates.find(parsed=>/\bVF\b/i.test(parsed.sheetName)):candidates.find(parsed=>parsed.entries.some(entry=>entry.parentId)))||candidates[0];
+        if(!selected)throw new Error('No current reference entries were found.');
+        workbooks[kind]=new Map(imported.references.map(parsed=>[parsed.sheetName,parsed]));names[kind]=[...workbooks[kind].keys()];pending[kind]=selected;paint();
       }catch(error){toast(error.message||'This reference could not be read');}finally{busy=false;}
     });
-    $$('[data-reference-sheet]').forEach(select=>select.onchange=()=>{const kind=select.dataset.referenceSheet;pending[kind]=auditReadReferenceWorkbook(workbooks[kind],kind,select.value);paint();});
+    $$('[data-reference-sheet]').forEach(select=>select.onchange=()=>{if(busy)return;const kind=select.dataset.referenceSheet;pending[kind]=workbooks[kind].get(select.value);paint();});
     $('#referencesApply').onclick=async()=>{
       if(busy)return;busy=true;$('#referencesApply').disabled=true;
-      const session=S.session;
-      try{let baselineResult,result;
+      const revision=session.changesRev;
+      try{let prepared;
         if(Object.values(pending).some(reference=>!reference?.entries?.length))throw new Error('Select a reference sheet with current entries, or remove that reference.');
         await runWithProgress('Checking references','Original workbook unchanged',async(checkpoint,report)=>{
-          report(.2,'Checking original registry');await checkpoint();baselineResult=sessionAudit(session.baselineSnapshot,pending);
-          report(.65,'Checking working draft');await checkpoint();result=session.changes.length?sessionAudit(session.snapshot,pending):baselineResult;report(1,'References applied');
+          report(.05,'Preparing background checks');await checkpoint();
+          prepared=await prepareAuditReview(session,session.changes,auditReadMigrationSettings(session.milestoneMigration),false,report,{references:pending});await checkpoint();report(1,'References applied');
         });
-        if(S.session!==session||actionScope!==token)return;
+        if(S.session!==session||actionScope!==token||session.changesRev!==revision)return;
+        const {baselineResult,result}=prepared;
         session.references=pending;session.baselineResult=baselineResult;session.reviewUndo=[];
         const known=new Set([...baselineResult.findings,...result.findings].map(finding=>finding.id));session.actioned=new Set([...session.actioned].filter(id=>known.has(id)));session.reviewedIds=new Set([...(session.reviewedIds||[])].filter(id=>known.has(id)));session.excluded=new Set([...session.excluded].filter(id=>known.has(id)));
-        reviewInstallDraft({snapshot:session.snapshot,result,changes:session.changes});closeActionDialog();rerenderModifications(navigate);toast('References applied and draft re-audited');
+        reviewInstallDraft({...prepared,changes:session.changes});closeActionDialog();rerenderModifications(navigate);toast('References applied. Review Item Master or milestone findings in Actions.');
       }catch(error){toast(error.message||'References could not be applied');if($('#referencesApply'))$('#referencesApply').disabled=false;}finally{busy=false;}
     };
   };
@@ -712,12 +726,17 @@ async function processActionDialog(scope){
       scope.incoming=incoming;scope.prepared=prepared;scope.stage='review';scope.offset=0;paintActionDialog();$('#actionApply').focus();
     }else{
       if(!scope.prepared||scope.prepared.revision!==session.changesRev)throw new Error('The registry changed. Review the corrections again.');
-      reviewRememberUndo();reviewInstallDraft(scope.prepared);
-      session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner:session.reviewOwner||'',reason:'Confirmed corrections after reviewing values and validation.',disposition:'corrected-draft',findingIds:scope.prepared.impact.resolved.map(finding=>finding.id),changes:scope.incoming});
-      rerenderModifications(scope.navigate||currentNavigate);scope.stage='success';scope.offset=0;paintActionDialog();$('#actionCancel').focus();toast('Changes applied to the working draft');
+      session.reviewBusy=true;button.disabled=true;
+      await runWithProgress('Applying changes','Original workbook unchanged',async(checkpoint,report)=>{
+        report(.1,'Updating the working draft');await checkpoint();
+        if(S.session!==session||actionScope!==scope||scope.prepared.revision!==session.changesRev)throw new Error('The registry changed. No changes applied.');
+        reviewRememberUndo();reviewInstallDraft(scope.prepared);
+        session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner:session.reviewOwner||'',reason:'Confirmed corrections after reviewing values and validation.',disposition:'corrected-draft',findingIds:scope.prepared.impact.resolved.map(finding=>finding.id),changes:scope.incoming});
+        report(.7,'Refreshing findings');rerenderModifications(scope.navigate||currentNavigate);scope.stage='success';scope.offset=0;paintActionDialog();$('#actionCancel').focus();report(1,'Changes applied');toast('Changes applied to the working draft');
+      });
     }
   }catch(error){if(actionScope===scope)$('#actionImpact').textContent=error.message||'No changes applied. The corrections could not be checked.';}
-  finally{session.reviewBusy=false;if(actionScope===scope&&scope.stage==='edit'){button.disabled=false;button.textContent='Review changes';$('#actionFields').disabled=false;}}
+  finally{session.reviewBusy=false;if(actionScope===scope&&scope.stage!=='success'){$('#actionApply').disabled=false;$('#actionApply').textContent=scope.stage==='edit'?'Review changes':'Apply changes';$('#actionFields').disabled=false;}}
 }
 function actionSuggestions(findings,context,target,provided){
   const seen=new Set();return findings.map(finding=>provided?.get(finding.id)||auditActionEntry(finding,context,target)).filter(entry=>{
@@ -725,10 +744,29 @@ function actionSuggestions(findings,context,target,provided){
     if(seen.has(key))return false;seen.add(key);return true;
   }).map(entry=>({...entry,changes:entry.changes.map(change=>({...change}))}));
 }
-function openActionDialog(label,findings,navigate,provided){
+function openActionDialog(label,findings,navigate,provided,prepared){
   findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
+  if(findings.length>200&&!prepared){
+    const session=S.session,revision=session.changesRev,token={kind:'preparing-actions'};
+    if(session.reviewBusy)return;session.reviewBusy=true;actionScope=token;
+    return runWithProgress('Preparing actions','Finding suggested values',async(checkpoint,report)=>{
+      await checkpoint();
+      if(S.session!==session||actionScope!==token)return;
+      modifyRecommendationContext||=auditRecommendationContext(session.snapshot,auditMigrationReferences(session.references,session.milestoneMigration));
+      const context=modifyRecommendationContext,suggestions=[],seen=new Set();
+      for(let offset=0;offset<findings.length;offset+=100){
+        if(S.session!==session||session.changesRev!==revision||actionScope!==token)return;
+        for(const entry of actionSuggestions(findings.slice(offset,offset+100),context,'child',provided)){
+          const key=JSON.stringify(entry.changes.map(change=>[auditCorrectionKey(change),change.value]).sort());
+          if(!seen.has(key)){seen.add(key);suggestions.push(entry);}
+        }
+        report(Math.min(1,(offset+100)/findings.length),'Preparing editable values');await checkpoint();
+      }
+      if(S.session===session&&session.changesRev===revision&&actionScope===token){session.reviewBusy=false;openActionDialog(label,findings,navigate,provided,{context,suggestions});}
+    }).catch(error=>toast(error.message||'Actions could not be prepared')).finally(()=>{session.reviewBusy=false;});
+  }
   modifyRecommendationContext||=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
-  const context=modifyRecommendationContext,suggestions=actionSuggestions(findings,context,'child',provided);
+  const context=prepared?.context||modifyRecommendationContext,suggestions=prepared?.suggestions||actionSuggestions(findings,context,'child',provided);
   actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
   paintActionDialog();
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
@@ -805,7 +843,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><b>${modifyHighlight(entry.rule.title)}</b><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
+    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Set every match shown for this check aside':'Set every finding of this check aside'}">${ic('circle-x')}Set all aside</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -831,16 +869,38 @@ function updateModifyCounts(navigate){
   renderSideNav(navigate);
 }
 function milestoneMigrationControls(){
-  const settings=S.session.milestoneMigration||{enabled:false,profile:null},count=auditMilestoneMigrationRows(S.session.snapshot,settings).length;
-  return `<div class="milestone-migration"><label><input id="newMilestones" type="checkbox" role="switch" ${settings.enabled?'checked':''} ${settings.profile?'':'disabled'}>New Milestones</label><span>${settings.profile?`${esc(settings.profile.project)}: ${settings.enabled?`${count.toLocaleString()} rows to update across the registry`:'mapping loaded'}`:'Load a project milestone mapping'}</span><button class="btn ghost sm" id="migrationLoad">${ic('folder-open')}Load mapping</button><button class="btn ghost sm" id="migrationPreview" ${count?'':'disabled'}>Review replacements</button><input type="file" id="migrationFile" accept=".json" hidden></div>`;
+  const settings=S.session.milestoneMigration||{enabled:false,profile:null},count=auditMilestoneMigrationRows(S.session.snapshot,{...settings,enabled:true}).length;
+  return `<div class="milestone-migration"><label><input id="newMilestones" type="checkbox" role="switch" aria-describedby="migrationStatus" ${settings.enabled?'checked':''}>New Milestones</label><button class="btn ghost sm" id="migrationPreview">Review replacements</button><span id="migrationStatus">${settings.profile?`${esc(settings.profile.project)}: ${count.toLocaleString()} rows with replacements`:'Requires an approved old-to-new L1 mapping, separate from reference workbooks.'}</span><button class="btn ghost sm" id="migrationLoad">${ic('folder-open')}Load mapping</button><input type="file" id="migrationFile" accept=".json" hidden></div>`;
 }
 async function setMilestoneMigration(settings,navigate){
   const session=S.session;if(session.reviewBusy)return;
   try{session.reviewBusy=true;const prepared=await reviewPrepare(session.changes,auditReadMigrationSettings(settings));
     if(S.session!==session)return;reviewRememberUndo();reviewInstallDraft(prepared);rerenderModifications(navigate);
-    toast('Milestone mapping updated. Registry values change only after you review and apply replacements.');
+    toast('Milestone mapping updated. Registry values change only after you review and apply replacements.');return true;
   }catch(error){toast(error.message||'The mapping could not be loaded.');if(S.session===session)rerenderModifications(navigate);}
   finally{session.reviewBusy=false;}
+}
+function reviewMilestoneMappings(navigate){
+  const session=S.session,settings=session.milestoneMigration||{enabled:false,profile:null};if(session.reviewBusy)return;
+  const token={kind:'milestone-map-review'},entries=auditMilestoneMigrationRows(session.snapshot,{...settings,enabled:true}),counts=new Map();
+  for(const {mapping} of entries)counts.set(mapping.from,(counts.get(mapping.from)||0)+1);
+  const mappings=settings.profile?.mappings||[];
+  actionScope=token;
+  $('#actionModalBody').innerHTML=`<span class="eyebrow">New Milestones</span><h3 id="actionTitle">Review L1 replacements</h3>
+    <p>${settings.profile?`${esc(settings.profile.project)}: ${entries.length.toLocaleString()} equipment rows have replacements, including rows hidden by filters. Only Milestone Parent (L1) changes; L2 stays unchanged.`:'Load an approved project mapping to specify which old L1 becomes which new L1. The milestone register and VF catalog do not define these replacements.'}</p>
+    ${mappings.length?`<div class="action-preview"><table><thead><tr><th>Current L1</th><th>Replacement L1</th><th>Equipment rows</th></tr></thead><tbody>${mappings.map(mapping=>`<tr><td>${esc(mapping.from)}</td><td><b>${esc(mapping.to)}</b><small>${esc(mapping.label)}</small></td><td>${(counts.get(mapping.from)||0).toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:''}
+    <footer class="export-foot"><span>No registry values have changed.</span><div><button class="btn ghost" id="migrationReviewCancel">Cancel</button>${settings.profile?`<button class="btn primary" id="migrationReviewApply" ${entries.length?'':'disabled'}>Review equipment changes</button>`:'<button class="btn primary" id="migrationReviewLoad">Load mapping</button>'}</div></footer>`;
+  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
+  $('#actionModalClose').onclick=closeActionDialog;$('#migrationReviewCancel').onclick=closeActionDialog;modal.onclick=event=>{if(event.target===modal&&!session.reviewBusy)closeActionDialog();};
+  if(!settings.profile){$('#migrationReviewLoad').onclick=()=>{closeActionDialog();$('#migrationFile').click();};return;}
+  const revision=session.changesRev;
+  $('#migrationReviewApply').onclick=async()=>{
+    if(S.session!==session||actionScope!==token||session.reviewBusy)return;
+    if(session.changesRev!==revision){toast('The registry changed. Review the replacements again.');return;}
+    if(!settings.enabled&&!await setMilestoneMigration({...settings,enabled:true},navigate))return;
+    if(S.session!==session||actionScope!==token)return;
+    previewMilestoneMigration(navigate);
+  };
 }
 function previewMilestoneMigration(navigate){
   const entries=auditMilestoneMigrationRows(S.session.snapshot,S.session.milestoneMigration),provided=new Map();
@@ -852,13 +912,18 @@ function previewMilestoneMigration(navigate){
   openActionDialog(`New Milestones: ${S.session.milestoneMigration.profile.project}`,findings,navigate,provided);
 }
 function wireMilestoneMigration(navigate){
-  $('#newMilestones').onchange=event=>setMilestoneMigration({...S.session.milestoneMigration,enabled:event.target.checked},navigate);
+  $('#newMilestones').onchange=event=>{
+    const settings=S.session.milestoneMigration||{enabled:false,profile:null};
+    if(S.session.reviewBusy){event.target.checked=settings.enabled;return;}
+    if(!settings.profile){event.target.checked=false;reviewMilestoneMappings(navigate);return;}
+    setMilestoneMigration({...settings,enabled:event.target.checked},navigate);
+  };
   $('#migrationLoad').onclick=()=>$('#migrationFile').click();
   $('#migrationFile').onchange=async event=>{const file=event.target.files[0],session=S.session;if(!file||session.reviewBusy)return;
-    try{if(file.size>2000000)throw new Error('This mapping file is too large.');const text=await file.text();if(S.session!==session)return;const profile=auditReadMilestoneMigration(JSON.parse(text));await setMilestoneMigration({enabled:false,profile},navigate);}
+    try{if(file.size>2000000)throw new Error('This mapping file is too large.');const text=await file.text();if(S.session!==session)return;const profile=auditReadMilestoneMigration(JSON.parse(text));if(await setMilestoneMigration({enabled:false,profile},navigate))reviewMilestoneMappings(navigate);}
     catch(error){toast(error.message||'Select a valid milestone mapping JSON.');}
   };
-  $('#migrationPreview').onclick=()=>previewMilestoneMigration(navigate);
+  $('#migrationPreview').onclick=()=>reviewMilestoneMappings(navigate);
 }
 export function renderModifications(navigate){
   if(!(S.session&&S.session.rawResult)){navigate('upload');return;}

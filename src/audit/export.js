@@ -1,8 +1,9 @@
 import { clean, natCmp } from '../core/text.js'
 import { zipDeflateAvailable, zipEntries } from '../core/zip.js'
-import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob, workbookBlobCompact } from '../core/download.js'
+import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob, workbookBlobCompact, workbookBytesCompact } from '../core/download.js'
 import { EXTO_REV21_COLUMNS, extoRev21Norm } from '../exto/rev21-contract.js'
 import { S } from '../state.js'
+import { prepareAuditReview } from '../io/import-client.js'
 import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
 import { auditColumnName, auditNormId } from './model.js'
@@ -805,6 +806,7 @@ function auditYellowStyleFactory(document){
 /* Only XLSX packages are supported: never silently downgrade a legacy, macro,
    signed, or unparseable workbook to a values-only copy. No source bytes mutate. */
 export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,changes,options={}){
+  options.onStage?.(.05,'Opening original package');
   if(typeof DOMParser!=='function'||typeof XMLSerializer!=='function')auditCorrectionFail('XML','This browser does not provide the XML tools needed for safe export.');
   const bytes=sourceBytes instanceof ArrayBuffer?new Uint8Array(sourceBytes.slice(0)):ArrayBuffer.isView(sourceBytes)?new Uint8Array(sourceBytes.buffer,sourceBytes.byteOffset,sourceBytes.byteLength).slice():null;
   if(!bytes||bytes[0]!==0x50||bytes[1]!==0x4b)auditCorrectionFail('PACKAGE','Safe updated-registry export requires an original XLSX workbook.');
@@ -834,7 +836,9 @@ export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,cha
       if(worksheetParts.has(path))auditCorrectionFail('PACKAGE','Multiple worksheets point to the same physical package part.');worksheetParts.add(path);sheetPaths.set(name,path);
     }
   }
-  const workbook=XLSX.read(bytes,{type:'array',cellStyles:true}),plan=auditCorrectionPreflight(workbook,baselineSnapshot,changes),documents=new Map(),rowIndexes=new Map(),patches=[];
+  options.onStage?.(.15,'Validating corrected cells');
+  const workbook=options.sourceWorkbook||XLSX.read(bytes,{type:'array',cellStyles:true}),plan=auditCorrectionPreflight(workbook,baselineSnapshot,changes),documents=new Map(),rowIndexes=new Map(),patches=[];
+  options.onStage?.(.35,'Updating worksheet metadata');
   for(const target of plan){
     const path=sheetPaths.get(target.sheetName);if(!path)auditCorrectionFail('PACKAGE','A targeted worksheet relationship is missing.',target.index);
     let rowsByNumber=rowIndexes.get(path);
@@ -883,13 +887,66 @@ export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,cha
     else value.textContent=typeof target.value==='boolean'?(target.value?'1':'0'):String(target.value);
     cell.insertBefore(value,cell.firstChild);
   }
+  options.onStage?.(.55,'Writing corrected worksheets');
   const encoder=new TextEncoder();for(const [path,document] of documents)parts.get(path).data=encoder.encode(new XMLSerializer().serializeToString(document));
   if(zipDeflateAvailable())return zipEntries(entries,options.onProgress);
   for(const entry of entries){const file=XLSX.CFB.find(container,`/${entry.name}`);if(file){file.content=entry.data;file.size=entry.data.length;}else XLSX.CFB.utils.cfb_add(container,entry.name,entry.data);}
   return new Uint8Array(XLSX.CFB.write(container,{fileType:'zip',type:'array',compression:true}));
 }
+export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,options={}){
+  options.onStage?.(.05,'Reading original metadata');
+  const bytes=sourceBytes instanceof ArrayBuffer?new Uint8Array(sourceBytes.slice(0)):ArrayBuffer.isView(sourceBytes)?new Uint8Array(sourceBytes.buffer,sourceBytes.byteOffset,sourceBytes.byteLength).slice():null;
+  if(!bytes||bytes[0]!==0x50||bytes[1]!==0x4b)auditCorrectionFail('PACKAGE','Updated Registry requires the original XLSX workbook.');
+  const source=options.sourceWorkbook||XLSX.read(bytes,{type:'array',cellStyles:true});
+  const plan=auditCorrectionPreflight(source,baseline,changes),byRow=new Map();
+  for(const target of plan){const key=auditCorrectionSourceKey({sheet:target.sheetName,row:target.row}),cells=byRow.get(key)||new Map();cells.set(target.column,target);byRow.set(key,cells);}
+  const completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
+  const selected=baseline.rows.filter(row=>byRow.has(auditCorrectionSourceKey(row._source))&&!completed.has(auditNormId(row.equipmentId)));
+  if(!selected.length)auditCorrectionFail('EMPTY','No changed, incomplete equipment remains to export.');
+  const snapshots=new Map(),collect=snapshot=>{if(snapshot.snapshots)snapshot.snapshots.forEach(collect);else snapshots.set(snapshot.source.sheet,snapshot);};collect(baseline);
+  const layouts=new Map(),columns=[],columnMap=new Map();
+  for(const row of selected){
+    const name=row._source.sheet;if(layouts.has(name))continue;
+    const sheet=source.Sheets[name],snapshot=snapshots.get(name),header=snapshot?.headerRow;
+    if(!header)auditCorrectionFail('HEADER','The original registry header location is unavailable.');
+    const last=XLSX.utils.decode_range(sheet['!ref']).e.c,layout=[],occurrences=new Map();
+    for(let c=0;c<=last;c++){
+      const cell=sheet[XLSX.utils.encode_cell({r:header-1,c})],label=auditCorrectionCellValue(cell);
+      const keyBase=label?extoRev21Norm(label):`blank-column-${c}`,occurrence=occurrences.get(keyBase)||0;occurrences.set(keyBase,occurrence+1);
+      const key=JSON.stringify([keyBase,occurrence]);
+      if(!columnMap.has(key)){columnMap.set(key,columns.length);columns.push({label});}
+      layout.push(columnMap.get(key));
+    }
+    layouts.set(name,layout);
+  }
+  options.onStage?.(.3,'Copying changed equipment with all metadata');
+  const sheet=XLSX.utils.aoa_to_sheet([columns.map(column=>column.label)]),yellow={patternType:'solid',fgColor:{rgb:'FFFFF2CC'},bgColor:{rgb:'FFFFF2CC'}};
+  selected.forEach((row,index)=>{
+    const origin=row._source,input=source.Sheets[origin.sheet],patch=byRow.get(auditCorrectionSourceKey(origin));
+    for(const [c,outputColumn] of layouts.get(origin.sheet).entries()){
+      const original=input[XLSX.utils.encode_cell({r:origin.row-1,c})],change=patch.get(c);
+      if(!original&&!change)continue;
+      if(original?.f!=null&&original.v==null)auditCorrectionFail('FORMULA','A retained metadata formula has no cached value. Recalculate and save the original workbook first.');
+      if(original?.t==='e')auditCorrectionFail('VALUE','A changed equipment row contains an Excel error. Correct the source metadata first.');
+      const cell={...(original||{t:'s',v:''})};
+      for(const key of ['f','F','D','h','r','w','l','c'])delete cell[key];
+      // The style writer treats digit-only formats as format IDs; an empty
+      // literal preserves zero-padding without changing the displayed value.
+      if(/^0{2,}$/.test(cell.z||''))cell.z+='""';
+      if(cell.z)cell.s={...cell.s,numFmt:cell.z};
+      if(change){cell.v=change.value;cell.t=typeof change.value==='number'?'n':typeof change.value==='boolean'?'b':'s';cell.s={...cell.s,fill:yellow};}
+      sheetSetCell(sheet,XLSX.utils.encode_cell({r:index+1,c:outputColumn}),cell);
+    }
+  });
+  sheet['!cols']=columns.map(column=>({wch:Math.min(48,Math.max(18,column.label.length+2))}));
+  styleHeaderRow(sheet);sheetFreezeRows(sheet,1);sheetAutoFilter(sheet,`A1:${auditColumnName(columns.length-1)}${selected.length+1}`);
+  const workbook=XLSX.utils.book_new();addSheet(workbook,sheet,'Upload Template');
+  options.onStage?.(.65,'Packaging changed rows');
+  return new Uint8Array(await workbookBytesCompact(workbook,{onProgress:options.onProgress}));
+}
 export async function exportUpdatedRegistryXlsx(){
   const session=S.session,bytes=session&&session.sourceBytes,baseline=session&&session.baselineSnapshot;
+  const revision=session?.changesRev;
   const changes=(session&&session.changes||[]).map(change=>({...change,...(change.source?{source:{...change.source,columns:{...change.source.columns}}}:{})}));
   if(!bytes){toast('The original workbook is not in memory — load the registry again first');return false;}
   if(!baseline){toast('The original audit baseline is missing; load the registry again first');return false;}
@@ -898,12 +955,13 @@ export async function exportUpdatedRegistryXlsx(){
   try{
     await runWithProgress('Building the updated registry','Checking original cells and staged corrections',async(checkpoint,report)=>{
       report(.05,'Checking every correction against the original workbook');await checkpoint();
-      const updated=await buildUpdatedRegistryBytes(bytes,baseline,changes,{onProgress:async fraction=>{report(.4+fraction*.58,'Packaging the corrected copy');await checkpoint();}});
+      const {bytes:updated}=await prepareAuditReview(session,changes,session.milestoneMigration,false,report,{export:true});await checkpoint();
+      if(S.session!==session||session.changesRev!==revision)throw new Error('The registry changed while exporting. No copy was downloaded.');
       report(1,'Corrected copy ready');downloadBlob(`${base}-Updated-Registry.xlsx`,new Blob([updated],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
     });
     toast(`Updated registry exported: ${changes.length.toLocaleString()} corrections written`);
     return true;
-  }catch(error){toast(error instanceof AuditCorrectionExportError?error.message:'The updated registry could not be built; no corrected copy was exported');return false;}
+  }catch(error){toast(error.message||'The updated registry could not be built; no corrected copy was exported');return false;}
 }
 
 /* Current corrections and the review journal are separate: a reviewed finding

@@ -26,6 +26,11 @@ test('packaged review worker validates large drafts off-thread and reuses its so
   const expected=auditSessionResult(auditApplyCorrections(baseline,[change]));assert.deepEqual(first.prepared.result,expected);
   const changes=[change,auditMakeCorrection(baseline.rows[1],'Dependency Project','')];
   const second=await send({previousChanges:[change],changes});assert.equal(second.reads,1,'original workbook was not reparsed');assert.equal(second.prepared.exportCheck.cellCount,2);assert.equal(second.prepared.snapshot.rows[1].dependencyProject,'');
+  const exported=await send({kind:'export',changes,completedEquipmentIds:[baseline.rows[0].equipmentId]});
+  assert.equal(exported.reads,1,'export reuses the validated source workbook');
+  const output=XLSX.read(exported.prepared.bytes,{type:'array',cellStyles:true}),sheet=output.Sheets['Upload Template'];
+  assert.deepEqual([...output.SheetNames],['Upload Template']);assert.equal(sheet.K2.v,baseline.rows[1].equipmentId);assert.equal(sheet.AO2.v,'');assert.equal(sheet.AO2.s.fgColor.rgb,'FFF2CC');
+  assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,1);
   assert.ok(ticks>0,'the calling thread remains responsive while the worker computes');
   console.log(JSON.stringify({reviewBenchmark:{rows:count,twoReviewsMs:Math.round(performance.now()-started),responsiveTicks:ticks,workbookReads:second.reads}}));
  }finally{clearInterval(timer);await worker.terminate();}

@@ -34,7 +34,7 @@ function fixture(count=32,withStatus=true,bookType='xlsx'){
 
 // Run the exact packaged worker in an isolated JS thread with browser globals.
 // This tests offline processing, not browser UI or URL-policy behavior.
-async function background(bytes,audit=true){
+async function background(bytes,audit=true,referenceKind){
   const thread=new Thread(`const {parentPort,workerData}=require('node:worker_threads');
     const vm=require('node:vm');
     const context=vm.createContext({TextEncoder,Uint8Array,self:{postMessage:(data,transfer)=>parentPort.postMessage(data,transfer)}});
@@ -45,7 +45,7 @@ async function background(bytes,audit=true){
     return await new Promise((resolve,reject)=>{
       thread.on('error',reject);
       thread.on('message',data=>{messages.push(data);if(data.type==='result'||data.type==='error')resolve({data,messages});});
-      thread.postMessage({file:new Blob([bytes]),fileName:'synthetic.xlsx',audit});
+      thread.postMessage({file:new Blob([bytes]),fileName:'synthetic.xlsx',audit,referenceKind});
     });
   }finally{await thread.terminate();}
 }
@@ -74,6 +74,21 @@ test('comparison reference skips audit and does not return workbook bytes',async
   const {data}=await background(fixture(),false);
   assert.equal(data.type,'result');assert.equal(data.rawResult,null);assert.equal(data.status,null);assert.equal(data.bytes,null);
   assert.equal(data.snapshot.rows.length,32);
+});
+
+test('large VF reference is parsed in the worker with reusable sheet results',async()=>{
+  const workbook=XLSX.utils.book_new(),count=10000;
+  for(const [name,rows] of [['VF Current',[['Item Master Name'],...Array.from({length:count},(_,i)=>[`VF_DEMO_TYPE_${i}`])]],['Alternate',[['Item Master Name'],['VF_DEMO_OTHER']]],['Empty',[['Item Master Name']]],['History',[['Item Master Name'],['VF_OLD']]]])XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(rows),name);
+  const bytes=new Uint8Array(XLSX.write(workbook,{type:'array',bookType:'xlsx'}));
+  let ticks=0;const timer=setInterval(()=>ticks++,5);
+  try{
+    const {data,messages}=await background(bytes,false,'itemMasters');
+    assert.equal(data.type,'result');assert.deepEqual(data.references.map(r=>r.sheetName),['VF Current','Alternate','Empty']);
+    assert.equal(data.references[0].entries.length,count);assert.equal(data.references[2].entries.length,0);
+    assert.equal(data.bytes,undefined);assert.equal(data.snapshot,undefined);
+    assert.ok(ticks>3,'main event loop remains available during catalog parsing');
+    assert.equal(messages.filter(m=>m.type==='progress').at(-1).fraction,1);
+  }finally{clearInterval(timer);}
 });
 
 test('bad workbook produces an actionable error instead of a pending import',async()=>{

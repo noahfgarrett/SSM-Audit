@@ -199,6 +199,10 @@ export const SSM_AUDIT_EXAMPLES=Object.freeze(Object.fromEntries([
     rows:[r({...PANEL}),r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'B1-PNL-6041',depProject:'PH2-EXPANSION',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
     focus:[{row:1,field:'dependencyProject'}],
     caption:'Dependency Project names another project, but every dependency on the row is a tag in this registry.',fix:'Clear Dependency Project; it is only for dependencies that live elsewhere.'}),
+  ex('dependency.project-multiple',{
+    rows:[r({id:'B1-AHU-1041',desc:'Air handler',parent:sys('104'),deps:'EXTERNAL-PANEL',depProject:'DEMO-EXTERNAL; DEMO-EXTERNAL',upn:'104',disc:MECH,im:'VF_MD_GAH/GMAH'})],
+    focus:[{row:0,field:'dependencyProject'}],
+    caption:'The same external project is listed twice in Dependency Project.',fix:'Keep one copy of the external project. If the name is the current Project instead, clear the field.'}),
   ex('structure.system-without-root',{
     rows:[r({id:'B1-PMP-1111',desc:'Chilled water pump',parent:'B1-PMP-1112',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'}),r({id:'B1-PMP-1112',desc:'Chilled water pump',parent:'B1-PMP-1111',upn:'111',disc:MECH,im:'VF_Rotating_PUMP'})],
     focus:[{row:0,field:'systemName'},{row:0,field:'closestParent'},{row:1,field:'closestParent'}],

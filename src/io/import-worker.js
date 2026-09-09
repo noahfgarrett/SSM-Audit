@@ -2,6 +2,8 @@ import { auditSnapshotFromWorkbook, auditNormId } from '../audit/model.js'
 import { auditStatusFromWorkbook } from '../audit/status-report.js'
 import { runSsmAudit } from '../audit/engine.js'
 import { auditPrepareInWorker } from '../audit/review.js'
+import { auditReferenceSheets, auditReadReferenceWorkbook } from '../audit/references.js'
+import { buildAuditUpdateRowsBytes } from '../audit/export.js'
 
 const auditReviewWorkerCache={};
 
@@ -10,6 +12,14 @@ const auditReviewWorkerCache={};
 self.onmessage=async({data})=>{
   const report=(fraction,label)=>self.postMessage({type:'progress',fraction,label});
   try{
+    if(data.kind==='export'){
+      if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;}
+      if(!auditReviewWorkerCache.file)throw new Error('Open the original registry before exporting corrections.');
+      report(.02,'Reading original workbook');
+      const source=new Uint8Array(await auditReviewWorkerCache.file.arrayBuffer());
+      const bytes=await buildAuditUpdateRowsBytes(source,auditReviewWorkerCache.baseline,data.changes,{sourceWorkbook:auditReviewWorkerCache.workbook,completedEquipmentIds:data.completedEquipmentIds,onStage:report,onProgress:fraction=>report(.65+fraction*.34,'Packaging corrected copy')});
+      report(1,'Corrected copy ready');self.postMessage({type:'result',prepared:{bytes}},[bytes.buffer]);return;
+    }
     if(data.kind==='review'){
       const prepared=await auditPrepareInWorker(auditReviewWorkerCache,data,report);
       self.postMessage({type:'result',prepared});return;
@@ -18,6 +28,17 @@ self.onmessage=async({data})=>{
     const bytes=new Uint8Array(await data.file.arrayBuffer());
     report(.06,'Opening workbook');
     const workbook=XLSX.read(bytes,{type:'array',dense:true});
+    if(data.referenceKind){
+      report(.2,'Finding reference sheets');
+      const sheets=auditReferenceSheets(workbook,data.referenceKind);
+      if(!sheets.length)throw new Error('No usable reference sheet was found.');
+      const references=sheets.map((name,index)=>{
+        report(.25+index/sheets.length*.65,'Reading reference entries');
+        return auditReadReferenceWorkbook(workbook,data.referenceKind,name);
+      });
+      report(1,'Reference ready');
+      self.postMessage({type:'result',references});return;
+    }
     report(.2,'Reading registry tabs');
     const snapshot=await auditSnapshotFromWorkbook(workbook,data.fileName,null,(fraction,label)=>report(.2+fraction*.45,label));
     report(.68,'Checking completed equipment');

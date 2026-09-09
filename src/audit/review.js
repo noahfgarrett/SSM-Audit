@@ -37,5 +37,5 @@ export async function auditPrepareInWorker(cache,data,report=()=>{}){
   const impact=auditMigrationImpact(auditCorrectionImpact(before.result,result),before.snapshot,snapshot,migration);
   const draftResolvedIds=auditCorrectionImpact(cache.baselineResult,result).resolved.map(f=>f.id);
   cache.previous={key:JSON.stringify(changes),snapshot,result};
-  return {snapshot,result,exportCheck,impact,draftResolvedIds,...(data.migrationChanged?{milestoneMigration:migration,baselineResult:cache.baselineResult}:{})};
+  return {snapshot,result,exportCheck,impact,draftResolvedIds,...(data.migrationChanged?{milestoneMigration:migration}:{}),...(data.migrationChanged||data.referencesChanged?{baselineResult:cache.baselineResult}:{})};
 }

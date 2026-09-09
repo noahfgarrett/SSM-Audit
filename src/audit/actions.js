@@ -119,7 +119,7 @@ for(const [ids,fields] of [
   ['parent.blank parent.self parent.unresolved parent.generated-header-review structure.system-without-root logic.drive-parent-unexpected logic.heat-trace-chain-missing sop.lcp-placement sop.untied-instrument-rollup sop.control-valve-parent sop.room-sensor-parent',['Closest Parent','Dependencies']],
   ['dependency.self dependency.duplicate dependency.same-upn-bottom-up dependency.parent-also-listed dependency.on-header header.has-dependency logic.control-link-missing logic.driven-electrical-path-missing logic.control-electrical-path-missing logic.rio-control-path-missing sop.vfd-dependencies logic.fdu-supported-equipment-missing logic.vesda-fire-alarm-missing',['Dependencies']],
   ['dependency.unresolved',['Dependencies','Dependency Project']],
-  ['dependency.project-not-needed',['Dependency Project']],
+  ['dependency.project-not-needed dependency.project-multiple',['Dependency Project']],
   ['metadata.upn-not-approved metadata.misc-upn-review metadata.system-upn-mismatch metadata.upn-inconsistent metadata.ic-discipline',['UPN','System Name','Discipline']],
   ['milestone.incomplete-pair milestone.l2-upn-mismatch milestone.l2-upn-unknown milestone.intent-mismatch milestone.parent-inconsistent milestone.local-cohort-outlier milestone.level-field-mismatch milestone.branch-outlier reference.milestone-parent-missing reference.milestone-parent-mismatch reference.milestone-unknown reference.milestone-ambiguous',['L1 Milestone Parent','L2 Milestone']],
   ['item-master.standardized-assignment item-master.migration-advisory header.item-master-not-blank',['Item Master Unique Identifier']],
@@ -228,14 +228,21 @@ export function auditProposeCorrection(finding,context){
       const seen=new Set();const refs=auditSplitReferences(row.dependencies).filter(tag=>{const key=auditNormId(tag);if(key===auditNormId(row.equipmentId)||seen.has(key))return false;seen.add(key);return true;});
       add('Dependencies',refs.join('; '));reason='Remove repeated and self-referencing entries while keeping the other dependencies.';confidence='Direct check';
     }else if(finding.rule.id==='dependency.project-not-needed'){
-      add('Dependency Project','');reason='All listed dependencies resolve inside this registry. Confirm no external project is intended.';
+      add('Dependency Project','');reason='This field repeats the current project or the dependencies resolve inside this registry. Confirm no external project is intended.';
+    }else if(finding.rule.id==='dependency.project-multiple'){
+      const names=clean(row.dependencyProject).split(';').map(clean).filter(Boolean),unique=new Map(names.map(name=>[auditNormId(name),name]));
+      if(unique.size!==1)return null;
+      const own=auditNormId(row.project),[key,value]=[...unique][0];
+      add('Dependency Project',own&&key===own?'':value);reason=own&&key===own?'Repeated entries name the current project. Clear this field while retaining Dependencies.':'The same external project is repeated. Keep one copy; confirm the external project is correct.';
     }else if(['milestone.local-cohort-outlier','milestone.branch-outlier'].includes(finding.rule.id)){
       const candidate=(finding.rule.id==='milestone.branch-outlier'?context.branches:context.cohorts).get(auditSourceKey(row));if(!candidate)return null;
       add('L2 Milestone',candidate.expectedMilestone);add('L1 Milestone Parent',candidate.expectedParent);
       reason=`${candidate.agreementCount} comparable records agree on this pair. Confirm this equipment is in the same phase.`;
-    }else if(finding.rule.id==='item-master.standardized-assignment'){
-      const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,VF_ITEM_MASTER_NAMES);if(candidates.length!==1)return null;
-      add('Item Master Unique Identifier',candidates[0]);reason='One standardized name has the same functional name. Confirm checklist compatibility; the site prefix alone is not an error.';
+    }else if(['item-master.standardized-assignment','item-master.migration-advisory'].includes(finding.rule.id)){
+      const catalog=context.references?.itemMasters;
+      const vocabulary=catalog?catalog.entries.map(entry=>entry.name):VF_ITEM_MASTER_NAMES;
+      const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,vocabulary);if(candidates.length!==1)return null;
+      add('Item Master Unique Identifier',candidates[0]);reason=`One VF name matches the ending of the current name in ${catalog?'the selected catalog':'the built-in list'}. Leading site text is ignored by this match; confirm the full equipment function and checklist compatibility before replacing it. Migration is optional.`;
     }else if(finding.field==='Closest Parent'&&auditActionPolicy(finding).fields.includes('Closest Parent')){
       const parents=auditParentRecommendations(row,context);if(parents.length!==1)return null;
       return auditCustomCorrection(finding,parents[0].tag,context,parents[0].reason+' Confirm the served equipment.');

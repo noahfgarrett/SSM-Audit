@@ -1,4 +1,4 @@
-export function importAuditWorkbook(file,{audit=true,report=()=>{}}={}){
+export function importAuditWorkbook(file,{audit=true,referenceKind,report=()=>{}}={}){
   return new Promise((resolve,reject)=>{
     let worker,url,settled=false;
     const finish=(error,result)=>{
@@ -20,12 +20,12 @@ export function importAuditWorkbook(file,{audit=true,report=()=>{}}={}){
       };
       worker.onerror=event=>{event.preventDefault?.();finish(new Error('Background workbook processing failed. Try reopening the app in a current browser.'));};
       worker.onmessageerror=()=>finish(new Error('Could not receive the workbook results. Try reopening the app.'));
-      worker.postMessage({file,fileName:file.name,audit});
+      worker.postMessage({file,fileName:file.name,audit,...(referenceKind?{referenceKind}:{})});
     }catch(error){finish(error);}
   });
 }
 
-export function prepareAuditReview(session,changes,migration,migrationChanged,report=()=>{}){
+export function prepareAuditReview(session,changes,migration,migrationChanged,report=()=>{},options={}){
   return new Promise((resolve,reject)=>{
     let connection=session.reviewWorker,initial=false;
     try{
@@ -48,7 +48,7 @@ export function prepareAuditReview(session,changes,migration,migrationChanged,re
       }
       if(connection.pending)throw new Error('Wait for the current review to finish.');
       connection.pending={resolve,reject,report};
-      connection.worker.postMessage({kind:'review',changes,previousChanges:session.changes||[],references:session.references||{},migration,migrationChanged,...(initial?{baseline:session.baselineSnapshot,file:new Blob([session.sourceBytes||new Uint8Array()])}:{})});
+      connection.worker.postMessage({kind:options.export?'export':'review',changes,previousChanges:session.changes||[],references:options.references||session.references||{},referencesChanged:options.references!==undefined,completedEquipmentIds:options.export?[...(session.status?.completed||[])]:undefined,migration,migrationChanged,...(initial?{baseline:session.baselineSnapshot,file:new Blob([session.sourceBytes||new Uint8Array()])}:{})});
     }catch(error){if(connection?.pending?.reject===reject){connection.pending=null;session.disposeReviewWorker?.();}reject(error);}
   });
 }

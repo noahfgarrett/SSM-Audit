@@ -51,9 +51,13 @@ function reviewHarness(session) {
   }
   const context = vm.createContext({
     S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,auditSessionResult,auditActionEntry,auditActionPolicy,
-    prepareAuditReview:async(s,changes,migration,migrationChanged,report)=>{
+    importAuditWorkbook:async(file,{referenceKind})=>{
+      const workbook=XLSX.read(file.bytes,{type:'array',dense:true});
+      return {references:auditReferenceSheets(workbook,referenceKind).map(name=>auditReadReferenceWorkbook(workbook,referenceKind,name))};
+    },
+    prepareAuditReview:async(s,changes,migration,migrationChanged,report,options={})=>{
       if(changes.length)calls.preflight++;
-      return auditPrepareInWorker(reviewCache,{changes,previousChanges:s.changes||[],references:s.references||{},migration,migrationChanged,...(!reviewCache.baseline?{baseline:s.baselineSnapshot,file:new Blob([s.sourceBytes||new Uint8Array()])}:{})},report);
+      return auditPrepareInWorker(reviewCache,{changes,previousChanges:s.changes||[],references:options.references||s.references||{},referencesChanged:options.references!==undefined,migration,migrationChanged,...(!reviewCache.baseline?{baseline:s.baselineSnapshot,file:new Blob([s.sourceBytes||new Uint8Array()])}:{})},report);
     },
     crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
     auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,auditMilestoneMigrationRows,auditMigrationImpact,
@@ -75,7 +79,7 @@ function reviewHarness(session) {
   vm.runInContext(reviewSource, context, { filename: 'audit-review-helpers.js' })
   vm.runInContext(ui.slice(end,ui.indexOf('\nfunction syncModifyPatternBox(',end)),context)
   vm.runInContext(ui.slice(ui.indexOf('function milestoneMigrationControls('),ui.indexOf('export function renderModifications(')),context)
-  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit,setMilestoneMigration,previewMilestoneMigration})', context)
+  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit,setMilestoneMigration,previewMilestoneMigration,milestoneMigrationControls,reviewMilestoneMappings,wireMilestoneMigration})', context)
   return { context, api, calls, hooks, messages, node, lists }
 }
 
@@ -99,6 +103,31 @@ test('project milestone replacement previews and applies only L1, then restores 
   assert.equal(session.milestoneMigration.enabled,true);
 });
 
+test('milestone mapping summary works while off and reviews every affected row before applying',async()=>{
+  const session=registry({systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope',milestone:'DEMO-L2-M1-20 Equipment scope'}),h=reviewHarness(session);
+  session.milestoneMigration={enabled:false,profile:auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Demo',mappings:[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 New scope'}]})};
+  session.modifySearch='not this equipment';
+  const controls=h.api.milestoneMigrationControls();assert.match(controls,/1 rows with replacements/);assert.doesNotMatch(controls,/disabled/);
+  h.api.wireMilestoneMigration();h.node('#migrationPreview').onclick();
+  assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-01/);assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-02/);assert.match(h.node('#actionModalBody').innerHTML,/1 equipment rows/);
+  assert.equal(session.milestoneMigration.enabled,false);assert.equal(session.changes.length,0);
+  await h.node('#migrationReviewApply').onclick();
+  assert.equal(session.milestoneMigration.enabled,true);assert.equal(session.changes.length,0);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/DEMO-L1-M1-02 New scope/);
+  await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');assert.equal(session.snapshot.rows[0].milestone,'DEMO-L2-M1-20 Equipment scope');
+});
+
+test('missing milestone mapping offers setup instead of a dead checkbox even with both references',()=>{
+  const session=registry(),h=reviewHarness(session);
+  session.references={milestones:{entries:[]},itemMasters:{entries:[]}};
+  assert.doesNotMatch(h.api.milestoneMigrationControls(),/disabled/);
+  h.api.wireMilestoneMigration();const target={checked:true};h.node('#newMilestones').onchange({target});
+  assert.equal(target.checked,false);assert.equal(session.changes.length,0);
+  assert.match(h.node('#actionModalBody').innerHTML,/do not define these replacements/);
+  let picked=false;h.node('#migrationFile').click=()=>{picked=true;};h.node('#migrationReviewLoad').onclick();assert.equal(picked,true);
+});
+
 test('metadata target switch preserves edits and applies to the chosen parent row',async()=>{
   const session=registry({systemName:system,building:'DEMO-A',closestParent:'PARENT'},[{equipmentId:'PARENT',building:'DEMO-B',upn:'602',systemName:system,discipline:'ELECTRICAL',closestParent:system}]);
   const h=reviewHarness(session),child={value:'child'},parent={value:'parent'};h.lists.set('input[name="actionTarget"]',[child,parent]);
@@ -112,6 +141,29 @@ test('metadata target switch preserves edits and applies to the chosen parent ro
   parent.onchange();await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
   assert.equal(session.snapshot.rows[0].building,'DEMO-A');assert.equal(session.snapshot.rows[1].building,'DEMO-A');assert.equal(session.changes[0].tag,'PARENT');
   assert.equal(session.snapshot.rows[0].closestParent,'PARENT');assert.match(h.node('#actionModalBody').innerHTML,/Changes applied/);
+});
+
+test('catalog migration proposes a VF replacement and applies only its Item Master cell',async()=>{
+  const session=registry({systemName:system,itemMaster:'CAMPUS_DEMO_EL_PANEL'}),h=reviewHarness(session);
+  const catalog=auditReadReferenceAoa([['Item Master Name'],['VF_EL_PANEL']],'itemMasters','VF Current');
+  session.references={itemMasters:catalog};session.rawResult=auditSessionResult(session.snapshot,session.references);session.baselineResult=session.rawResult;
+  const issue=session.rawResult.findings.find(f=>f.rule.id==='item-master.migration-advisory');assert.ok(issue);
+  h.api.openActionDialog('Optional VF migration',[issue]);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/value="VF_EL_PANEL"/);
+  await h.node('#actionApply').onclick();assert.equal(session.snapshot.rows[0].itemMaster,'CAMPUS_DEMO_EL_PANEL');
+  await h.node('#actionApply').onclick();assert.equal(session.snapshot.rows[0].itemMaster,'VF_EL_PANEL');
+  assert.deepEqual(session.changes.map(c=>c.field),['Item Master Unique Identifier']);
+  assert.equal(session.baselineSnapshot.rows[0].itemMaster,'CAMPUS_DEMO_EL_PANEL');
+  assert.ok(!session.rawResult.findings.some(f=>f.rule.id==='item-master.migration-advisory'));
+});
+test('bulk action preparation shows progress and yields before displaying editable blanks',async()=>{
+  const session=registry({systemName:system,dependencyProject:'DEMO',project:'DEMO'}),h=reviewHarness(session);
+  const issue=session.rawResult.findings.find(f=>f.rule.id==='dependency.project-not-needed');assert.ok(issue);
+  const findings=Array.from({length:2872},(_,i)=>({...issue,id:`bulk-${i}`}));
+  await h.api.openActionDialog('Clear project',findings);
+  assert.ok(h.calls.progress>0);assert.ok(h.calls.checkpoints>20);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/value=""/);
+  assert.equal(session.reviewBusy,false);assert.equal(session.changes.length,0);
 });
 
 test('Actions show the issue and editable drive corrections, preview all cells, then confirm success',async()=>{
@@ -390,7 +442,7 @@ for (const kind of ['itemMasters', 'milestones']) {
     await harness.node('#referencesApply').onclick()
     assert.deepEqual(structuredClone(session), before)
     assert.equal(session.references[kind], current)
-    assert.equal(harness.calls.progress, 0, 'empty references must fail before any re-audit')
+    assert.equal(harness.calls.progress, 1, 'only the import ran; empty references must fail before any re-audit')
     assert.equal(harness.calls.refresh, 0)
     assert.match(harness.messages.at(-1), /current entries/i)
     assert.equal(harness.node('#referencesApply').disabled, false)

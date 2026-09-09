@@ -2277,3 +2277,9 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .completed-row[data-completed-open]{cursor:pointer}
 .completed-row[data-completed-open]:focus-visible{outline:2px solid var(--accent-400);outline-offset:-2px}
 .completed-row[data-completed-open]:hover .completed-tag{color:var(--accent-700)}
+.modify-rule-label{min-width:0;overflow-wrap:anywhere}
+.modify-rule-label>b{font-size:11.5px;font-weight:600;color:var(--ink)}
+.modify-im-status{display:block;margin-top:4px;color:var(--ink-2);font-size:12px;font-weight:400}
+.modify-im-swap{display:grid;gap:4px;padding:8px 0;font-size:12px;line-height:1.5;overflow-wrap:anywhere;color:var(--ink-2)}
+.modify-pattern>.modify-im-swap{padding:0 16px 12px 42px}
+.modify-im-swap b{font-weight:600;color:var(--ink)}

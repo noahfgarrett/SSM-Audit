@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.40.0",
+    "date": "2026-09-09",
+    "type": "feature",
+    "notes": "- Improved action reviews and suggested changes\n- Improved loading responsiveness and updated exports"
+  },
+  {
     "version": "1.39.7",
     "date": "2026-09-09",
     "type": "fix",
