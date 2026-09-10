@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import {readFileSync} from 'node:fs'
 import {esc} from '../src/core/text.js'
+import {auditActionPatternKey} from '../src/audit/actions.js'
 
 const source=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
 function harness(){
@@ -15,7 +16,7 @@ function harness(){
   const session={excluded:new Set(),changes:[{tag:'DEMO-1',field:'Building',value:'DEMO-B'}],snapshot:{rows:[{equipmentId:'DEMO-1',building:'DEMO-B'}]},rawResult:{findings}};
   const nodes=new Map(),messages=[],calls={refresh:0,counts:0};
   const node=selector=>{if(!nodes.has(selector)){const classes=new Set();nodes.set(selector,{innerHTML:'',checked:true,disabled:false,classList:{toggle:(name,on)=>on?classes.add(name):classes.delete(name),contains:name=>classes.has(name)}});}return nodes.get(selector);};
-  const context=vm.createContext({S:{session},esc,isExcludedId:id=>session.excluded.has(id),modifyPatternMap:new Map(),modifyPatternKey:(_rule,why)=>why,
+  const context=vm.createContext({S:{session},esc,auditActionPatternKey,isExcludedId:id=>session.excluded.has(id),modifyPatternMap:new Map(),modifyPatternKey:(_rule,why)=>why,
     modifyAmount:value=>String(value),modifyHighlight:esc,modifyPctBtn:()=>'',modifyItemMasterSwap:()=>'',ic:name=>`<i>${name}</i>`,SEVERITY_LABELS:{error:'Invalid'},
     $:node,$$:()=>[],saveExcluded:()=>{session.reviewDirty=true;},refreshSessionResult:()=>{calls.refresh++;},updateModifyCounts:()=>{calls.counts++;},toast:message=>messages.push(message)});
   vm.runInContext(source.slice(source.indexOf('function modifyActiveFindings('),source.indexOf('function modifyFillPatternRows(')),context);

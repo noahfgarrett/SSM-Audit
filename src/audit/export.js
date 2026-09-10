@@ -7,6 +7,7 @@ import { prepareAuditReview } from '../io/import-client.js'
 import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
 import { auditColumnName, auditNormId } from './model.js'
+import { auditActionPatternKey } from './actions.js'
 
 function addSheet(workbook,sheet,name){XLSX.utils.book_append_sheet(workbook,sheet,name);}
 function printable(value){return typeof value==='string'?value:JSON.stringify(value);}
@@ -907,6 +908,12 @@ export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,opt
   const layouts=new Map(),columns=[],columnMap=new Map();
   for(const row of selected){
     const name=row._source.sheet;if(layouts.has(name))continue;
+    if(options.uploadTemplate){
+      if(!columns.length)columns.push(...EXTO_REV21_COLUMNS.map(column=>({label:column.header})));
+      const layout=[];
+      for(const column of EXTO_REV21_COLUMNS){const c=row._source.columns?.[column.field];if(c!=null)layout[c]=column.index;}
+      layouts.set(name,layout);continue;
+    }
     const sheet=source.Sheets[name],snapshot=snapshots.get(name),header=snapshot?.headerRow;
     if(!header)auditCorrectionFail('HEADER','The original registry header location is unavailable.');
     const last=XLSX.utils.decode_range(sheet['!ref']).e.c,layout=[],occurrences=new Map();
@@ -924,6 +931,7 @@ export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,opt
   selected.forEach((row,index)=>{
     const origin=row._source,input=source.Sheets[origin.sheet],patch=byRow.get(auditCorrectionSourceKey(origin));
     for(const [c,outputColumn] of layouts.get(origin.sheet).entries()){
+      if(outputColumn==null)continue;
       const original=input[XLSX.utils.encode_cell({r:origin.row-1,c})],change=patch.get(c);
       if(!original&&!change)continue;
       if(original?.f!=null&&original.v==null)auditCorrectionFail('FORMULA','A retained metadata formula has no cached value. Recalculate and save the original workbook first.');
@@ -938,6 +946,8 @@ export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,opt
       sheetSetCell(sheet,XLSX.utils.encode_cell({r:index+1,c:outputColumn}),cell);
     }
   });
+  // Include every upload column even when the source has no corresponding value.
+  sheet['!ref']=`A1:${auditColumnName(columns.length-1)}${selected.length+1}`;
   sheet['!cols']=columns.map(column=>({wch:Math.min(48,Math.max(18,column.label.length+2))}));
   styleHeaderRow(sheet);sheetFreezeRows(sheet,1);sheetAutoFilter(sheet,`A1:${auditColumnName(columns.length-1)}${selected.length+1}`);
   const workbook=XLSX.utils.book_new();addSheet(workbook,sheet,'Upload Template');
@@ -1011,6 +1021,144 @@ export async function exportAuditCorrectionsXlsx(){
     const workbook=buildAuditCorrectionsWorkbook(session.changes||[],session.reviewHistory||[],{baselineResult:session.baselineResult});
     downloadBlob(`${base}-Corrections.xlsx`,await workbookBlobCompact(workbook));toast('Correction log and review actions exported');return true;
   }catch(_){toast('The correction log could not be built');return false;}
+}
+
+/* ---- Actions workbook: rule sheets own the inputs; Actionable is a live worklist. ---- */
+export function buildAuditActionsWorkbook(result,sessionName,options={}){
+  const workbook=XLSX.utils.book_new(),used=new Set(['index','actionable','_action queue']),byRule=new Map(),bySource=new Map(),byTag=new Map();
+  const excluded=new Set(options.excludedIds||[]),disabled=new Set(options.disabledRules||[]),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
+  for(const row of result.rows||[]){
+    bySource.set(auditCorrectionSourceKey(row._source),row);
+    const id=auditNormId(row.equipmentId),rows=byTag.get(id)||[];rows.push(row);byTag.set(id,rows);
+  }
+  for(const finding of result.findings||[]){
+    if(!finding.rule?.id||excluded.has(finding.id)||disabled.has(finding.rule.id)||completed.has(auditNormId(finding.equipmentId)))continue;
+    let group=byRule.get(finding.rule.id);if(!group){group={rule:finding.rule,patterns:new Map(),count:0};byRule.set(finding.rule.id,group);}
+    const key=auditActionPatternKey(finding),pattern=group.patterns.get(key)||[];pattern.push(finding);group.patterns.set(key,pattern);group.count++;
+  }
+  const groups=[...byRule.values()].sort((a,b)=>natCmp(a.rule.title,b.rule.title));
+  const headers=['Actionable','Actioned','Group','Equipment ID','Description','Finding details','Current value','Expected value','What to do','Field','Closest Parent','Dependencies','UPN','System Name','Discipline','Building','L1 Milestone Parent','L2 Milestone','Level','Actioned By','Notes','Source Sheet','Source Row'];
+  const widths=[12,11,8,30,34,54,38,38,50,24,30,34,9,32,24,20,40,40,15,22,36,24,12];
+  const lastColumn=auditColumnName(headers.length-1),bands=['FFFFFF','F2F2F2'].map(fill=>sheetCellStyle({fill,color:'222222',vertical:'top',wrap:true,align:'left'}));
+  const onWhite=style=>({...style,fill:bands[0].fill});
+  const indexRows=[['SSM Audit - Actions workbook'],[clean(sessionName)],['On rule tabs, check Actionable to add findings to the front worklist. Check Actioned when complete. Progress follows workbook checkmarks only.'],[],['Rule','Groups','Findings','Actioned','Progress']];
+  const sheets=[],queueEntries=[];
+  for(const [groupAt,group] of groups.entries()){
+    group.sheetName=auditExportSheetName(group.rule.title,used);
+    const patterns=[...group.patterns.values()].sort((a,b)=>b.length-a.length||natCmp(a[0].why,b[0].why));
+    const aoa=[[group.rule.title],[group.rule.statement||''],['Index','','Findings',group.count,'Actioned',0,'Progress',0],[],headers];
+    const shading=[];
+    for(const [patternAt,findings] of patterns.entries()){
+      findings.sort((a,b)=>natCmp(a.equipmentId,b.equipmentId)||natCmp(a.sheet,b.sheet)||(a.row||0)-(b.row||0));
+      for(const finding of findings){
+        const candidates=byTag.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditCorrectionSourceKey(finding))||(candidates.length===1?candidates[0]:{});
+        aoa.push([AUDIT_EXPORT_UNTICKED,AUDIT_EXPORT_UNTICKED,patternAt+1,clean(finding.equipmentId),clean(row.equipmentDescription),clean(finding.why),printable(finding.actual)??'',printable(finding.expected)??'',clean(finding.recommendation),clean(finding.field),clean(row.closestParent),clean(row.dependencies),clean(row.upn),clean(row.systemName),clean(row.discipline),clean(row.building),clean(row.milestoneParent),clean(row.milestone),AUDIT_EXPORT_SEVERITY_LABELS[finding.severity]||finding.severity,'','',clean(finding.sheet),finding.row||'']);
+        queueEntries.push({sheetName:group.sheetName,row:aoa.length,rule:group.rule.title});
+        shading.push(patternAt%2);
+      }
+    }
+    const sheet=XLSX.utils.aoa_to_sheet(aoa),end=aoa.length;
+    sheet['!cols']=widths.map(wch=>({wch}));sheet['!rows']=[{hpt:28},{hpt:42},{hpt:24},{hpt:8},{hpt:30}];
+    sheet['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:7}}];
+    for(let r=0;r<4;r++)for(let c=0;c<headers.length;c++)sheetStyleCell(sheet,XLSX.utils.encode_cell({r,c}),bands[0]);
+    sheetStyleCell(sheet,'A1',onWhite(AUDIT_EXPORT_STYLES.title));sheetStyleCell(sheet,'A2',onWhite({...AUDIT_EXPORT_STYLES.note,alignment:{wrapText:true,vertical:'top'}}));
+    sheetStyleCell(sheet,'A3',onWhite(AUDIT_EXPORT_STYLES.back));sheetLinkCell(sheet,'A3',"#'Index'!A1",'Back to the index');
+    sheetSetCell(sheet,'F3',sheetFormulaCell(`COUNTIF(B6:B${end},"${AUDIT_EXPORT_TICK}")`,0,onWhite(AUDIT_EXPORT_STYLES.number)));
+    sheetSetCell(sheet,'H3',sheetFormulaCell('IFERROR(F3/D3,0)',0,onWhite(AUDIT_EXPORT_STYLES.percent)));
+    auditExportHeaderRow(sheet,5,headers,headers.map((_,at)=>at<2?'center':'left'));
+    for(let r=5;r<aoa.length;r++){
+      const band=bands[shading[r-5]];
+      for(let c=0;c<headers.length;c++)sheetStyleCell(sheet,XLSX.utils.encode_cell({r,c}),c<3?{...band,alignment:{...band.alignment,horizontal:'center'}}:band);
+      sheet['!rows'][r]={hpt:Math.min(240,Math.max(42,...aoa[r].map((value,c)=>Math.ceil(String(value).length/Math.max(8,widths[c]-3))*14+8)))};
+    }
+    sheetFreezeRows(sheet,5);sheetAutoFilter(sheet,`A5:${lastColumn}${end}`);
+    sheetXmlExtras(sheet,{dataValidations:[auditExportTickValidation(`A6:B${end}`)],conditionalFormatting:[`<conditionalFormatting sqref="B6:B${end}"><cfRule type="expression" dxfId="0" priority="1"><formula>$B6="${AUDIT_EXPORT_TICK}"</formula></cfRule></conditionalFormatting>`]});
+    sheets.push({sheet,name:group.sheetName});
+    indexRows.push([group.rule.title,patterns.length,group.count,0,0]);
+    options.onProgress?.((groupAt+1)/Math.max(1,groups.length));
+  }
+  if(!groups.length)indexRows.push(['No active findings in this selection']);
+  const index=XLSX.utils.aoa_to_sheet(indexRows);index['!cols']=[{wch:62},{wch:12},{wch:12},{wch:12},{wch:14}];
+  index['!rows']=[{hpt:30},{hpt:24},{hpt:36},{hpt:8},{hpt:26}];
+  index['!merges']=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}},{s:{r:2,c:0},e:{r:2,c:4}}];
+  for(let r=0;r<4;r++)for(let c=0;c<5;c++)sheetStyleCell(index,XLSX.utils.encode_cell({r,c}),bands[0]);
+  sheetStyleCell(index,'A1',onWhite(AUDIT_EXPORT_STYLES.title));sheetStyleCell(index,'A2',onWhite(AUDIT_EXPORT_STYLES.subtitle));sheetStyleCell(index,'A3',onWhite({...AUDIT_EXPORT_STYLES.note,alignment:{wrapText:true}}));
+  auditExportHeaderRow(index,5,indexRows[4],['left','right','right','right','right']);
+  for(const [at,group] of groups.entries()){
+    const r=at+6,ref=auditExportSheetRef(group.sheetName);index['!rows'][r-1]={hpt:34};
+    for(let c=0;c<5;c++)sheetStyleCell(index,`${auditColumnName(c)}${r}`,bands[at%2]);
+    sheetLinkCell(index,`A${r}`,`#${ref}!A1`,group.rule.title);
+    sheetSetCell(index,`D${r}`,sheetFormulaCell(`${ref}!F3`,0,bands[at%2]));
+    sheetSetCell(index,`E${r}`,sheetFormulaCell(`IFERROR(D${r}/C${r},0)`,0,{...bands[at%2],numFmt:'0%'}));
+  }
+  sheetFreezeRows(index,5);sheetAutoFilter(index,`A5:E${indexRows.length}`);
+  const {actionable,queue}=auditActionsWorklist(queueEntries,bands);
+  workbook.Dxfs=[...AUDIT_EXPORT_DXFS];addSheet(workbook,actionable,'Actionable');addSheet(workbook,index,'Index');for(const {sheet,name} of sheets)addSheet(workbook,sheet,name);
+  if(queue){
+    addSheet(workbook,queue,'_Action queue');
+    workbook.Workbook={...(workbook.Workbook||{}),Sheets:workbook.SheetNames.map(name=>({name,Hidden:name==='_Action queue'?1:0}))};
+  }
+  return workbook;
+}
+
+function auditActionsWorklist(entries,bands){
+  const onWhite=style=>({...style,fill:bands[0].fill});
+  const headers=['Equipment ID','Rule','Finding details','Current value','Expected value','What to do','Discipline','L2 Milestone','Rule tab / row','Notes'];
+  const actionable=XLSX.utils.aoa_to_sheet([
+    ['Actionable'],['Select Actionable on a rule tab to add a finding here. Mark Actioned on that rule tab when complete. This worklist updates automatically; edit only the rule tabs.'],
+    ['Pending',0,'Index'],[],headers,
+  ]);
+  actionable['!cols']=[30,38,54,32,32,50,24,38,38,36].map(wch=>({wch})).concat([{hidden:true}]);
+  actionable['!rows']=[{hpt:30},{hpt:36},{hpt:24},{hpt:8},{hpt:30}];
+  actionable['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+  for(let r=0;r<4;r++)for(let c=0;c<10;c++)sheetStyleCell(actionable,XLSX.utils.encode_cell({r,c}),bands[0]);
+  sheetStyleCell(actionable,'A1',onWhite(AUDIT_EXPORT_STYLES.title));sheetStyleCell(actionable,'A2',onWhite({...AUDIT_EXPORT_STYLES.note,alignment:{wrapText:true,vertical:'top'}}));
+  sheetStyleCell(actionable,'C3',onWhite(AUDIT_EXPORT_STYLES.back));sheetLinkCell(actionable,'C3',"#'Index'!A1",'Browse rule tabs');
+  auditExportHeaderRow(actionable,5,headers);sheetFreezeRows(actionable,5);
+  if(!entries.length){sheetSetCell(actionable,'A6',{t:'s',v:'No active findings in this selection'});return {actionable};}
+  const queue=XLSX.utils.aoa_to_sheet([['Pending rank',...headers],[0]]),last=entries.length+2,stride=entries.length+1;
+  // Strictly increasing ranks avoid duplicate lookup keys and quadratic range scans.
+  // A selected row advances by stride plus one; all other rows advance by one.
+  for(const [at,entry] of entries.entries()){
+    const r=at+3,ref=auditExportSheetRef(entry.sheetName),source=entry.row;
+    sheetSetCell(queue,`A${r}`,sheetFormulaCell(`A${r-1}+IF(AND(${ref}!A${source}="${AUDIT_EXPORT_TICK}",${ref}!B${source}<>"${AUDIT_EXPORT_TICK}"),${stride},0)+1`,at+1));
+    const columns=['D',null,'F','G','H','I','O','R',null,'U'];
+    columns.forEach((column,c)=>{
+      const address=`${auditColumnName(c+1)}${r}`;
+      if(column){const cell=`${ref}!${column}${source}`;sheetSetCell(queue,address,{t:'s',v:'',f:`IF(${cell}="","",${cell})`});}
+      else sheetSetCell(queue,address,{t:'s',v:c===1?entry.rule:`${entry.sheetName} / row ${source}`});
+    });
+    sheetSetCell(queue,`L${r}`,{t:'s',v:`#${ref}!A${source}`});
+  }
+  sheetSetCell(actionable,'B3',sheetFormulaCell(`INT('_Action queue'!A${last}/${stride})`,0,onWhite(AUDIT_EXPORT_STYLES.number)));
+  for(let at=0;at<entries.length;at++){
+    const r=at+6,band=bands[at%2];
+    sheetSetCell(actionable,`K${r}`,sheetFormulaCell(`IF(ROWS($A$6:A${r})<=$B$3,MATCH(ROWS($A$6:A${r})*${stride},'_Action queue'!$A$2:$A$${last},1)+1,0)`,0));
+    for(let c=0;c<headers.length;c++){
+      const col=auditColumnName(c+1),value=`INDEX('_Action queue'!$${col}$2:$${col}$${last},$K${r})`;
+      const display=c===8?`HYPERLINK(INDEX('_Action queue'!$L$2:$L$${last},$K${r}),${value})`:value;
+      sheetSetCell(actionable,`${auditColumnName(c)}${r}`,{t:'s',v:'',f:`IF($K${r}=0,"",${display})`,s:band});
+    }
+    actionable['!rows'][r-1]={hpt:68};
+  }
+  return {actionable,queue};
+}
+
+export async function exportActionsXlsx(findings){
+  const session=S.session;if(!session?.rawResult){toast('Run an SSM Audit first');return false;}
+  const revision=session.changesRev,excludedRev=session.excludedRev;
+  const result={...session.rawResult,rows:session.snapshot.rows,findings:findings||session.result.findings};
+  const options={excludedIds:[...(session.excluded||[])],disabledRules:[...(S.rules.disabled||[])],completedEquipmentIds:[...(session.status?.completed||[])]};
+  const base=clean(session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  try{
+    await runWithProgress('Exporting Actions','Preparing rule-by-rule review sheets',async(checkpoint,report)=>{
+      await checkpoint();
+      const {bytes}=await prepareAuditReview(session,session.changes,session.milestoneMigration,false,report,{actionsWorkbook:{result,sessionName:session.name,options}});
+      await checkpoint();if(S.session!==session||session.changesRev!==revision||session.excludedRev!==excludedRev)throw new Error('The review changed while exporting. Please export again.');
+      downloadBlob(`${base}-Actions.xlsx`,new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    });
+    toast('Actions workbook exported');return true;
+  }catch(error){toast(error.message||'The Actions workbook could not be built');return false;}
 }
 
 /* ---- Tracker Export ----

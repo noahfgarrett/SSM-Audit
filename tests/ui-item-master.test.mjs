@@ -3,10 +3,11 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import {readFileSync} from 'node:fs'
 import {clean,esc} from '../src/core/text.js'
+import {auditActionPatternKey} from '../src/audit/actions.js'
 const source=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
 test('migration status and matching groups display distinct current-to-VF pairs',()=>{
  const session={references:{itemMasters:{entries:[{name:'VF_EL_PANEL'},{name:'VF_EL_PUMP'}]}}};
- const context=vm.createContext({S:{session},clean,esc,modifySuggestedFix:f=>f.expected?{changes:[{prop:'itemMaster',before:f.actual,value:f.expected}]}:null,modifyPatternKey:(_id,key)=>key});
+ const context=vm.createContext({S:{session},clean,esc,auditActionPatternKey,modifySuggestedFix:f=>f.expected?{changes:[{prop:'itemMaster',before:f.actual,value:f.expected}]}:null,modifyPatternKey:(_id,key)=>key});
  vm.runInContext(source.slice(source.indexOf('function modifyItemMasterSwap('),source.indexOf('/* Findings with the same explanation')),context);
  vm.runInContext(source.slice(source.indexOf('function modifyPatterns('),source.indexOf('function modifyPatternCountText(')),context);
  const api=vm.runInContext('({modifyItemMasterSwap,modifyItemMasterCatalogStatus,modifyPatterns})',context),rule={id:'item-master.migration-advisory'};

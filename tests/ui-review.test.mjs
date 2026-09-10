@@ -154,6 +154,37 @@ test('metadata target switch preserves edits and applies to the chosen parent ro
   assert.equal(session.snapshot.rows[0].closestParent,'PARENT');assert.match(h.node('#actionModalBody').innerHTML,/Changes applied/);
 });
 
+test('group editor defaults to bulk and preserves individual overrides and child-parent drafts',async()=>{
+  const parentRow={equipmentId:'PARENT',building:'DEMO-B',upn:'602',systemName:system,discipline:'ELECTRICAL',closestParent:system};
+  const childRow={equipmentId:'EQ-2',building:'DEMO-A',upn:'602',systemName:system,discipline:'ELECTRICAL',closestParent:'PARENT'};
+  const session=registry({systemName:system,building:'DEMO-A',closestParent:'PARENT'},[childRow,parentRow]);
+  const h=reviewHarness(session),bulk={dataset:{actionMode:'bulk'}},individual={dataset:{actionMode:'individual'}},child={value:'child'},parent={value:'parent'};
+  h.lists.set('[data-action-mode]',[bulk,individual]);h.lists.set('input[name="actionTarget"]',[child,parent]);
+  const issues=session.rawResult.findings.filter(f=>f.rule.id==='parent.cross-building');assert.equal(issues.length,2);
+  await h.api.openActionDialog('Building mismatch',issues);
+  assert.match(h.node('#actionModalBody').innerHTML,/data-action-mode="bulk" aria-selected="true"/);
+  assert.match(h.node('#actionModalBody').innerHTML,/data-action-bulk="building"[^>]*value="DEMO-B"/);
+  h.node('#actionBulkFields').oninput({target:{closest:()=>({dataset:{actionBulk:'building'},value:'DEMO-C'})}});
+  individual.onclick();assert.equal((h.node('#actionPreviewRows').innerHTML.match(/value="DEMO-C"/g)||[]).length,2);
+  h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'1',actionCell:'0'},value:'DEMO-D'})}});
+  bulk.onclick();assert.match(h.node('#actionModalBody').innerHTML,/Mixed suggestions/);
+  individual.onclick();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-D"/);
+  bulk.onclick();parent.onchange();assert.match(h.node('#actionModalBody').innerHTML,/1 affected parent rows/);
+  child.onchange();individual.onclick();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-C"/);assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-D"/);
+  parent.onchange();await h.node('#actionApply').onclick();assert.equal(session.changes.length,0);
+  await h.node('#actionApply').onclick();assert.deepEqual(session.snapshot.rows.map(r=>r.building),['DEMO-A','DEMO-A','DEMO-A']);
+  assert.equal(session.changes.length,1);assert.equal(session.changes[0].tag,'PARENT');
+});
+
+test('bulk edit applies the shared value to every selected child only after confirmation',async()=>{
+  const session=registry({systemName:system,dependencyProject:'DEMO',project:'DEMO'},[{equipmentId:'EQ-2',systemName:system,upn:'602',project:'DEMO',dependencyProject:'DEMO',discipline:'ELECTRICAL',building:'DEMO'}]);
+  const h=reviewHarness(session),issues=session.rawResult.findings.filter(f=>f.rule.id==='dependency.project-not-needed');assert.equal(issues.length,2);
+  await h.api.openActionDialog('Clear dependency project',issues);
+  h.node('#actionBulkFields').oninput({target:{closest:()=>({dataset:{actionBulk:'dependencyProject'},value:''})}});
+  await h.node('#actionApply').onclick();assert.equal(session.changes.length,0);
+  await h.node('#actionApply').onclick();assert.deepEqual(session.snapshot.rows.map(r=>r.dependencyProject),['','']);assert.equal(session.changes.length,2);
+});
+
 test('catalog migration proposes a VF replacement and applies only its Item Master cell',async()=>{
   const session=registry({systemName:system,itemMaster:'CAMPUS_DEMO_EL_PANEL'}),h=reviewHarness(session);
   const catalog=auditReadReferenceAoa([['Item Master Name'],['VF_EL_PANEL']],'itemMasters','VF Current');
@@ -175,6 +206,37 @@ test('bulk action preparation shows progress and yields before displaying editab
   assert.ok(h.calls.progress>0);assert.ok(h.calls.checkpoints>20);
   assert.match(h.node('#actionPreviewRows').innerHTML,/value=""/);
   assert.equal(session.reviewBusy,false);assert.equal(session.changes.length,0);
+});
+
+test('large L1 reviews yield with controls locked before merging and validating every change',async()=>{
+  const values={systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope',milestone:'DEMO-L2-M1-10'};
+  const session=registry(values,Array.from({length:499},(_,i)=>({...values,equipmentId:`EQ-${i+2}`,building:'DEMO',upn:'602',discipline:'ELECTRICAL',closestParent:system,equipmentDescription:'Electrical panel'}))),h=reviewHarness(session);
+  session.milestoneMigration={enabled:true,profile:h.context.auditSparrowMilestoneMigration()};
+  await h.api.previewMilestoneMigration();
+  const before=h.calls.checkpoints;let sawLocked=false;
+  h.hooks.checkpoint=()=>{sawLocked||=session.reviewBusy&&h.node('#actionApply').disabled;};
+  await h.node('#actionApply').onclick();
+  assert.ok(sawLocked);assert.ok(h.calls.checkpoints-before>=5);assert.equal(h.calls.preflight,1);
+  assert.match(h.node('#actionModalBody').innerHTML,/500 cells will change/);
+  assert.equal(session.changes.length,0,'review alone must not apply the batch');
+  await h.node('#actionApply').onclick();
+  assert.equal(session.changes.length,500);
+  assert.ok(session.changes.every(change=>change.prop==='milestoneParent'));
+  assert.ok(session.snapshot.rows.every(row=>row.milestone==='DEMO-L2-M1-10'));
+});
+
+test('unchanged reviews reuse audit results but still validate cells and invalidate changed reference context',async()=>{
+  const session=registry(),cache={},changes=[auditMakeCorrection(session.snapshot.rows[0],'System Name',system)];
+  const data={baseline:session.baselineSnapshot,file:new Blob([session.sourceBytes]),changes,previousChanges:[],references:{},migration:{enabled:false,profile:null}};
+  const first=await auditPrepareInWorker(cache,data);
+  const {baseline,file,...repeat}=data;
+  const second=await auditPrepareInWorker(cache,repeat);
+  assert.equal(second.result,first.result);assert.deepEqual(second.impact,first.impact);
+  const third=await auditPrepareInWorker(cache,{...repeat,references:{itemMasters:{entries:[{name:'VF_DEMO'}]}}});
+  assert.notEqual(third.result,first.result);
+  const column=session.baselineSnapshot.rows[0]._source.columns.systemName;
+  cache.workbook.Sheets.Registry[XLSX.utils.encode_cell({r:1,c:column})].v='Conflicting original';
+  await assert.rejects(auditPrepareInWorker(cache,repeat),/original cell value has changed/i);
 });
 
 test('Actions show the issue and editable drive corrections, preview all cells, then confirm success',async()=>{

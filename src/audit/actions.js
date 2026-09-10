@@ -15,6 +15,11 @@ export const AUDIT_ACTION_FIELDS=Object.freeze({
 const AUDIT_ACTION_COLUMNS=new Map(EXTO_REV21_COLUMNS.map(column=>[column.field,column]));
 const AUDIT_ACTION_PROPS=new Set(Object.values(AUDIT_ACTION_FIELDS));
 
+export function auditActionPatternKey(finding){
+  const why=finding.why||'';
+  return ['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule?.id)?JSON.stringify([why,finding.actual,finding.expected]):why;
+}
+
 export function auditCorrectionKey(change){return JSON.stringify([change.source?.sheet||'',change.source?.row||0,change.prop||AUDIT_ACTION_FIELDS[change.field]]);}
 export function auditActionIndex(snapshot){
   const bySource=new Map(),byTag=new Map(),bySystem=new Map();

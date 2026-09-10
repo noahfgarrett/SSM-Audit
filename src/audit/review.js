@@ -27,15 +27,15 @@ export async function auditPrepareInWorker(cache,data,report=()=>{}){
     if(!cache.workbook){const bytes=new Uint8Array(await cache.file.arrayBuffer());if(bytes[0]!==0x50||bytes[1]!==0x4b)throw new Error('Draft corrections require an original XLSX registry.');cache.workbook=XLSX.read(bytes,{type:'array',cellStyles:true});}
     exportCheck=validateAuditCorrections(cache.workbook,baseline,changes);
   }
-  const contextKey=JSON.stringify([references,migration]),previousKey=JSON.stringify(previousChanges);
+  const contextKey=JSON.stringify([references,migration]),previousKey=JSON.stringify(previousChanges),changesKey=JSON.stringify(changes);
   report(.4,'Running audit checks');
   if(cache.contextKey!==contextKey){cache.baselineResult=auditSessionResult(baseline,references,migration);cache.previous=null;cache.contextKey=contextKey;}
   const before=cache.previous?.key===previousKey?cache.previous:{snapshot:auditApplyCorrections(baseline,previousChanges),result:null};
   before.result||=previousChanges.length?auditSessionResult(before.snapshot,references,migration):cache.baselineResult;
-  const result=changes.length?auditSessionResult(snapshot,references,migration):cache.baselineResult;
+  const result=cache.previous?.key===changesKey?cache.previous.result:changes.length?auditSessionResult(snapshot,references,migration):cache.baselineResult;
   report(.85,'Comparing findings');
   const impact=auditMigrationImpact(auditCorrectionImpact(before.result,result),before.snapshot,snapshot,migration);
   const draftResolvedIds=auditCorrectionImpact(cache.baselineResult,result).resolved.map(f=>f.id);
-  cache.previous={key:JSON.stringify(changes),snapshot,result};
+  cache.previous={key:changesKey,snapshot,result};
   return {snapshot,result,exportCheck,impact,draftResolvedIds,...(data.migrationChanged?{milestoneMigration:migration}:{}),...(data.migrationChanged||data.referencesChanged?{baselineResult:cache.baselineResult}:{})};
 }

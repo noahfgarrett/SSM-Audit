@@ -33,3 +33,19 @@ test('Tracker export selector keeps its choice and passes it to the download', a
   await node('#exportGo').onclick()
   assert.deepEqual(downloads, ['discipline', 'milestone'])
 })
+
+test('Actions export modal passes precisely its filtered findings to the Actions download',async()=>{
+  const source=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
+  const start=source.indexOf('function renderExportOptions(){'),end=source.indexOf('\nexport function openExportOptions()',start);
+  const findings=[{id:'selected'}],downloads=[],nodes=new Map();
+  const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:''});return nodes.get(selector);};
+  const context=vm.createContext({S:{session:{exportKind:'actions',result:{findings:[]}}},esc,ic:()=>'', $:node,$$:()=>[],
+    exportPlan:()=>({levels:{},rules:{}}),exportPlanSummary:()=>({}),SSM_AUDIT_SEVERITIES:[],closeExportOptions(){},
+    actionsExportFindings:()=>findings,exportActionsXlsx:async rows=>downloads.push(rows),
+  });
+  vm.runInContext(source.slice(start,end),context);vm.runInContext('renderExportOptions()',context);
+  assert.match(node('#exportModalBody').innerHTML,/1 active findings/);
+  assert.match(node('#exportModalBody').innerHTML,/Check Actionable/);
+  assert.match(node('#exportModalBody').innerHTML,/check Actioned/);
+  await node('#exportGo').onclick();assert.equal(downloads[0],findings);
+});

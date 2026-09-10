@@ -39,7 +39,7 @@ export function animateClose(element,done){
   motionPending.set(element,{onEnd,timer:setTimeout(finish,MOTION_EXIT_MS+140)});
 }
 
-let toastTimer=0;
+let toastTimer=0,progressHideTimer=0;
 export function toast(message){
   const element=$('#toast');if(!element)return;
   element.textContent=message;element.classList.add('show');clearTimeout(toastTimer);
@@ -47,6 +47,7 @@ export function toast(message){
 }
 
 export function showProgress(title,detail=''){
+  clearTimeout(progressHideTimer);
   $('#lmsg').textContent=title;$('#lsub').textContent=detail;$('#lpct').textContent='0';
   $('#lring').style.strokeDashoffset=String(239);animateOpen($('#overlay'));
 }
@@ -56,7 +57,7 @@ export function setProgress(fraction,label){
   $('.ring')?.setAttribute('aria-valuenow',String(percent));
   if(label)$('#lsub').textContent=label;
 }
-export function hideProgress(){setProgress(1);setTimeout(()=>animateClose($('#overlay')),140);}
+export function hideProgress(){setProgress(1);progressHideTimer=setTimeout(()=>animateClose($('#overlay')),140);}
 
 export async function runWithProgress(title,detail,task){
   showProgress(title,detail);

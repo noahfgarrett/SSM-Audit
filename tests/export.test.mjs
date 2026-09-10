@@ -6,8 +6,9 @@ import { readFileSync } from 'node:fs'
 import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditMergeSnapshots, auditSnapshotFromAoa, auditSnapshotFromWorkbook } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
+import { compareSsmRegistries } from '../src/audit/compare.js'
 import { auditMakeCorrection, auditRecommendationContext, auditProposeCorrection, auditApplyCorrections } from '../src/audit/actions.js'
-import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, buildAuditUpdateRowsBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx } from '../src/audit/export.js'
+import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, buildAuditUpdateRowsBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, exportSsmComparisonXlsx, exportSsmAuditXlsx, exportTrackerXlsx } from '../src/audit/export.js'
 import { S, resetSession } from '../src/state.js'
 
 // Package tests use the browser's XML DOM, or @xmldom/xmldom supplied by this
@@ -951,6 +952,39 @@ test('correction export reads session reviewHistory, including review-only physi
   assert.deepEqual(actions[1].slice(6, 15), ['EQ-2', 'System Name', 'Before 2', '', 'Registry', 3, 'J', 'J3', 'review-rule'])
 })
 
+test('comparison download preserves every system, difference and equipment pairing without mutating either registry',async t=>{
+  const {downloads}=captureExportDownloads(t),{snapshot}=correctionFixture(),reference=structuredClone(snapshot),before=JSON.stringify(snapshot);
+  reference.rows[0].equipmentDescription='Different equipment';
+  const previous=S.comparison;t.after(()=>{S.comparison=previous;});
+  const result=compareSsmRegistries(snapshot,reference);
+  S.comparison={result,targetName:'Synthetic target',referenceName:'Synthetic reference'};
+  exportSsmComparisonXlsx();assert.equal(downloads.length,1);
+  const book=XLSX.read(await downloads[0].arrayBuffer(),{type:'array'});
+  assert.deepEqual(book.SheetNames,['Comparison Summary','Systems','Observed Differences','Equipment Mapping']);
+  assert.equal(grid(book.Sheets.Systems).length-1,result.systems.length);
+  assert.equal(grid(book.Sheets['Observed Differences']).length-1,result.systems.reduce((n,s)=>n+s.observations.length,0));
+  const pairs=grid(book.Sheets['Equipment Mapping']).slice(1),expected=result.systems.flatMap(system=>system.pairs);
+  assert.equal(pairs.length,expected.length);
+  assert.deepEqual(pairs.map(row=>[row[3]||'',row[9]||'']),expected.map(pair=>[pair.target?.tag||'',pair.reference?.tag||'']));
+  assert.equal(JSON.stringify(snapshot),before);
+});
+
+test('both audit report layouts and both tracker modes produce downloadable workbooks from the current session',async t=>{
+  const {downloads}=captureExportDownloads(t),result=auditResult();
+  Object.assign(S.session,{name:'Synthetic',result,rawResult:result,baselineResult:result,actioned:new Set(),excluded:new Set()});
+  const before=JSON.stringify(result);
+  for(const layout of ['milestone','level'])await exportSsmAuditXlsx({layout,levels:{},rules:{}});
+  for(const mode of ['milestone','discipline'])await exportTrackerXlsx(mode);
+  assert.equal(downloads.length,4);
+  const books=await Promise.all(downloads.map(async blob=>XLSX.read(await blob.arrayBuffer(),{type:'array'})));
+  for(const book of books.slice(0,2)){
+    assert.equal(book.SheetNames[0],'Dashboard');assert.ok(book.Sheets.Index);assert.ok(book.Sheets.Rules);
+  }
+  for(const book of books.slice(2))assert.deepEqual(book.SheetNames,['Tracker']);
+  assert.notEqual(books[2].Sheets.Tracker.A8.v,books[3].Sheets.Tracker.A8.v);
+  assert.equal(JSON.stringify(result),before);
+});
+
 function packageEntries(bytes) {
   const container = XLSX.CFB.read(new Uint8Array(bytes), { type: 'array' }), entries = new Map()
   container.FullPaths.forEach((path, at) => {
@@ -977,6 +1011,27 @@ test('partial updates retain every metadata column, exclude completed rows and h
  for(let c=0;c<headers.length;c++)if(c!==index.systemName)assert.equal(sheet[XLSX.utils.encode_cell({r:1,c})]?.v,book.Sheets.Registry[XLSX.utils.encode_cell({r:1,c})]?.v);
  assert.deepEqual(new Uint8Array(source),original);
  await assert.rejects(buildAuditUpdateRowsBytes(source,snapshot,changes,{completedEquipmentIds:['EQ-1','EQ-2']}),/No changed, incomplete equipment/);
+});
+test('upload-template updates map reordered columns, retain upload metadata and omit registry extras',async()=>{
+ const ordered=[...EXTO_REV21_COLUMNS].reverse().filter(c=>c.field!=='retainCxSteps');
+ const values=Object.fromEntries(EXTO_REV21_COLUMNS.map(c=>[c.field,`Keep ${c.field}`]));
+ values.equipmentId='EQ-1';values.upn='602';
+ const aoa=[['Registry-only ID',...ordered.map(c=>` ${c.header} `)],['PRIVATE-ID',...ordered.map(c=>values[c.field])],['DONE-ID',...ordered.map(c=>c.field==='equipmentId'?'EQ-2':values[c.field])]];
+ const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+ const source=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'})),original=source.slice();
+ const snapshot=await auditSnapshotFromWorkbook(XLSX.read(source.slice(),{type:'array'}),'');
+ const changes=snapshot.rows.map(row=>auditMakeCorrection(row,'Dependency Project',''));
+ const output=await buildAuditUpdateRowsBytes(source,snapshot,changes,{uploadTemplate:true,completedEquipmentIds:['eq-2']});
+ const result=XLSX.read(output,{type:'array',cellStyles:true}),sheet=result.Sheets['Upload Template'];
+ assert.deepEqual(result.SheetNames,['Upload Template']);assert.deepEqual(grid(sheet)[0],headers);
+ assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,1);
+ for(const column of EXTO_REV21_COLUMNS){
+   const cell=sheet[XLSX.utils.encode_cell({r:1,c:column.index})];
+   assert.equal(cell?.v??'',column.field==='dependencyProject'||column.field==='retainCxSteps'?'':values[column.field],column.header);
+   if(column.field==='dependencyProject')assert.equal(cell.s.fgColor.rgb,'FFF2CC');
+   else assert.notEqual(cell?.s?.fgColor?.rgb,'FFF2CC');
+ }
+ assert.deepEqual(source,original);
 });
 test('partial updates retain cached metadata values and reject unavailable formula results',async()=>{
  const {book,snapshot}=correctionFixture(),column=headers.length,address=XLSX.utils.encode_cell({r:1,c:column});

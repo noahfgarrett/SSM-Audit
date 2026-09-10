@@ -3,7 +3,8 @@ import { auditStatusFromWorkbook } from '../audit/status-report.js'
 import { runSsmAudit } from '../audit/engine.js'
 import { auditPrepareInWorker } from '../audit/review.js'
 import { auditReferenceSheets, auditReadReferenceWorkbook } from '../audit/references.js'
-import { buildAuditUpdateRowsBytes } from '../audit/export.js'
+import { buildAuditUpdateRowsBytes, buildAuditActionsWorkbook } from '../audit/export.js'
+import { workbookBytesCompact } from '../core/download.js'
 
 const auditReviewWorkerCache={};
 
@@ -12,12 +13,21 @@ const auditReviewWorkerCache={};
 self.onmessage=async({data})=>{
   const report=(fraction,label)=>self.postMessage({type:'progress',fraction,label});
   try{
+    if(data.kind==='actions-export'){
+      if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;}
+      const {result,sessionName,options}=data.actionsWorkbook;
+      report(.05,'Grouping action findings');
+      const workbook=buildAuditActionsWorkbook(result,sessionName,{...options,onProgress:fraction=>report(.1+fraction*.55,'Building rule tabs')});
+      report(.65,'Packaging Actions workbook');
+      const bytes=new Uint8Array(await workbookBytesCompact(workbook,{onProgress:fraction=>report(.65+fraction*.34,'Packaging Actions workbook')}));
+      report(1,'Actions workbook ready');self.postMessage({type:'result',prepared:{bytes}},[bytes.buffer]);return;
+    }
     if(data.kind==='export'){
       if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;}
       if(!auditReviewWorkerCache.file)throw new Error('Open the original registry before exporting corrections.');
       report(.02,'Reading original workbook');
       const source=new Uint8Array(await auditReviewWorkerCache.file.arrayBuffer());
-      const bytes=await buildAuditUpdateRowsBytes(source,auditReviewWorkerCache.baseline,data.changes,{sourceWorkbook:auditReviewWorkerCache.workbook,completedEquipmentIds:data.completedEquipmentIds,onStage:report,onProgress:fraction=>report(.65+fraction*.34,'Packaging corrected copy')});
+      const bytes=await buildAuditUpdateRowsBytes(source,auditReviewWorkerCache.baseline,data.changes,{uploadTemplate:true,sourceWorkbook:auditReviewWorkerCache.workbook,completedEquipmentIds:data.completedEquipmentIds,onStage:report,onProgress:fraction=>report(.65+fraction*.34,'Packaging corrected copy')});
       report(1,'Corrected copy ready');self.postMessage({type:'result',prepared:{bytes}},[bytes.buffer]);return;
     }
     if(data.kind==='review'){

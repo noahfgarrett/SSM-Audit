@@ -257,6 +257,7 @@ export function runSsmAudit(snapshot,options={}){
   /* The approved VF Item Master names ship with the app; a caller may pass a
      narrower or newer list, and an explicit empty list disables vocabulary checks. */
   const itemMasterVocabulary=Array.isArray(options.itemMasterVocabulary)?options.itemMasterVocabulary:[...VF_ITEM_MASTER_NAMES];
+  const itemMasterNames=new Set(itemMasterVocabulary.map(auditNormId)),itemMasterCandidates=new Map();
   const add=(rule,severity,row,details)=>{if(rule.enabled)findings.push(auditFinding(rule,severity,row,details));};
   const rowsById=new Map(),duplicates=new Map();
   for(const row of rows){const key=auditNormId(row.equipmentId);if(!key)continue;if(rowsById.has(key)){const list=duplicates.get(key)||[rowsById.get(key)];list.push(row);duplicates.set(key,list);}else rowsById.set(key,row);}
@@ -363,9 +364,10 @@ export function runSsmAudit(snapshot,options={}){
     /* Site names are not invalid solely because of their prefix. A unique
        catalog match is an optional migration lead, not a replacement mandate. */
     if((SSM_AUDIT_RULES.itemMasterStandard.enabled||SSM_AUDIT_RULES.itemMasterMigration.enabled)&&clean(row.itemMaster)){checks++;
-      const im=auditNormId(row.itemMaster),known=itemMasterVocabulary.some(value=>auditNormId(value)===im);
+      const im=auditNormId(row.itemMaster),known=itemMasterNames.has(im);
       if(!known&&!auditIsBlankItemMaster(row)&&itemMasterVocabulary.length){
-        const candidates=auditItemMasterCanonicalCandidates(row.itemMaster,itemMasterVocabulary);
+        let candidates=itemMasterCandidates.get(im);
+        if(!candidates){candidates=auditItemMasterCanonicalCandidates(row.itemMaster,itemMasterVocabulary);itemMasterCandidates.set(im,candidates);}
         if(/^VF\d*(?:_|$)/.test(im))add(SSM_AUDIT_RULES.itemMasterStandard,'warning',row,{field:'Item Master Unique Identifier',
           why:'This VF Item Master name is absent from the approved list available to this audit.',actual:row.itemMaster,expected:'An approved VF Item Master name',recommendation:'Confirm whether this name belongs to a newer approved list, or correct the assignment.'});
         else if(candidates.length===1)add(SSM_AUDIT_RULES.itemMasterMigration,'info',row,{field:'Item Master Unique Identifier',

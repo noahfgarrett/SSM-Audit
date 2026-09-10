@@ -7,11 +7,11 @@ import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIE
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
-import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, validateAuditCorrections } from '../audit/export.js'
+import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, exportActionsXlsx, validateAuditCorrections } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { AUDIT_ACTION_FIELDS, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
@@ -303,16 +303,18 @@ function renderExportOptions(){
   const kind=S.session.exportKind||'actionable';
   const trackerSignOffBy=S.session.trackerSignOffBy==='discipline'?'discipline':'milestone';
   const changesCount=(S.session.changes||[]).length;
+  const actionFindings=kind==='actions'?actionsExportFindings():[];
   const kindTabs=`<div class="export-kinds" role="tablist">
       <button class="export-kind ${kind==='actionable'?'on':''}" type="button" data-export-kind="actionable"><b>Actionable Export</b><small>Findings beside the equipment tree — the working report.</small></button>
+      <button class="export-kind ${kind==='actions'?'on':''}" type="button" data-export-kind="actions"><b>Actions workbook</b><small>One tab per rule, grouped findings and manual checkmarks.</small></button>
       <button class="export-kind ${kind==='updated'?'on':''}" type="button" data-export-kind="updated"><b>Updated Registry</b><small>Changed equipment rows with all metadata and highlighted corrections.</small></button>
       <button class="export-kind ${kind==='corrections'?'on':''}" type="button" data-export-kind="corrections"><b>Correction Log</b><small>Before-and-after values and review decisions.</small></button>
       <button class="export-kind ${kind==='tracker'?'on':''}" type="button" data-export-kind="tracker"><b>Tracker</b><small>Manual team sign-off by milestone or discipline.</small></button>
     </div>`;
   if(kind!=='actionable'){
     $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose the export</h3>${kindTabs}
-      ${kind==='updated'
-        ?`<p class="export-intro">A partial update workbook containing only changed equipment rows, with all original metadata columns and yellow corrected cells. Completed equipment and status/report tabs are omitted. Unchanged metadata formulas use their saved values. Your original workbook stays unchanged. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
+      ${kind==='actions'?`<p class="export-intro">${actionFindings.length.toLocaleString()} active findings using the current Actions search, milestone and discipline filters. Each rule has its own tab with alternating white and light-gray groups. Check Actionable on a rule tab to add a finding to the front worklist; check Actioned when complete to remove it from the pending list and update progress. Dismissed and completed findings are omitted. Checkmarks start empty and do not sync back to the app.</p>`:kind==='updated'
+        ?`<p class="export-intro">A partial update workbook containing only changed equipment rows, in the exact upload-template column order, with yellow corrected cells. Available upload metadata is retained; missing fields stay blank. Registry-only columns, completed equipment and status/report tabs are omitted. Unchanged metadata formulas use their saved values. Your original workbook stays unchanged. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
         :kind==='corrections'?`<p class="export-intro">Current corrections and review history, including reviewer, note, source row, and before-and-after values. Draft corrections have not been verified in an uploaded registry.</p>`:`<div class="export-layout"><b>Sign off whole groups</b>
           <label class="export-layout-choice ${trackerSignOffBy==='milestone'?'on':''}"><input type="radio" name="tracker-signoff" value="milestone" ${trackerSignOffBy==='milestone'?'checked':''}><span><b>By L2 milestone</b><small>One checkmark signs off a milestone across all disciplines.</small></span></label>
           <label class="export-layout-choice ${trackerSignOffBy==='discipline'?'on':''}"><input type="radio" name="tracker-signoff" value="discipline" ${trackerSignOffBy==='discipline'?'checked':''}><span><b>By discipline</b><small>One checkmark signs off a discipline across all milestones.</small></span></label>
@@ -320,7 +322,7 @@ function renderExportOptions(){
       <footer class="export-foot"><span></span><div><button class="btn primary" type="button" id="exportGo" ${kind==='updated'&&(!changesCount||!S.session.sourceBytes)?'disabled':''}>${ic('file-down')}Export</button></div></footer>`;
     $$('[data-export-kind]').forEach(button=>button.onclick=()=>{S.session.exportKind=button.dataset.exportKind;renderExportOptions();});
     $$('input[name="tracker-signoff"]').forEach(input=>input.onchange=()=>{S.session.trackerSignOffBy=input.value;renderExportOptions();});
-    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='updated')await exportUpdatedRegistryXlsx();else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx(trackerSignOffBy);};
+    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='actions')await exportActionsXlsx(actionFindings);else if(kind==='updated')await exportUpdatedRegistryXlsx();else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx(trackerSignOffBy);};
     return;
   }
   $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>${kindTabs}
@@ -520,9 +522,10 @@ function modifyItemMasterCatalogStatus(rule){
 let modifyPatternMap=new Map();
 function modifyPatternKey(ruleId,why){return auditFingerprint(ruleId+'|'+(why||''));}
 function modifyActiveFindings(findings){return findings.filter(finding=>!isExcludedId(finding.id));}
+function actionsExportFindings(){return modifyActiveFindings(modifyGroups().flatMap(group=>group.rules.flatMap(entry=>entry.matches)));}
 function modifyPatterns(entry){
   const byWhy=new Map();
-  for(const finding of entry.matches){const why=finding.why||'',key=['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule.id)?JSON.stringify([why,finding.actual,finding.expected]):why;const list=byWhy.get(key)||[];list.push(finding);byWhy.set(key,list);}
+  for(const finding of entry.matches){const key=auditActionPatternKey(finding),list=byWhy.get(key)||[];list.push(finding);byWhy.set(key,list);}
   const groups=[],singles=[];
   for(const [key,findings] of byWhy){if(findings.length>1)groups.push({why:findings[0].why||'',findings,key:modifyPatternKey(entry.rule.id,key)});else singles.push(findings[0]);}
   groups.sort((left,right)=>right.findings.length-left.findings.length);
@@ -630,6 +633,8 @@ async function reviewPrepare(changes,migration){
   const session=S.session,revision=session.changesRev;let prepared;
   await runWithProgress('Checking the draft','Original workbook unchanged',async(checkpoint,report)=>{
     report(.05,'Preparing background review');await checkpoint();
+    if(typeof changes==='function')changes=await changes(checkpoint,report);
+    if(S.session!==session||session.changesRev!==revision)throw new Error('The draft changed. Preview the corrections again.');
     const settings=migration===undefined?session.milestoneMigration:auditReadMigrationSettings(migration);
     const migrationChanged=migration!==undefined&&JSON.stringify(settings)!==JSON.stringify(session.milestoneMigration||{enabled:false,profile:null});
     const result=await prepareAuditReview(session,changes,settings,migrationChanged,report);await checkpoint();
@@ -671,8 +676,21 @@ function renderActionPreview(){
   const scope=actionScope;if(!scope)return;const editing=scope.stage==='edit',entries=editing?scope.suggestions:scope.incoming,offset=scope.offset||0,rows=entries.slice(offset,offset+80);
   $('#actionPreviewRows').innerHTML=editing?rows.map((entry,index)=>`<tr><td><b>${esc(entry.row.equipmentId)}</b><small class="action-problem">${esc(entry.finding.why||entry.finding.rule.title)}</small><small>${esc(entry.reason)}</small></td><td colspan="2">${entry.changes.map((change,cell)=>`<label class="action-edit-field"><span>${esc(change.field)}</span><span class="action-value-pair"><span class="action-current">${esc(change.before||'(blank)')}</span><input data-action-entry="${offset+index}" data-action-cell="${cell}" aria-label="${esc(change.field)} for ${esc(entry.row.equipmentId)}" value="${esc(change.value)}" maxlength="32767"></span></label>`).join('')}</td></tr>`).join(''):rows.map(change=>`<tr><td><b>${esc(change.tag)}</b><small>${esc(change.field)}</small></td><td>${esc(change.before||'(blank)')}</td><td class="action-new-value">${esc(change.value||'(blank)')}</td></tr>`).join('');
   $('#actionPage').textContent=entries.length?`${offset+1}-${offset+rows.length} of ${entries.length}`:'No changes';
-  $('#actionPager').hidden=entries.length<=80;
+  $('#actionPager').hidden=entries.length<=80||(editing&&scope.mode==='bulk');
   $('#actionPrevious').disabled=!offset;$('#actionNext').disabled=offset+80>=entries.length;
+}
+function actionBulkFields(scope){
+  const fields=new Map();
+  for(const entry of scope.suggestions)for(const change of entry.changes){
+    let field=fields.get(change.prop);
+    if(!field){field={prop:change.prop,label:change.field,before:new Set(),values:new Set(),count:0};fields.set(change.prop,field);}
+    field.before.add(change.before);field.values.add(change.value);field.count++;
+  }
+  return [...fields.values()];
+}
+function actionBulkHtml(scope){
+  const reasons=[...new Set(scope.findings.map(finding=>finding.why||finding.rule.title))];
+  return `<p class="action-bulk-problem">${esc(reasons.length===1?reasons[0]:[...new Set(scope.findings.map(finding=>finding.rule.title))].join('; '))}</p>`+actionBulkFields(scope).map(field=>`<label class="action-bulk-field"><span><b>${esc(field.label)}</b><small>${field.count.toLocaleString()} affected ${scope.target==='parent'?'parent':'equipment'} rows</small></span><span class="action-current"><small>Current</small>${field.before.size===1?esc([...field.before][0]||'(blank)'):'Multiple current values'}</span><span><small>Suggested / your value</small><input data-action-bulk="${esc(field.prop)}" aria-label="${esc(field.label)} for all affected equipment" value="${field.values.size===1?esc([...field.values][0]):''}" placeholder="${field.values.size>1?'Mixed suggestions; leave unchanged or enter a shared value':''}" maxlength="32767"></span></label>`).join('');
 }
 function paintActionDialog(){
   const scope=actionScope,editing=scope.stage==='edit',success=scope.stage==='success';
@@ -680,14 +698,21 @@ function paintActionDialog(){
   $('#actionModalBody').innerHTML=`<section class="action-simple"><span class="eyebrow">${success?'Completed in working draft':editing?'1. Review and edit':'2. Confirm changes'}</span><h3 id="actionTitle">${success?'Changes applied':esc(scope.label)}</h3>
     ${success?`<div class="action-success" role="status">${ic('circle-check')}<div><b>${cells.toLocaleString()} ${cells===1?'cell':'cells'} updated</b><span>${cleared.toLocaleString()} findings cleared. ${scope.prepared.impact.introduced.length.toLocaleString()} new findings.</span></div></div>`:`<p class="action-summary">${editing?`${scope.findings.length.toLocaleString()} findings${scope.unsupported?`; ${scope.unsupported.toLocaleString()} need a verified value`:''}`:`${cells.toLocaleString()} cells will change; ${cleared.toLocaleString()} findings will clear`}</p>`}
     ${editing&&scope.canTarget?`<fieldset class="action-target" ${scope.session.reviewBusy?'disabled':''}><legend>Edit metadata on</legend><div class="action-target-options">${['child','parent'].map(target=>`<label><input type="radio" name="actionTarget" value="${target}" ${scope.target===target?'checked':''}>${target==='child'?'Child':'Parent'}</label>`).join('')}</div></fieldset>`:''}
+    ${editing&&scope.findings.length>1?`<div class="action-mode-tabs" role="tablist" aria-label="Edit mode"><button type="button" role="tab" data-action-mode="bulk" aria-selected="${scope.mode==='bulk'}" aria-controls="actionFields">Apply to All</button><button type="button" role="tab" data-action-mode="individual" aria-selected="${scope.mode!=='bulk'}" aria-controls="actionFields">Individual Equipment</button></div>`:''}
     ${!scope.suggestions.length?`<p class="action-empty">${scope.canTarget&&scope.target==='parent'?'The parent must resolve to one unique registry row before its metadata can be edited.':'This issue needs an engineering decision or source-row correction. No automatic cell edit is offered.'}</p>`:''}
     ${editing&&scope.findings.every(f=>f.rule.id==='dependency.project-not-needed')?`<button class="btn ghost sm" id="actionClearProject">${ic('eraser')}Clear Dependency Project</button>`:''}
-    <fieldset id="actionFields" class="action-fields"><div class="action-preview" ${scope.suggestions.length?'':'hidden'}><table><thead><tr><th>Equipment / ${editing?'issue':'field'}</th><th>Current</th><th>${editing?'Suggested / your value':success?'Applied':'New value'}</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div></fieldset>
+    <fieldset id="actionFields" class="action-fields"><div id="actionBulkFields" class="action-bulk-fields" ${editing&&scope.mode==='bulk'?'':'hidden'}>${editing&&scope.mode==='bulk'?actionBulkHtml(scope):''}</div><div class="action-preview" ${scope.suggestions.length&&!(editing&&scope.mode==='bulk')?'':'hidden'}><table><thead><tr><th>Equipment / ${editing?'issue':'field'}</th><th>Current</th><th>${editing?'Suggested / your value':success?'Applied':'New value'}</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div></fieldset>
     <div class="action-pager" id="actionPager"><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous changes" title="Previous changes">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next changes" title="Next changes">${ic('chevron-right')}</button></div>
     <div id="actionImpact" class="action-impact" role="status" aria-live="polite">${!editing&&scope.prepared.impact.migrationConflicts?.length?`${scope.prepared.impact.migrationConflicts.length} L1/L2 pairing conflicts remain flagged after these project-approved replacements. L2 assignments will not be changed.`:!editing&&!success&&scope.prepared.impact.introduced.length?`${scope.prepared.impact.introduced.length} new findings need review. No new errors were introduced.`:''}</div>
     <footer class="export-foot"><span>${success?'Changed cells are highlighted yellow in Updated Registry.':'Original workbook unchanged'}</span><div>${!editing&&!success?'<button class="btn ghost" id="actionBack">Edit values</button>':''}<button class="btn ghost" id="actionCancel">${success?'Done':'Cancel'}</button><button class="btn primary" id="actionApply" ${scope.suggestions.length?'':'hidden disabled'}>${success?'View all changes':editing?'Review changes':'Apply changes'}</button></div></footer></section>`;
   $('#actionCancel').onclick=closeActionDialog;
-  if($('#actionClearProject'))$('#actionClearProject').onclick=()=>{if(scope.session.reviewBusy)return;for(const entry of scope.suggestions)for(const change of entry.changes)if(change.prop==='dependencyProject')change.value='';renderActionPreview();};
+  $$('[data-action-mode]').forEach(button=>button.onclick=()=>{if(scope.session.reviewBusy||scope.stage!=='edit')return;scope.mode=button.dataset.actionMode;scope.offset=0;paintActionDialog();});
+  $('#actionBulkFields').oninput=event=>{
+    const input=event.target.closest('[data-action-bulk]');if(!input||scope.stage!=='edit'||scope.session.reviewBusy)return;
+    for(const entry of scope.suggestions)for(const change of entry.changes)if(change.prop===input.dataset.actionBulk)change.value=input.value;
+    $('#actionImpact').textContent='';
+  };
+  if($('#actionClearProject'))$('#actionClearProject').onclick=()=>{if(scope.session.reviewBusy)return;for(const entry of scope.suggestions)for(const change of entry.changes)if(change.prop==='dependencyProject')change.value='';paintActionDialog();};
   $$('input[name="actionTarget"]').forEach(input=>input.onchange=()=>{
     if(scope.session.reviewBusy||scope.stage!=='edit')return;
     scope.drafts.set(scope.target,scope.suggestions);scope.target=input.value;
@@ -712,17 +737,23 @@ async function processActionDialog(scope){
   try{
     if(S.session!==session||session.changesRev!==scope.revision)throw new Error('The registry changed. Close this dialog and open the action again.');
     if(editing){
-      const cells=new Map();
-      for(const change of scope.suggestions.flatMap(entry=>entry.changes)){
-        const value=clean(change.value),key=auditCorrectionKey(change);
-        if(value===change.before)continue;
-        if(cells.has(key)&&cells.get(key).value!==value)throw new Error('Two suggestions edit the same cell differently. Give them the same value or review these findings separately.');
-        cells.set(key,{...change,value});
-      }
-      const incoming=[...cells.values()];if(!incoming.length)throw new Error('No values have changed. Enter a correction or cancel.');
-      const changes=auditMergeCorrections(session.baselineSnapshot,session.changes,incoming);
       session.reviewBusy=true;button.disabled=true;$('#actionFields').disabled=true;button.textContent='Checking changes...';$('#actionImpact').textContent='';
-      const prepared=await reviewPrepare(changes);if(actionScope!==scope||S.session!==session)return;
+      let incoming;
+      const prepared=await reviewPrepare(async(checkpoint,report)=>{
+        const cells=new Map();
+        for(let offset=0;offset<scope.suggestions.length;offset+=100){
+          if(actionScope!==scope||S.session!==session||session.changesRev!==scope.revision)throw new Error('The registry changed. No changes applied.');
+          for(const entry of scope.suggestions.slice(offset,offset+100))for(const change of entry.changes){
+            const value=clean(change.value),key=auditCorrectionKey(change);
+            if(value===change.before)continue;
+            if(cells.has(key)&&cells.get(key).value!==value)throw new Error('Two suggestions edit the same cell differently. Give them the same value or review these findings separately.');
+            cells.set(key,{...change,value});
+          }
+          if(scope.suggestions.length>200){report(.05+.05*Math.min(1,(offset+100)/scope.suggestions.length),'Collecting changes');await checkpoint();}
+        }
+        incoming=[...cells.values()];if(!incoming.length)throw new Error('No values have changed. Enter a correction or cancel.');
+        return auditMergeCorrections(session.baselineSnapshot,session.changes,incoming);
+      });if(actionScope!==scope||S.session!==session)return;
       if(prepared.impact.unsafe.length)throw new Error(`No changes applied. ${prepared.impact.unsafe[0].rule.title}. Adjust the values and review again.`);
       scope.incoming=incoming;scope.prepared=prepared;scope.stage='review';scope.offset=0;paintActionDialog();$('#actionApply').focus();
     }else{
@@ -768,7 +799,7 @@ function openActionDialog(label,findings,navigate,provided,prepared){
   }
   modifyRecommendationContext||=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
   const context=prepared?.context||modifyRecommendationContext,suggestions=prepared?.suggestions||actionSuggestions(findings,context,'child',provided);
-  actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
+  actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',mode:findings.length>1&&!provided?'bulk':'individual',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
   paintActionDialog();
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
   actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;
@@ -923,7 +954,7 @@ function previewMilestoneMigration(navigate){
     provided.set(finding.id,{row,finding,reason:'Project-approved replacement. The existing L2 milestone is unchanged.',changes:[auditMakeCorrection(row,'Milestone Parent',mapping.label,finding)]});return finding;
   });
   if(!findings.length){toast('No milestone replacements remain.');return;}
-  openActionDialog(`New Milestones: ${S.session.milestoneMigration.profile.project}`,findings,navigate,provided);
+  return openActionDialog(`New Milestones: ${S.session.milestoneMigration.profile.project}`,findings,navigate,provided);
 }
 function wireMilestoneMigration(navigate){
   $('#newMilestones').onchange=async event=>{
@@ -946,7 +977,7 @@ export function renderModifications(navigate){
   const changesCount=(S.session.changes||[]).length;
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div></div>
+    <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div><div class="actions-exports"><button class="btn" id="exportActions" type="button">${ic('file-down')}Export Actions</button><button class="btn primary" id="exportUpdatedRegistry" type="button" ${changesCount&&S.session.sourceBytes?'':'disabled'}>${ic('file-spreadsheet')}Updated Registry</button></div></div>
     ${milestoneMigrationControls()}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands"><button class="btn ghost sm" id="reviewReferences">${ic('file-spreadsheet')}References</button><button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
@@ -957,6 +988,8 @@ export function renderModifications(navigate){
   </section>`;
   $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
   wireMilestoneMigration(navigate);
+  $('#exportActions').onclick=()=>{S.session.exportKind='actions';openExportOptions();};
+  $('#exportUpdatedRegistry').onclick=()=>{if(!S.session.reviewBusy)return exportUpdatedRegistryXlsx();};
   const body=$('#modifyBody');
   body.onchange=event=>{
     const groupBox=event.target.closest('[data-mod-group]');
