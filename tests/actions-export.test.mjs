@@ -68,3 +68,36 @@ test('distinct Item Master replacements remain separate patterns and formula-lik
   const grid=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}).slice(5);assert.equal(new Set(grid.map(row=>row[2])).size,2);
   const at=grid.findIndex(row=>row[3]==='=1+1')+6;assert.equal(sheet[`D${at}`].t,'s');assert.equal(sheet[`D${at}`].f,undefined);
 });
+
+test('browser exports use direct bytes with native compression and the fallback, retaining every finding',async()=>{
+  const context=vm.createContext({Uint8Array,ArrayBuffer,TextEncoder,TextDecoder});
+  vm.runInContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.url),'utf8'),context);
+  assert.equal(vm.runInContext('typeof Buffer',context),'undefined');
+  const savedXlsx=globalThis.XLSX,savedCompression=globalThis.CompressionStream;
+  const writer=context.XLSX.write,formats=[];
+  context.XLSX.write=(book,options)=>{
+    formats.push(options.type);
+    assert.equal(options.type,'buffer','array output expands the ZIP into a per-byte character array');
+    return writer(book,options);
+  };
+  try{
+    globalThis.XLSX=context.XLSX;
+    for(const native of [true,false]){
+      globalThis.CompressionStream=native?savedCompression:undefined;
+      const seed=fixture(),count=1800;
+      const findings=Array.from({length:count},(_,i)=>({...seed.findings[i%4],id:String(i),equipmentId:`DEMO-${i}`,row:i+2}));
+      const book=buildAuditActionsWorkbook({rows:[],findings},'Synthetic large export');
+      const bytes=await workbookBytesCompact(book),read=context.XLSX.read(bytes,{type:'array',cellStyles:true});
+      const sheet=read.Sheets[rule.title],last=count+5;
+      assert.equal(sheet.D3.v,count);assert.equal(context.XLSX.utils.decode_range(sheet['!ref']).e.r,last-1);
+      assert.equal(sheet[`B${last}`].v,AUDIT_EXPORT_UNTICKED);
+      assert.equal(sheet[`B${last}`].s.fgColor.rgb,'F2F2F2');
+      assert.ok(read.Sheets.Actionable[`A${last}`].f.includes('INDEX'));
+      assert.equal(read.Workbook.Sheets.at(-1).Hidden,1);
+      const zip=context.XLSX.CFB.read(bytes,{type:'array'});
+      const xml=new TextDecoder().decode(context.XLSX.CFB.find(zip,'/xl/worksheets/sheet3.xml').content);
+      assert.match(xml,/dataValidation type="list"/);
+    }
+    assert.deepEqual(formats,['buffer','buffer']);
+  }finally{globalThis.XLSX=savedXlsx;globalThis.CompressionStream=savedCompression;}
+});

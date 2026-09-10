@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.41.1",
+    "date": "2026-09-10",
+    "type": "fix",
+    "notes": "- Improved export reliability"
+  },
+  {
     "version": "1.41.0",
     "date": "2026-09-10",
     "type": "feature",

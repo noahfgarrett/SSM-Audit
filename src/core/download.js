@@ -10,7 +10,7 @@ export function downloadBlob(filename,blob){
 
 const XLSX_MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export function workbookBytes(workbook,options={}){
-  const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'array',cellStyles:true},options));
+  const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'buffer',cellStyles:true},options));
   return workbookApplyXmlExtras(workbook,bytes,options);
 }
 export function workbookBlob(workbook,options={}){return new Blob([workbookBytes(workbook,options)],{type:XLSX_MIME});}
@@ -83,7 +83,9 @@ function workbookZipEntries(workbook,bytes){
 export async function workbookBytesCompact(workbook,options={}){
   const {onProgress,...rest}=options,writeOptions=Object.assign({bookSST:true},rest);
   if(!zipDeflateAvailable())return workbookBytes(workbook,Object.assign({compression:true},writeOptions));
-  const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'array',cellStyles:true,compression:false},writeOptions));
+  // In this SheetJS build, "array" first creates a binary string through a
+  // character array. "buffer" returns bytes directly in browsers and Node.
+  const bytes=XLSX.write(workbook,Object.assign({bookType:'xlsx',type:'buffer',cellStyles:true,compression:false},writeOptions));
   return zipEntries(workbookZipEntries(workbook,bytes),onProgress);
 }
 export async function workbookBlobCompact(workbook,options={}){return new Blob([await workbookBytesCompact(workbook,options)],{type:XLSX_MIME});}
