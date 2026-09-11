@@ -4,6 +4,7 @@ import vm from 'node:vm'
 import {readFileSync} from 'node:fs'
 import {buildAuditActionsWorkbook,AUDIT_EXPORT_TICK,AUDIT_EXPORT_UNTICKED} from '../src/audit/export.js'
 import {workbookBytesCompact} from '../src/core/download.js'
+import {runSsmAudit} from '../src/audit/engine.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.url),'utf8'));
 const rule={id:'parent.cross-upn',title:'Parent is in a different UPN',statement:'Parent and child share a UPN.'};
@@ -61,6 +62,15 @@ test('metadata joins use physical rows for duplicate tags and never guess an amb
 });
 test('empty scope exports a readable index, not phantom rules or broken progress formulas',()=>{
   const book=buildAuditActionsWorkbook({rows:[],findings:[]},'Demo');assert.deepEqual(book.SheetNames,['Actionable','Index']);assert.match(book.Sheets.Index.A6.v,/No active findings/);
+});
+test('Actions workbook What to do carries the tag-supported metadata correction',()=>{
+  const parent={equipmentId:'F77-MAH101-01-0',upn:'101',discipline:'MECHANICAL DRY',systemName:'101 Makeup Air',_source:{sheet:'Registry',row:2}};
+  const child={equipmentId:'F77-VFD101-01-0',upn:'650',discipline:'FACILITIES MONITORING SYSTEM',closestParent:parent.equipmentId,_source:{sheet:'Registry',row:3}};
+  const result={...runSsmAudit({rows:[parent,child],missingHeaders:[]})};
+  result.findings=result.findings.filter(f=>f.rule.id==='parent.cross-upn');assert.equal(result.findings.length,1);
+  const book=buildAuditActionsWorkbook(result,'Synthetic');
+  assert.match(book.Sheets[rule.title].I6.v,/Change F77-VFD101-01-0's UPN from 650 to 101/);
+  assert.match(book.Sheets[rule.title].I6.v,/align its System Name/);
 });
 test('distinct Item Master replacements remain separate patterns and formula-like tags remain literal text',()=>{
   const result=fixture();result.findings=result.findings.map((f,i)=>({...f,rule:{id:'item-master.migration-advisory',title:'Item Master review'},why:'Review the replacement',actual:i<2?'DEMO_PANEL':'DEMO_PUMP',expected:i<2?'VF_PANEL':'VF_PUMP'}));

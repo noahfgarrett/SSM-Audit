@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.41.2",
+    "date": "2026-09-11",
+    "type": "fix",
+    "notes": "- Improved review guidance and action editing"
+  },
+  {
     "version": "1.41.1",
     "date": "2026-09-10",
     "type": "fix",

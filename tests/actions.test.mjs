@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { auditMakeCorrection, auditApplyCorrections, auditMergeCorrections, auditCorrectionImpact, auditRecommendationContext, auditProposeCorrection, auditRegistryRevision, auditReviewDocument, auditReadReviewDocument } from '../src/audit/actions.js'
+import { auditMakeCorrection, auditApplyCorrections, auditMergeCorrections, auditCorrectionImpact, auditRecommendationContext, auditProposeCorrection, auditRegistryRevision, auditReviewDocument, auditReadReviewDocument, auditActionEntry } from '../src/audit/actions.js'
 import { S, resetSession } from '../src/state.js'
 import { sessionAudit, activeRules } from '../src/ui/audit.js'
 import { auditReadReferenceAoa } from '../src/audit/references.js'
@@ -11,6 +11,19 @@ import { auditReadReferenceAoa } from '../src/audit/references.js'
 const base={building:'DEMO',upn:'602',discipline:'ELECTRICAL',systemName:'602  Medium Voltage',closestParent:'602  Medium Voltage',equipmentDescription:'Electrical panel'}
 function snapshot(records){return auditSnapshotFromAoa([EXTO_REV21_COLUMNS.map(c=>c.header),...records.map(row=>EXTO_REV21_COLUMNS.map(c=>({...base,...row})[c.field]||''))],{sheet:'Registry',file:'synthetic.xlsx'})}
 const finding=(row,rule='metadata.system-upn-mismatch',field='System Name')=>({id:'test:1',sheet:row._source.sheet,row:row._source.row,equipmentId:row.equipmentId,field,rule:{id:rule}})
+
+for(const [ruleId,prop] of [['parent.cross-building','building'],['parent.cross-discipline','discipline']])test(`${ruleId} asks for reconciliation and never copies the other row as a suggested fix`,()=>{
+  const original=snapshot([{equipmentId:'PARENT',building:'DEMO-A',discipline:'MECHANICAL DRY'}, {equipmentId:'CHILD',closestParent:'PARENT',building:'DEMO-B',discipline:'MECHANICAL WET'}]);
+  const issue=runSsmAudit(original).findings.find(f=>f.rule.id===ruleId);assert.ok(issue);
+  assert.match(issue.recommendation,/Reconcile/);assert.doesNotMatch(issue.recommendation,/pick a parent|as a dependency/);
+  const context=auditRecommendationContext(original);
+  for(const [target,index] of [['child',1],['parent',0]]){
+    const entry=auditActionEntry(issue,context,target);assert.equal(entry.confidence,'Engineer review');
+    assert.equal(entry.changes.length,1);assert.equal(entry.changes[0].prop,prop);
+    assert.equal(entry.changes[0].value,original.rows[index][prop]);
+    assert.equal(entry.changes[0].before,entry.changes[0].value);
+  }
+});
 
 test('corrections target the physical duplicate occurrence and never mutate source rows',()=>{
   const original=snapshot([{equipmentId:'PNL-1'},{equipmentId:'PNL-1'}]);
@@ -91,6 +104,8 @@ function servedDrive({upn='101',child={},parent={}}={}){
 }
 for(const upn of ['101','104'])test(`tag and served equipment agree on UPN ${upn}: prefill coordinated corrections`,()=>{
   const original=servedDrive({upn}),before=runSsmAudit(original),issue=before.findings.find(f=>f.rule.id==='parent.cross-upn');assert.ok(issue);
+  assert.match(issue.recommendation,new RegExp(`Change F77-VFD${upn}-01-00's UPN from 650 to ${upn}`));
+  assert.match(issue.recommendation,/System Name/);assert.doesNotMatch(issue.recommendation,/pick a parent|as a dependency/);
   const proposal=auditProposeCorrection(issue,auditRecommendationContext(original));assert.ok(proposal);
   assert.deepEqual(proposal.changes.map(c=>c.field),['UPN','System Name','Discipline']);
   const draft=auditApplyCorrections(original,proposal.changes),row=draft.rows[1];
@@ -109,6 +124,34 @@ for(const child of [
 ])test(`uncertain or conflicting tag evidence has no UPN proposal: ${JSON.stringify(child)}`,()=>{
   const original=servedDrive({child}),row=original.rows[1];
   assert.equal(auditProposeCorrection(finding(row,'parent.cross-upn','Closest Parent'),auditRecommendationContext(original)),null);
+});
+test('UPN guidance identifies incorrect parent metadata without renaming equipment',()=>{
+  const original=servedDrive({parent:{upn:'650'},child:{upn:'101',systemName:extoRev21SystemsForUpn('101')[0]}});
+  const issue=runSsmAudit(original).findings.find(f=>f.rule.id==='parent.cross-upn');assert.ok(issue);
+  assert.match(issue.recommendation,/Change F77-MAH101-01-00's UPN from 650 to 101/);
+  assert.match(issue.recommendation,/Keep the equipment tags and existing links unchanged/);
+});
+test('UPN guidance supports grandchildren through an intermediate parent',()=>{
+  const original=servedDrive();
+  const rows=original.rows.map(row=>({...row}));
+  rows.push({...rows[1],equipmentId:'F77-TET101-01-00',upn:'101',closestParent:rows[1].equipmentId,equipmentDescription:'Temperature transmitter'});
+  const result=runSsmAudit(snapshot(rows));
+  const issue=result.findings.find(f=>f.rule.id==='parent.cross-upn'&&f.equipmentId==='F77-TET101-01-00');
+  assert.match(issue.recommendation,/Change F77-VFD101-01-00's UPN from 650 to 101/);
+});
+for(const equipmentId of ['F77-VFD-101-01','F77-VFD101-RIO650-01','F77-VFD650-01','BLDG101-VFD-01'])test(`uncertain UPN guidance requests metadata reconciliation: ${equipmentId}`,()=>{
+  const original=servedDrive({child:{equipmentId}}),issue=runSsmAudit(original).findings.find(f=>f.rule.id==='parent.cross-upn');
+  assert.match(issue.recommendation,/Reconcile the UPN metadata/);assert.doesNotMatch(issue.recommendation,/Change .*UPN from/);
+});
+test('a numeric building prefix is not UPN evidence',()=>{
+  const original=servedDrive({child:{equipmentId:'BLDG650-VFD101-01-00'}}),issue=runSsmAudit(original).findings.find(f=>f.rule.id==='parent.cross-upn');
+  assert.match(issue.recommendation,/UPN from 650 to 101/);
+  assert.ok(auditProposeCorrection(issue,auditRecommendationContext(original)));
+});
+test('conflicting parent tag evidence does not prefill a metadata correction',()=>{
+  const original=servedDrive({parent:{equipmentId:'F77-MAH104-01-00'},child:{closestParent:'F77-MAH104-01-00'}});
+  const issue=runSsmAudit(original).findings.find(f=>f.rule.id==='parent.cross-upn');
+  assert.match(issue.recommendation,/Reconcile/);assert.equal(auditProposeCorrection(issue,auditRecommendationContext(original)),null);
 });
 test('an instrument under a matching system header suggests metadata, never a replacement parent',()=>{
   const original=servedDrive({parent:{equipmentId:'DEMO-HEADER',equipmentDescription:'System header',itemMaster:'VF_Blank'},child:{equipmentId:'F77-TET101-02-01',equipmentDescription:'Temperature Transmitter',closestParent:'DEMO-HEADER'}});

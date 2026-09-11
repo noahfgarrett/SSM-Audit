@@ -48,8 +48,9 @@ for(const [id,field,prop] of [['parent.cross-building','Building','building'],['
  assert.equal(auditProposeCorrection(f,context),null);
  const child=auditActionEntry(f,context,'child'),parent=auditActionEntry(f,context,'parent');
  assert.deepEqual(child.changes.map(c=>c.field),[field]);assert.deepEqual(parent.changes.map(c=>c.field),[field]);
- assert.equal(child.changes[0].value,s.rows[1][prop]);assert.equal(parent.changes[0].value,s.rows[0][prop]);
+ assert.equal(child.changes[0].value,s.rows[0][prop]);assert.equal(parent.changes[0].value,s.rows[1][prop]);
  assert.equal(parent.changes[0].tag,'PARENT');
+ parent.changes[0].value=s.rows[0][prop];
  const updated=auditApplyCorrections(s,parent.changes);assert.equal(updated.rows[0].closestParent,'PARENT');assert.equal(updated.rows[0].dependencies,'POWER');assert.equal(s.rows[1][prop],prop==='building'?'BLDG-2':'MECHANICAL DRY');
 });
 test('missing and ambiguous parents cannot be edited by guessing a row',()=>{

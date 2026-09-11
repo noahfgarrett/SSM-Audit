@@ -149,7 +149,9 @@ test('metadata target switch preserves edits and applies to the chosen parent ro
   h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'0',actionCell:'0'},value:'DEMO-C'})}});
   parent.onchange();assert.match(h.node('#actionPreviewRows').innerHTML,/<b>PARENT<\/b>/);
   child.onchange();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-C"/);
-  parent.onchange();await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
+  parent.onchange();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-B"/);
+  h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'0',actionCell:'0'},value:'DEMO-A'})}});
+  await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
   assert.equal(session.snapshot.rows[0].building,'DEMO-A');assert.equal(session.snapshot.rows[1].building,'DEMO-A');assert.equal(session.changes[0].tag,'PARENT');
   assert.equal(session.snapshot.rows[0].closestParent,'PARENT');assert.match(h.node('#actionModalBody').innerHTML,/Changes applied/);
 });
@@ -163,7 +165,7 @@ test('group editor defaults to bulk and preserves individual overrides and child
   const issues=session.rawResult.findings.filter(f=>f.rule.id==='parent.cross-building');assert.equal(issues.length,2);
   await h.api.openActionDialog('Building mismatch',issues);
   assert.match(h.node('#actionModalBody').innerHTML,/data-action-mode="bulk" aria-selected="true"/);
-  assert.match(h.node('#actionModalBody').innerHTML,/data-action-bulk="building"[^>]*value="DEMO-B"/);
+  assert.match(h.node('#actionModalBody').innerHTML,/data-action-bulk="building"[^>]*value="DEMO-A"/);
   h.node('#actionBulkFields').oninput({target:{closest:()=>({dataset:{actionBulk:'building'},value:'DEMO-C'})}});
   individual.onclick();assert.equal((h.node('#actionPreviewRows').innerHTML.match(/value="DEMO-C"/g)||[]).length,2);
   h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'1',actionCell:'0'},value:'DEMO-D'})}});
@@ -171,7 +173,9 @@ test('group editor defaults to bulk and preserves individual overrides and child
   individual.onclick();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-D"/);
   bulk.onclick();parent.onchange();assert.match(h.node('#actionModalBody').innerHTML,/1 affected parent rows/);
   child.onchange();individual.onclick();assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-C"/);assert.match(h.node('#actionPreviewRows').innerHTML,/value="DEMO-D"/);
-  parent.onchange();await h.node('#actionApply').onclick();assert.equal(session.changes.length,0);
+  parent.onchange();
+  h.node('#actionPreviewRows').oninput({target:{closest:()=>({dataset:{actionEntry:'0',actionCell:'0'},value:'DEMO-A'})}});
+  await h.node('#actionApply').onclick();assert.equal(session.changes.length,0);
   await h.node('#actionApply').onclick();assert.deepEqual(session.snapshot.rows.map(r=>r.building),['DEMO-A','DEMO-A','DEMO-A']);
   assert.equal(session.changes.length,1);assert.equal(session.changes[0].tag,'PARENT');
 });

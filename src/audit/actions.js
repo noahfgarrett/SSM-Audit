@@ -1,7 +1,7 @@
 import { clean } from '../core/text.js'
-import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn, extoRev21EffectiveDiscipline, extoRev21Canonical, extoRev21UpnCandidates } from '../exto/rev21-contract.js'
+import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn, extoRev21EffectiveDiscipline, extoRev21Canonical } from '../exto/rev21-contract.js'
 import { auditNormId, auditSourceKey, auditSplitReferences } from './model.js'
-import { auditCommissioningRole, auditIsBlankItemMaster, auditMilestoneBranchCandidates, auditMilestoneCohortCandidates, auditItemMasterCanonicalCandidates } from './engine.js'
+import { auditCommissioningRole, auditIsBlankItemMaster, auditMilestoneBranchCandidates, auditMilestoneCohortCandidates, auditItemMasterCanonicalCandidates, auditTagUpnForMetadata as auditActionTagUpn } from './engine.js'
 import { VF_ITEM_MASTER_NAMES } from '../exto/vf-item-masters.js'
 import { auditReferenceRecommendation } from './references.js'
 import { auditReadMigrationSettings } from './milestone-migration.js'
@@ -150,26 +150,13 @@ export function auditActionEntry(finding,context,target='child'){
   const changes=new Map((proposed?.changes||[]).map(c=>[c.prop,c]));
   for(const field of policy.fields){
     const prop=AUDIT_ACTION_FIELDS[field];if(row._source.columns?.[prop]==null||changes.has(prop))continue;
-    let value=row[prop];
-    if(policy.targets&&['Building','Discipline'].includes(field)&&finding.rule.id!=='parent.cross-upn'){
-      const other=(target==='parent'?child:parent)?.[prop];value=(field==='Discipline'?extoRev21Canonical('discipline',other):clean(other))||value;
-    }
-    changes.set(prop,auditMakeCorrection(row,field,value,finding));
+    changes.set(prop,auditMakeCorrection(row,field,row[prop],finding));
   }
   if(!changes.size)return null;
   const contextLabel=policy.targets?`Child: ${child.equipmentId} | Parent: ${child.closestParent||'(not found)'}`:'';
   return {row,finding,changes:[...changes.values()],contextLabel,reason:(contextLabel?`${contextLabel}. `:'')+(proposed?.reason||(policy.targets?`Editing ${target} metadata. Confirm which equipment has the correct values. Parent and dependency links stay unchanged.`:'No reliable suggestion. Enter verified values or cancel.')),confidence:proposed?.confidence||'Engineer review'};
 }
 function auditActionSuffix(row){return auditNormId(row.equipmentId).split('-').slice(-2).join('-');}
-function auditActionTagUpn(row){
-  if(auditIsBlankItemMaster(row)||auditNormId(row.discipline)==='ELECTRICAL')return '';
-  const body=auditNormId(row.equipmentId);
-  const candidates=new Set();
-  for(const match of body.matchAll(/(?:^|[-_ ])([A-Z]{2,})(\d{3})/g)){
-    for(const upn of extoRev21UpnCandidates(match[1]+match[2]))candidates.add(upn);
-  }
-  return candidates.size===1?[...candidates][0]:'';
-}
 export function auditParentRecommendations(row,context){
   const group=context.index.bySystem.get(JSON.stringify([auditNormId(row.building),auditNormId(row.upn)]))||[];
   const role=auditCommissioningRole(row),suffix=auditActionSuffix(row),current=auditNormId(row.closestParent);
@@ -196,8 +183,9 @@ export function auditProposeCorrection(finding,context){
       const parents=context.index.byTag.get(auditNormId(row.closestParent));
       if(parents?.length!==1||context.index.byTag.get(auditNormId(row.equipmentId))?.length!==1)return null;
       const parent=parents[0],role=auditCommissioningRole(row);
-      const tagUpn=auditActionTagUpn(row);
+      const tagUpn=auditActionTagUpn(row),parentTagUpn=auditActionTagUpn(parent);
       if(!tagUpn||tagUpn!==auditNormId(parent.upn))return null;
+      if(parentTagUpn&&parentTagUpn!==tagUpn)return null;
       if(!clean(row.building)||auditNormId(row.building)!==auditNormId(parent.building))return null;
       const systems=extoRev21SystemsForUpn(tagUpn),parentSystem=systems.find(value=>auditNormId(value)===auditNormId(parent.systemName));
       const currentSystem=systems.find(value=>auditNormId(value)===auditNormId(row.systemName));
