@@ -48,7 +48,7 @@ export function prepareAuditReview(session,changes,migration,migrationChanged,re
       }
       if(connection.pending)throw new Error('Wait for the current review to finish.');
       connection.pending={resolve,reject,report};
-      connection.worker.postMessage({kind:options.actionsWorkbook?'actions-export':options.export?'export':'review',...(options.actionsWorkbook?{actionsWorkbook:options.actionsWorkbook}:{}),changes,previousChanges:session.changes||[],references:options.references||session.references||{},referencesChanged:options.references!==undefined,completedEquipmentIds:options.export?[...(session.status?.completed||[])]:undefined,migration,migrationChanged,...(initial?{baseline:session.baselineSnapshot,file:new Blob([session.sourceBytes||new Uint8Array()])}:{})});
+      connection.worker.postMessage({kind:options.actionsWorkbook?'actions-export':options.export?'export':'review',...(options.actionsWorkbook?{actionsWorkbook:options.actionsWorkbook}:{}),changes,previousChanges:session.changes||[],references:options.references||session.references||{},referencesChanged:options.references!==undefined,exportDate:options.exportDate,completedEquipmentIds:options.export?[...(session.status?.completed||[])]:undefined,migration,migrationChanged,...(initial?{baseline:session.baselineSnapshot,file:new Blob([session.sourceBytes||new Uint8Array()])}:{})});
     }catch(error){if(connection?.pending?.reject===reject){connection.pending=null;session.disposeReviewWorker?.();}reject(error);}
   });
 }

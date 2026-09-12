@@ -49,3 +49,18 @@ test('Actions export modal passes precisely its filtered findings to the Actions
   assert.match(node('#exportModalBody').innerHTML,/check Actioned/);
   await node('#exportGo').onclick();assert.equal(downloads[0],findings);
 });
+
+test('Updated Registry modal explains the batches and refreshes the Actions summary after download',async()=>{
+  const source=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
+  const start=source.indexOf('function renderExportOptions(){'),end=source.indexOf('\nexport function openExportOptions()',start);
+  const nodes=new Map(),S={screen:'modify',session:{exportKind:'updated',result:{findings:[]},changes:[{}],sourceBytes:new Uint8Array([1])}};
+  let downloads=0,renders=0;
+  const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:''});return nodes.get(selector);};
+  const context=vm.createContext({S,esc,ic:()=>'', $:node,$$:()=>[],exportPlan:()=>({levels:{},rules:{}}),exportPlanSummary:()=>({}),SSM_AUDIT_SEVERITIES:[],closeExportOptions(){},currentNavigate(){},
+    exportUpdatedRegistryXlsx:async()=>{downloads++;return true;},rerenderModifications:()=>renders++});
+  vm.runInContext(source.slice(start,end),context);vm.runInContext('renderExportOptions()',context);
+  assert.match(node('#exportModalBody').innerHTML,/1,950 changed equipment rows per file/);
+  assert.match(node('#exportModalBody').innerHTML,/Extract the ZIP/);
+  await node('#exportGo').onclick();assert.equal(downloads,1);assert.equal(renders,1);
+  S.screen='dashboard';await node('#exportGo').onclick();assert.equal(downloads,2);assert.equal(renders,1,'finishing export does not navigate away from another screen');
+});

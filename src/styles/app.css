@@ -2286,6 +2286,7 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .modify-pattern>.modify-im-swap{padding:0 16px 12px 42px}
 .modify-im-swap b{font-weight:600;color:var(--ink)}
 .actions-exports{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
+.registry-export-summary{margin:0 0 12px;font-size:12px;line-height:1.5;color:var(--ink-2);overflow-wrap:anywhere}
 .action-mode-tabs{display:flex;border-bottom:1px solid var(--border);margin:12px 0}
 .action-mode-tabs button{flex:1;min-width:0;padding:12px 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--ink-2);font:600 12px var(--sans);cursor:pointer}
 .action-mode-tabs button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--accent-700);background:var(--surface-2)}
