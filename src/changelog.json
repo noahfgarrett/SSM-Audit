@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.43.0",
+    "date": "2026-09-12",
+    "type": "feature",
+    "notes": "- Rows missing an L1 or L2 milestone now get a suggested pair in the Action dialog, with the evidence behind it and a measured confidence\n- References can include completed registries from other sites to inform those suggestions\n- The References button highlights until a reference is loaded and explains which checks references sharpen"
+  },
+  {
     "version": "1.42.0",
     "date": "2026-09-12",
     "type": "feature",
