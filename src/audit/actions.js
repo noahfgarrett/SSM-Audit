@@ -5,6 +5,7 @@ import { auditCommissioningRole, auditIsBlankItemMaster, auditMilestoneBranchCan
 import { VF_ITEM_MASTER_NAMES } from '../exto/vf-item-masters.js'
 import { auditReferenceRecommendation } from './references.js'
 import { auditReadMigrationSettings } from './milestone-migration.js'
+import { MILESTONE_LAYER_CONFIDENCE, calibrateMilestoneLayers, milestoneScheduleFromRegister, recommendMilestones } from './milestone-recommend.js'
 
 export const AUDIT_ACTION_FIELDS=Object.freeze({
   'UPN':'upn','Discipline':'discipline','Building':'building','System Name':'systemName','Closest Parent':'closestParent',
@@ -112,11 +113,21 @@ export async function auditReadReviewDocument(document,baseline,references={}){
   return {snapshot,changes:document.changes,actioned:ids(document.actioned),reviewed:ids(document.reviewed||document.actioned),excluded:ids(document.excluded),history,filterViews:auditReviewFilterViews(document.filterViews),milestoneMigration:auditReadMigrationSettings(document.milestoneMigration)};
 }
 
-export function auditRecommendationContext(snapshot,references={}){
-  const index=auditActionIndex(snapshot);let cohorts,branches;
+export function auditRecommendationContext(snapshot,references={},extras={}){
+  const index=auditActionIndex(snapshot);let cohorts,branches,milestones;
   return {snapshot,index,references,
     get cohorts(){return cohorts||=new Map(auditMilestoneCohortCandidates(snapshot.rows).map(candidate=>[auditSourceKey(candidate.row),candidate]));},
-    get branches(){return branches||=new Map(auditMilestoneBranchCandidates(snapshot.rows).map(candidate=>[auditSourceKey(candidate.row),candidate]));}};
+    get branches(){return branches||=new Map(auditMilestoneBranchCandidates(snapshot.rows).map(candidate=>[auditSourceKey(candidate.row),candidate]));},
+    /* Recommendations for rows missing milestones: the registry's own branches
+       first, then reference registries by milestone number. */
+    get milestones(){
+      if(milestones)return milestones;
+      const options={schedule:milestoneScheduleFromRegister(references.milestones&&references.milestones.entries||[]),references:extras.registries||[]};
+      /* Confidence shown to the user is measured on this registry's own labelled
+         rows wherever a layer has enough of them; defaults cover the rest. */
+      const confidence={...MILESTONE_LAYER_CONFIDENCE};
+      for(const [layer,stat] of Object.entries(calibrateMilestoneLayers(snapshot.rows,options)))if(stat.tested>=30&&confidence[layer]!==undefined)confidence[layer]=stat.accuracy;
+      return milestones=recommendMilestones(snapshot.rows,{...options,confidence}).byId;}};
 }
 const AUDIT_METADATA_TARGETS=Object.freeze({'parent.cross-building':['Building'],'parent.cross-discipline':['Discipline'],'parent.cross-upn':['UPN','System Name','Discipline']});
 const AUDIT_RULE_FIELDS=new Map();
@@ -179,7 +190,15 @@ export function auditProposeCorrection(finding,context){
     if(['parent.cross-building','parent.cross-discipline','parent.cycle','dependency.precedence-cycle','logic.external-path-unverified'].includes(finding.rule.id))return null;
     const reference=auditReferenceRecommendation(row,finding.field,context.references);
     if(reference){add(finding.field,reference.value);reason=reference.reason;confidence=reference.confidence||'Reference';}
-    else if(finding.rule.id==='parent.cross-upn'){
+    else if(finding.rule.id==='milestone.incomplete-pair'){
+      const recommendation=context.milestones.get(auditNormId(row.equipmentId));
+      if(!recommendation||!recommendation.number||recommendation.confidence<.6||recommendation.local===false)return null;
+      if(recommendation.l2Label)add('L2 Milestone',recommendation.l2Label);
+      if(recommendation.l1Label)add('L1 Milestone Parent',recommendation.l1Label);
+      const percent=Math.round(recommendation.confidence*100);
+      reason=`${recommendation.evidence}. Evidence of this kind was right ${percent}% of the time when replayed on labelled rows; confirm the phase before applying.`;
+      confidence=`${percent}% — ${recommendation.layer.replace(/-/g,' ')}`;
+    }else if(finding.rule.id==='parent.cross-upn'){
       const parents=context.index.byTag.get(auditNormId(row.closestParent));
       if(parents?.length!==1||context.index.byTag.get(auditNormId(row.equipmentId))?.length!==1)return null;
       const parent=parents[0],role=auditCommissioningRole(row);

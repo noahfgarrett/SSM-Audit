@@ -8,6 +8,7 @@ export const MODULES=[
   'src/exto/vf-item-masters.js',
   'src/audit/model.js',
   'src/audit/engine.js',
+  'src/audit/milestone-recommend.js',
   'src/audit/references.js',
   'src/audit/milestone-migration.js',
   'src/audit/actions.js',
