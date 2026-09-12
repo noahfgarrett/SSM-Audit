@@ -15,6 +15,7 @@ import { AUDIT_ACTION_FIELDS, auditActionPatternKey, auditActionPolicy, auditAct
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
+import { buildMilestoneReference } from '../audit/milestone-recommend.js'
 import { auditSparrowMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../audit/milestone-migration.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
@@ -599,20 +600,21 @@ function modifyListHtml(entry){
    changes for the Updated Registry Export. */
 let modifyRecommendationContext=null;
 function modifySuggestedFix(finding){
-  if(!modifyRecommendationContext)modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
+  if(!modifyRecommendationContext)modifyRecommendationContext=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration),{registries:S.session.milestoneReferences||[]});
   return auditProposeCorrection(finding,modifyRecommendationContext);
 }
 export function sessionAudit(snapshot,references=S.session.references||{},migration=S.session.milestoneMigration){
   return auditSessionResult(snapshot,references,migration);
 }
 function openReferencesDialog(navigate){
-  const session=S.session,pending={...session.references},workbooks={},names={},token={kind:'references'};
+  const session=S.session,pending={...session.references},workbooks={},names={},token={kind:'references'},registries=[...(session.milestoneReferences||[])];
   const kinds=[['milestones','Milestone register'],['itemMasters','Item Master catalog']];
   let busy=false,helpOpen=false;
   const paint=()=>{
     $('#actionModalBody').innerHTML=`<span class="eyebrow">Local references</span><div class="reference-title"><h3 id="actionTitle">Reference workbooks</h3><button class="btn ghost icon-btn" id="referencesHelp" type="button" title="How references work" aria-label="How references work" aria-controls="referencesHelpBody" aria-expanded="${helpOpen}">${ic('circle-help')}</button></div>
       <section class="reference-help" id="referencesHelpBody" aria-label="How references work" ${helpOpen?'':'hidden'}>${referenceHelpHtml()}</section>
       ${kinds.map(([kind,label])=>`<section class="reference-row"><div><b>${label}</b><small>${pending[kind]?`${pending[kind].entries.length.toLocaleString()} entries selected`:'Not selected'}</small><small>${esc(pending[kind]?.warning||'')}</small></div><button class="btn" type="button" data-reference-pick="${kind}">${ic('folder-open')}Choose file</button><button class="icon-btn btn ghost" type="button" data-reference-remove="${kind}" ${pending[kind]?'':'disabled'} title="Remove reference" aria-label="Remove ${label}">${ic('x')}</button><input type="file" data-reference-file="${kind}" accept=".xlsx,.xls" hidden>${workbooks[kind]?`<label class="reference-selection">Sheet<select data-reference-sheet="${kind}" aria-label="${label} sheet">${names[kind].map(name=>`<option value="${esc(name)}" ${pending[kind]?.sheetName===name?'selected':''}>${esc(name)}</option>`).join('')}</select></label>`:''}</section>`).join('')}
+      <section class="reference-row reference-registries"><div><b>Reference registries</b><small>${registries.length?`${registries.length} loaded — milestone numbers from other sites inform recommendations for rows missing milestones`:'Completed registries from other sites; used only for milestone recommendations'}</small>${registries.map((entry,index)=>`<small class="reference-registry">${esc(entry.site)} · ${entry.labelled.toLocaleString()} of ${entry.count.toLocaleString()} rows carry milestones <button class="btn-link" type="button" data-registry-remove="${index}">Remove</button></small>`).join('')}</div><button class="btn" type="button" id="registryPick">${ic('folder-open')}Add registry</button><input type="file" id="registryFile" accept=".xlsx,.xls" multiple hidden></section>
       <footer class="export-foot"><span>Session only. Original workbooks unchanged.</span><div><button class="btn ghost" id="referencesCancel" type="button">Cancel</button><button class="btn primary" id="referencesApply" type="button">Apply references</button></div></footer>`;
     $('#referencesHelp').onclick=()=>{helpOpen=!helpOpen;$('#referencesHelpBody').hidden=!helpOpen;$('#referencesHelp').setAttribute('aria-expanded',String(helpOpen));};
     $('#referencesCancel').onclick=closeActionDialog;
@@ -632,6 +634,21 @@ function openReferencesDialog(navigate){
       }catch(error){toast(error.message||'This reference could not be read');}finally{busy=false;}
     });
     $$('[data-reference-sheet]').forEach(select=>select.onchange=()=>{if(busy)return;const kind=select.dataset.referenceSheet;pending[kind]=workbooks[kind].get(select.value);paint();});
+    $('#registryPick').onclick=()=>$('#registryFile').click();
+    $$('[data-registry-remove]').forEach(button=>button.onclick=()=>{if(busy)return;registries.splice(Number(button.dataset.registryRemove),1);paint();});
+    $('#registryFile').onchange=async()=>{
+      const files=[...$('#registryFile').files];if(!files.length||busy)return;busy=true;
+      try{
+        for(const file of files){let imported;
+          await runWithProgress('Loading reference registry','Original workbook unchanged',async(checkpoint,report)=>{await checkpoint();imported=await importAuditWorkbook(file,{audit:false,referenceKind:'registries',report});await checkpoint();});
+          if(actionScope!==token||S.session!==session)return;
+          const reference=buildMilestoneReference(imported.registryRows,file.name.replace(/\.[^.]+$/,''));
+          if(!reference.labelled)throw new Error(`${file.name} carries no milestones, so it cannot inform recommendations.`);
+          registries.push(reference);
+        }
+        paint();
+      }catch(error){toast(error.message||'This registry could not be read');}finally{busy=false;}
+    };
     $('#referencesApply').onclick=async()=>{
       if(busy)return;busy=true;$('#referencesApply').disabled=true;
       const revision=session.changesRev;
@@ -643,7 +660,7 @@ function openReferencesDialog(navigate){
         });
         if(S.session!==session||actionScope!==token||session.changesRev!==revision)return;
         const {baselineResult,result}=prepared;
-        session.references=pending;session.baselineResult=baselineResult;session.reviewUndo=[];
+        session.references=pending;session.milestoneReferences=registries;session.baselineResult=baselineResult;session.reviewUndo=[];
         const known=new Set([...baselineResult.findings,...result.findings].map(finding=>finding.id));session.actioned=new Set([...session.actioned].filter(id=>known.has(id)));session.reviewedIds=new Set([...(session.reviewedIds||[])].filter(id=>known.has(id)));session.excluded=new Set([...session.excluded].filter(id=>known.has(id)));
         reviewInstallDraft({...prepared,changes:session.changes});closeActionDialog();rerenderModifications(navigate);toast('References applied. Review Item Master or milestone findings in Actions.');
         if(session.pendingAutosave){const saved=session.pendingAutosave;session.pendingAutosave=null;await restoreReviewDocument(saved,navigate,'autosave');}
@@ -838,7 +855,7 @@ function openActionDialog(label,findings,navigate,provided,prepared){
     return runWithProgress('Preparing actions','Finding suggested values',async(checkpoint,report)=>{
       await checkpoint();
       if(S.session!==session||actionScope!==token)return;
-      modifyRecommendationContext||=auditRecommendationContext(session.snapshot,auditMigrationReferences(session.references,session.milestoneMigration));
+      modifyRecommendationContext||=auditRecommendationContext(session.snapshot,auditMigrationReferences(session.references,session.milestoneMigration),{registries:session.milestoneReferences||[]});
       const context=modifyRecommendationContext,suggestions=[],seen=new Set();
       for(let offset=0;offset<findings.length;offset+=100){
         if(S.session!==session||session.changesRev!==revision||actionScope!==token)return;
@@ -851,7 +868,7 @@ function openActionDialog(label,findings,navigate,provided,prepared){
       if(S.session===session&&session.changesRev===revision&&actionScope===token){session.reviewBusy=false;openActionDialog(label,findings,navigate,provided,{context,suggestions});}
     }).catch(error=>toast(error.message||'Actions could not be prepared')).finally(()=>{session.reviewBusy=false;});
   }
-  modifyRecommendationContext||=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration));
+  modifyRecommendationContext||=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration),{registries:S.session.milestoneReferences||[]});
   const context=prepared?.context||modifyRecommendationContext,suggestions=prepared?.suggestions||actionSuggestions(findings,context,'child',provided);
   actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',mode:findings.length>1&&!provided?'bulk':'individual',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
   paintActionDialog();

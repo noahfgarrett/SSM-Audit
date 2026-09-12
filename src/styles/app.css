@@ -2298,3 +2298,7 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-bulk-field input{width:100%;min-width:0;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:4px;color:var(--ink);background:var(--surface);font:12px var(--sans)}
 .action-bulk-problem{font-size:12px;line-height:1.5;color:var(--ink-2);overflow-wrap:anywhere}
 @media(max-width:640px){.actions-exports{justify-content:flex-start}.modify-shell>.screen-heading{flex-wrap:wrap;gap:12px}.action-bulk-field{grid-template-columns:1fr}.action-mode-tabs button{font-size:11px}}
+
+/* ---- reference registries (milestone recommendations) ---- */
+.reference-registries small.reference-registry{display:block;margin-top:4px;color:var(--ink-2)}
+.reference-registries .btn-link{margin-left:6px}

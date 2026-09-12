@@ -172,3 +172,14 @@ test('unknown non-electrical nomenclature does not select a System Name just fro
   const original=servedDrive({child:{equipmentId:'F77-UNKNOWN',systemName:extoRev21SystemsForUpn('101')[0]}}),row=original.rows[1];
   assert.equal(auditProposeCorrection(finding(row),auditRecommendationContext(original)),null);
 });
+
+test('rows missing milestones get the closest-parent pair as a suggested fix with a measured confidence',()=>{
+  const l2='L2-M1-1220 - UPN 602 MV Enabling Green Tag',l1='L1-M1-110 - BC1 Available'
+  const original=snapshot([{equipmentId:'MV-ROOT',milestone:l2,milestoneParent:l1},{equipmentId:'MV-CHILD',closestParent:'MV-ROOT'}]);
+  const issue=runSsmAudit(original).findings.find(f=>f.rule.id==='milestone.incomplete-pair'&&f.equipmentId==='MV-CHILD');assert.ok(issue,'the child is flagged for missing milestones');
+  const proposal=auditProposeCorrection(issue,auditRecommendationContext(original));
+  assert.ok(proposal,'a recommendation is proposed');
+  assert.deepEqual(proposal.changes.map(change=>[change.field,change.value]).sort(),[['L1 Milestone Parent',l1],['L2 Milestone',l2]]);
+  assert.match(proposal.confidence,/^95% — parent chain$/);
+  assert.match(proposal.reason,/MV-ROOT/);
+});

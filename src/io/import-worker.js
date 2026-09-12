@@ -38,6 +38,13 @@ self.onmessage=async({data})=>{
     const bytes=new Uint8Array(await data.file.arrayBuffer());
     report(.06,'Opening workbook');
     const workbook=XLSX.read(bytes,{type:'array',dense:true});
+    if(data.referenceKind==='registries'){
+      report(.2,'Reading registry tabs');
+      const reference=await auditSnapshotFromWorkbook(workbook,data.fileName,null,(fraction,label)=>report(.2+fraction*.7,label));
+      const registryRows=reference.rows.map(row=>({equipmentId:row.equipmentId,upn:row.upn,discipline:row.discipline,building:row.building,systemName:row.systemName,closestParent:row.closestParent,milestone:row.milestone,milestoneParent:row.milestoneParent}));
+      report(1,'Reference registry ready');
+      self.postMessage({type:'result',registryRows});return;
+    }
     if(data.referenceKind){
       report(.2,'Finding reference sheets');
       const sheets=auditReferenceSheets(workbook,data.referenceKind);
