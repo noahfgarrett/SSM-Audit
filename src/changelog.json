@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.42.0",
+    "date": "2026-09-12",
+    "type": "feature",
+    "notes": "- Review progress is kept automatically in this browser and restored when the same registry is opened again; the review file remains the shareable save\n- Updated Registry now downloads as a dated ZIP of numbered upload batches, each within the upload limit"
+  },
+  {
     "version": "1.41.2",
     "date": "2026-09-11",
     "type": "fix",

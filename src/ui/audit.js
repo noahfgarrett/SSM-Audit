@@ -7,11 +7,11 @@ import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIE
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
-import { auditExportPlanMode, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, exportActionsXlsx, validateAuditCorrections } from '../audit/export.js'
+import { auditExportPlanMode, auditUpdateExportSummary, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, exportActionsXlsx, validateAuditCorrections } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { AUDIT_ACTION_FIELDS, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditReviewDocument } from '../audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditRegistryRevision, auditReviewDocument } from '../audit/actions.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
@@ -184,11 +184,46 @@ function setRuleDisabled(ruleId,off){
   const set=new Set(S.rules.disabled||[]);if(off)set.add(ruleId);else set.delete(ruleId);
   S.rules.disabled=[...set];saveRulePreferences();refreshSessionResult();
 }
-/* Workbook-derived progress is session-only; review files are an explicit export. */
+/* ---- autosave ----
+   Decisions come back on their own when the same registry is opened again in
+   this browser (keyed by a hash of its contents), so a reload never costs the
+   review. The review file remains the explicit, shareable save. */
+const REVIEW_AUTOSAVE_PREFIX='ssm-audit.review.';
+let reviewAutosaveTimer=0;
+async function reviewAutosaveKey(session){
+  if(!session||!session.baselineSnapshot)return '';
+  if(!session.reviewRevision)session.reviewRevision=await auditRegistryRevision(session.baselineSnapshot);
+  return REVIEW_AUTOSAVE_PREFIX+session.reviewRevision;
+}
+function reviewHasDecisions(session){
+  return !!((session.changes||[]).length||(session.reviewedIds||session.actioned||[]).size||(session.excluded||[]).size||(session.reviewHistory||[]).length||(session.filterViews||[]).length||session.milestoneMigration?.enabled);
+}
+function scheduleReviewAutosave(){
+  clearTimeout(reviewAutosaveTimer);
+  reviewAutosaveTimer=setTimeout(()=>{reviewAutosave().catch(()=>{});},800);
+}
+async function reviewAutosave(){
+  const session=S.session;if(!session||!session.baselineSnapshot)return;
+  const key=await reviewAutosaveKey(session);if(!key||S.session!==session)return;
+  try{
+    if(!reviewHasDecisions(session)){localStorage.removeItem(key);return;}
+    const data=await auditReviewDocument(session);if(S.session!==session)return;
+    localStorage.setItem(key,JSON.stringify(data));session.autosaveFailed=false;
+  }catch(_){
+    /* Quota or private mode: the review file is the fallback, said once. */
+    if(!session.autosaveFailed){session.autosaveFailed=true;toast('This review is too large for the browser to keep automatically — use Save review to keep it');}
+  }
+}
+async function reviewAutosaveRestore(navigate){
+  const session=S.session;if(!session||!session.baselineSnapshot)return;
+  const key=await reviewAutosaveKey(session);if(!key||S.session!==session)return;
+  let saved;try{const raw=localStorage.getItem(key);if(!raw)return;saved=JSON.parse(raw);}catch(_){return;}
+  await restoreReviewDocument(saved,navigate,'autosave');
+}
 function loadActioned(){
   S.session.actioned=new Set();S.session.reviewedIds=new Set();S.session.actionedRev=0;
 }
-function saveActioned(){S.session.reviewDirty=true;}
+function saveActioned(){S.session.reviewDirty=true;scheduleReviewAutosave();}
 export function isActioned(finding){return !!(finding&&S.session&&S.session.actioned&&S.session.actioned.has(finding.id));}
 function setActioned(finding,on){
   if(!S.session.actioned)S.session.actioned=new Set();
@@ -215,7 +250,7 @@ function actionedInResult(){
 function loadChanges(){
   S.session.changes=[];S.session.changesRev=0;
 }
-function saveChanges(){S.session.reviewDirty=true;}
+function saveChanges(){S.session.reviewDirty=true;scheduleReviewAutosave();}
 /* ---- modifications: findings dismissed ----
    The user's per-finding overrides. A dismissed finding disappears from every
    metric -- findings list, dashboard, hierarchy badges, export -- until it is
@@ -223,7 +258,7 @@ function saveChanges(){S.session.reviewDirty=true;}
 function loadExcluded(){
   S.session.excluded=new Set();S.session.excludedRev=0;
 }
-function saveExcluded(){S.session.reviewDirty=true;}
+function saveExcluded(){S.session.reviewDirty=true;scheduleReviewAutosave();}
 export function isExcludedId(id){return !!(S.session&&S.session.excluded&&S.session.excluded.has(id));}
 function setExcluded(id,on){
   if(!S.session.excluded)S.session.excluded=new Set();
@@ -314,7 +349,7 @@ function renderExportOptions(){
   if(kind!=='actionable'){
     $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose the export</h3>${kindTabs}
       ${kind==='actions'?`<p class="export-intro">${actionFindings.length.toLocaleString()} active findings using the current Actions search, milestone and discipline filters. Each rule has its own tab with alternating white and light-gray groups. Check Actionable on a rule tab to add a finding to the front worklist; check Actioned when complete to remove it from the pending list and update progress. Dismissed and completed findings are omitted. Checkmarks start empty and do not sync back to the app.</p>`:kind==='updated'
-        ?`<p class="export-intro">A partial update workbook containing only changed equipment rows, in the exact upload-template column order, with yellow corrected cells. Available upload metadata is retained; missing fields stay blank. Registry-only columns, completed equipment and status/report tabs are omitted. Unchanged metadata formulas use their saved values. Your original workbook stays unchanged. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
+        ?`<p class="export-intro">One dated ZIP containing numbered XLSX upload batches, with up to 1,950 changed equipment rows per file. Each batch uses the exact upload-template columns and yellow corrected cells. Extract the ZIP and upload the XLSX files in batch order. Available upload metadata is retained; missing fields stay blank. Registry-only columns, completed equipment and status/report tabs are omitted. Unchanged metadata formulas use their saved values. Your original workbook stays unchanged. ${changesCount?`<b>${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged.</b>`:'<b>Nothing is staged yet</b> — use the Action buttons on the Actions tab first.'} ${S.session.sourceBytes?'':'<b>The original workbook is not in memory — load the registry again first.</b>'}</p>`
         :kind==='corrections'?`<p class="export-intro">Current corrections and review history, including reviewer, note, source row, and before-and-after values. Draft corrections have not been verified in an uploaded registry.</p>`:`<div class="export-layout"><b>Sign off whole groups</b>
           <label class="export-layout-choice ${trackerSignOffBy==='milestone'?'on':''}"><input type="radio" name="tracker-signoff" value="milestone" ${trackerSignOffBy==='milestone'?'checked':''}><span><b>By L2 milestone</b><small>One checkmark signs off a milestone across all disciplines.</small></span></label>
           <label class="export-layout-choice ${trackerSignOffBy==='discipline'?'on':''}"><input type="radio" name="tracker-signoff" value="discipline" ${trackerSignOffBy==='discipline'?'checked':''}><span><b>By discipline</b><small>One checkmark signs off a discipline across all milestones.</small></span></label>
@@ -322,7 +357,7 @@ function renderExportOptions(){
       <footer class="export-foot"><span></span><div><button class="btn primary" type="button" id="exportGo" ${kind==='updated'&&(!changesCount||!S.session.sourceBytes)?'disabled':''}>${ic('file-down')}Export</button></div></footer>`;
     $$('[data-export-kind]').forEach(button=>button.onclick=()=>{S.session.exportKind=button.dataset.exportKind;renderExportOptions();});
     $$('input[name="tracker-signoff"]').forEach(input=>input.onchange=()=>{S.session.trackerSignOffBy=input.value;renderExportOptions();});
-    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='actions')await exportActionsXlsx(actionFindings);else if(kind==='updated')await exportUpdatedRegistryXlsx();else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx(trackerSignOffBy);};
+    $('#exportGo').onclick=async()=>{closeExportOptions();if(kind==='actions')await exportActionsXlsx(actionFindings);else if(kind==='updated'){if(await exportUpdatedRegistryXlsx()&&S.screen==='modify')rerenderModifications(currentNavigate);}else if(kind==='corrections')await exportAuditCorrectionsXlsx();else await exportTrackerXlsx(trackerSignOffBy);};
     return;
   }
   $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>${kindTabs}
@@ -611,6 +646,7 @@ function openReferencesDialog(navigate){
         session.references=pending;session.baselineResult=baselineResult;session.reviewUndo=[];
         const known=new Set([...baselineResult.findings,...result.findings].map(finding=>finding.id));session.actioned=new Set([...session.actioned].filter(id=>known.has(id)));session.reviewedIds=new Set([...(session.reviewedIds||[])].filter(id=>known.has(id)));session.excluded=new Set([...session.excluded].filter(id=>known.has(id)));
         reviewInstallDraft({...prepared,changes:session.changes});closeActionDialog();rerenderModifications(navigate);toast('References applied. Review Item Master or milestone findings in Actions.');
+        if(session.pendingAutosave){const saved=session.pendingAutosave;session.pendingAutosave=null;await restoreReviewDocument(saved,navigate,'autosave');}
       }catch(error){toast(error.message||'References could not be applied');if($('#referencesApply'))$('#referencesApply').disabled=false;}finally{busy=false;}
     };
   };
@@ -626,7 +662,7 @@ function reviewInstallDraft(prepared){
   session.snapshot=prepared.snapshot;session.rawResult=prepared.result;session.changes=prepared.changes;
   session.draftResolved=new Set(prepared.draftResolvedIds||auditCorrectionImpact(session.baselineResult,prepared.result).resolved.map(finding=>finding.id));
   session.actioned=new Set([...(session.reviewedIds||[]),...session.draftResolved]);
-  session.changesRev++;session.actionedRev++;session.auditedAt=Date.now();session.reviewDirty=true;
+  session.changesRev++;session.actionedRev++;session.auditedAt=Date.now();session.reviewDirty=true;scheduleReviewAutosave();
   modifyRecommendationContext=null;S.comparison.targetSnapshot=session.snapshot;S.comparison.result=null;refreshSessionResult();
 }
 async function reviewPrepare(changes,migration){
@@ -655,16 +691,34 @@ async function saveReviewFile(){
 async function loadReviewFile(file,navigate){
   if(!file)return;
   const session=S.session,revision=session.changesRev;
-  const checkSession=()=>{if(S.session!==session||session.changesRev!==revision)throw new Error('The registry changed while loading. No review was restored.');};
+  let parsed;
   try{
     if(file.size>25000000)throw new Error('This review file is too large.');
-    const content=await file.text();checkSession();
-    const restored=await auditReadReviewDocument(JSON.parse(content),session.baselineSnapshot,session.references);checkSession();
+    parsed=JSON.parse(await file.text());
+    if(S.session!==session||session.changesRev!==revision)throw new Error('The registry changed while loading. No review was restored.');
+  }catch(error){toast(error.message||'This review file could not be loaded');return;}
+  await restoreReviewDocument(parsed,navigate,'file',session,revision);
+}
+/* Shared by the review file and the browser autosave. An autosave that needs
+   reference workbooks waits for them instead of failing. */
+async function restoreReviewDocument(saved,navigate,source,session=S.session,revision=session.changesRev){
+  const autosave=source==='autosave';
+  const checkSession=()=>{if(S.session!==session||session.changesRev!==revision)throw new Error('The registry changed while loading. No review was restored.');};
+  try{
+    let restored;
+    try{restored=await auditReadReviewDocument(saved,session.baselineSnapshot,session.references);}
+    catch(error){
+      if(autosave&&/reference workbooks/.test(error.message||'')){session.pendingAutosave=saved;toast('Saved progress for this registry needs its reference workbooks — apply them to restore it');return;}
+      throw error;
+    }
+    checkSession();
     const prepared=await reviewPrepare(restored.changes,restored.milestoneMigration);checkSession();
     if(prepared.impact.unsafe.length)throw new Error('The saved corrections now introduce errors. No changes were loaded.');
     const known=new Set([...S.session.baselineResult.findings,...prepared.result.findings].map(finding=>finding.id));
-    reviewRememberUndo();S.session.actioned=new Set([...restored.actioned].filter(id=>known.has(id)));S.session.reviewedIds=new Set([...restored.reviewed].filter(id=>known.has(id)));S.session.excluded=new Set([...restored.excluded].filter(id=>known.has(id)));S.session.reviewHistory=restored.history;S.session.filterViews=restored.filterViews||[];reviewInstallDraft(prepared);rerenderModifications(navigate);toast('Review restored and draft re-audited');
-  }catch(error){toast(error.message||'This review file could not be loaded');}
+    reviewRememberUndo();S.session.actioned=new Set([...restored.actioned].filter(id=>known.has(id)));S.session.reviewedIds=new Set([...restored.reviewed].filter(id=>known.has(id)));S.session.excluded=new Set([...restored.excluded].filter(id=>known.has(id)));S.session.reviewHistory=restored.history;S.session.filterViews=restored.filterViews||[];reviewInstallDraft(prepared);
+    if(autosave){navigate(S.screen==='upload'?'dashboard':S.screen);toast('Saved progress restored');}
+    else{rerenderModifications(navigate);toast('Review restored and draft re-audited');}
+  }catch(error){toast(autosave?`Saved progress could not be restored: ${error.message||'unknown error'}`:(error.message||'This review file could not be loaded'));}
 }
 let actionTrapCleanup=null,actionOpener=null,actionScope=null;
 function closeActionDialog(){
@@ -978,6 +1032,7 @@ export function renderModifications(navigate){
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div><div class="actions-exports"><button class="btn" id="exportActions" type="button">${ic('file-down')}Export Actions</button><button class="btn primary" id="exportUpdatedRegistry" type="button" ${changesCount&&S.session.sourceBytes?'':'disabled'}>${ic('file-spreadsheet')}Updated Registry</button></div></div>
+    ${S.session.lastRegistryExport?`<p class="registry-export-summary" role="status"><b>Last export:</b> ${esc(auditUpdateExportSummary(S.session.lastRegistryExport))}</p>`:''}
     ${milestoneMigrationControls()}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands"><button class="btn ghost sm" id="reviewReferences">${ic('file-spreadsheet')}References</button><button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
@@ -989,7 +1044,7 @@ export function renderModifications(navigate){
   $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
   wireMilestoneMigration(navigate);
   $('#exportActions').onclick=()=>{S.session.exportKind='actions';openExportOptions();};
-  $('#exportUpdatedRegistry').onclick=()=>{if(!S.session.reviewBusy)return exportUpdatedRegistryXlsx();};
+  $('#exportUpdatedRegistry').onclick=async()=>{if(!S.session.reviewBusy&&await exportUpdatedRegistryXlsx()&&S.screen==='modify')rerenderModifications(navigate);};
   const body=$('#modifyBody');
   body.onchange=event=>{
     const groupBox=event.target.closest('[data-mod-group]');
@@ -1345,6 +1400,7 @@ export async function addAuditTarget(file,navigate){
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
+    await reviewAutosaveRestore(navigate);
   }catch(error){
     console.error('SSM Audit failed',error);S.session.error=error&&error.message||'Could not read this registry';S.session.snapshot=null;S.session.result=null;renderUpload(navigate);
   }
@@ -1406,6 +1462,7 @@ async function addComparisonFile(file,side,navigate){
     if(side==='target'){resetSession();S.session={...S.session,name:file.name,baselineSnapshot:snapshot,baselineResult:auditResult,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
+    if(side==='target')await reviewAutosaveRestore(navigate);
   }catch(error){console.error('Registry comparison import failed',error);if(side==='target'){resetSession();clearComparisonTarget();}else clearComparisonReference();S.comparison[errorKey]=error&&error.message||'Could not read this registry';renderUpload(navigate);}
 }
 
@@ -1588,7 +1645,7 @@ function filterSectionSet(section,key,on){
 }
 /* Filter values can contain project data; persist them only in review exports. */
 function loadFilterViews(){return S.session.filterViews||[];}
-function saveFilterViews(views){S.session.filterViews=views.slice(-100);S.session.reviewDirty=true;}
+function saveFilterViews(views){S.session.filterViews=views.slice(-100);S.session.reviewDirty=true;scheduleReviewAutosave();}
 function captureFilterView(name){
   return {name,filters:{hiddenSeverities:[...(S.session.hiddenSeverities||[])],hiddenSources:[...(S.session.hiddenSources||[])],hiddenCategories:[...(S.session.hiddenCategories||[])],hiddenRules:[...(S.session.hiddenRules||[])],dimFilters:JSON.parse(JSON.stringify(dimFilterMap()))}};
 }

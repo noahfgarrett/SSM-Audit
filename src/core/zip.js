@@ -21,17 +21,17 @@ const DOS_TIME=0,DOS_DATE=(1<<5)|1|((2026-1980)<<9);
 const FLAG_UTF8=0x0800;
 
 /* entries: [{name, data:Uint8Array}] → Uint8Array of a ZIP file. */
-export async function zipEntries(entries,onProgress){
+export async function zipEntries(entries,onProgress,options={}){
   const encoder=new TextEncoder(),locals=[],centrals=[];let offset=0;
   const totalBytes=entries.reduce((sum,entry)=>sum+entry.data.length,0)||1;let doneBytes=0;
   for(const entry of entries){
-    const name=encoder.encode(entry.name),data=entry.data,crc=crc32(data),packed=await deflateRaw(data);
+    const name=encoder.encode(entry.name),data=entry.data,crc=crc32(data),packed=options.store?data:await deflateRaw(data),method=options.store?0:8;
     const local=new Uint8Array(30+name.length),view=new DataView(local.buffer);
-    view.setUint32(0,0x04034b50,true);view.setUint16(4,20,true);view.setUint16(6,FLAG_UTF8,true);view.setUint16(8,8,true);
+    view.setUint32(0,0x04034b50,true);view.setUint16(4,20,true);view.setUint16(6,FLAG_UTF8,true);view.setUint16(8,method,true);
     view.setUint16(10,DOS_TIME,true);view.setUint16(12,DOS_DATE,true);view.setUint32(14,crc,true);view.setUint32(18,packed.length,true);view.setUint32(22,data.length,true);
     view.setUint16(26,name.length,true);view.setUint16(28,0,true);local.set(name,30);
     const central=new Uint8Array(46+name.length),cview=new DataView(central.buffer);
-    cview.setUint32(0,0x02014b50,true);cview.setUint16(4,20,true);cview.setUint16(6,20,true);cview.setUint16(8,FLAG_UTF8,true);cview.setUint16(10,8,true);
+    cview.setUint32(0,0x02014b50,true);cview.setUint16(4,20,true);cview.setUint16(6,20,true);cview.setUint16(8,FLAG_UTF8,true);cview.setUint16(10,method,true);
     cview.setUint16(12,DOS_TIME,true);cview.setUint16(14,DOS_DATE,true);cview.setUint32(16,crc,true);cview.setUint32(20,packed.length,true);cview.setUint32(24,data.length,true);
     cview.setUint16(28,name.length,true);cview.setUint16(30,0,true);cview.setUint16(32,0,true);cview.setUint16(34,0,true);cview.setUint16(36,0,true);cview.setUint32(38,0,true);cview.setUint32(42,offset,true);central.set(name,46);
     locals.push(local,packed);centrals.push(central);offset+=local.length+packed.length;

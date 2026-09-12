@@ -71,7 +71,7 @@ function reviewHarness(session) {
     document: { activeElement: null, contains: () => false },
     animateOpen: element => element.classList.add('show'), animateClose: element => element.classList.remove('show'),
     activateFocusTrap: () => () => {}, readArrayBuffer: async file => file.bytes,
-    refreshSessionResult: () => { calls.refresh++ }, rerenderModifications: () => { calls.render++ }, toast: message => messages.push(message),
+    refreshSessionResult: () => { calls.refresh++ }, rerenderModifications: () => { calls.render++ }, scheduleReviewAutosave: () => { calls.autosave = (calls.autosave || 0) + 1 }, toast: message => messages.push(message),
     runWithProgress: async (_title, _description, run) => {
       calls.progress++
       return run(async () => { calls.checkpoints++; await hooks.checkpoint?.(calls.checkpoints) }, () => {})
@@ -462,10 +462,11 @@ for (const reviewed of [true, false]) {
   })
 }
 
-test('filter views stay session-only without reading, writing or deleting localStorage', () => {
+test('filter views never touch localStorage directly — they hand off to the debounced review autosave', () => {
   const from = ui.indexOf('function loadFilterViews('), to = ui.indexOf('\nfunction captureFilterView(', from)
   assert.ok(from >= 0 && to > from)
-  const context = vm.createContext({ S: { session: null } })
+  let autosaves = 0
+  const context = vm.createContext({ S: { session: null }, scheduleReviewAutosave: () => { autosaves++ } })
   let storageAccesses = 0
   Object.defineProperty(context, 'localStorage', { get() { storageAccesses++; throw new Error('Session filter views must not access persistent storage') } })
   vm.runInContext(`${resetSession.toString()}\n${ui.slice(from, to)}`, context)

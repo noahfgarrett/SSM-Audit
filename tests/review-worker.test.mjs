@@ -31,9 +31,13 @@ test('packaged review worker validates large drafts off-thread and reuses its so
   const expected=auditSessionResult(auditApplyCorrections(baseline,[change]));assert.deepEqual(first.prepared.result,expected);
   const changes=[change,auditMakeCorrection(baseline.rows[1],'Dependency Project','')];
   const second=await send({previousChanges:[change],changes});assert.equal(second.reads,1,'original workbook was not reparsed');assert.equal(second.prepared.exportCheck.cellCount,2);assert.equal(second.prepared.snapshot.rows[1].dependencyProject,'');
-  const exported=await send({kind:'export',changes,completedEquipmentIds:[baseline.rows[0].equipmentId]});
+  const exported=await send({kind:'export',changes,exportDate:'2026-09-11',completedEquipmentIds:[baseline.rows[0].equipmentId]});
   assert.equal(exported.reads,1,'export reuses the validated source workbook');
-  const output=XLSX.read(exported.prepared.bytes,{type:'array',cellStyles:true}),sheet=output.Sheets['Upload Template'];
+  assert.equal(exported.prepared.filename,'Registry_Automated_Update_2026-09-11.zip');
+  assert.equal(exported.prepared.summary.exportedRows,1);assert.equal(exported.prepared.summary.excludedCompletedRows,1);
+  const archive=XLSX.CFB.read(exported.prepared.bytes,{type:'array'});
+  const batch=XLSX.CFB.find(archive,'/'+exported.prepared.summary.batches[0].name);
+  const output=XLSX.read(batch.content,{type:'array',cellStyles:true}),sheet=output.Sheets['Upload Template'];
   assert.deepEqual([...output.SheetNames],['Upload Template']);assert.equal(sheet.K2.v,baseline.rows[1].equipmentId);assert.equal(sheet.AO2.v,'');assert.equal(sheet.AO2.s.fgColor.rgb,'FFF2CC');
   assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,1);
   assert.deepEqual(Array.from(XLSX.utils.sheet_to_json(sheet,{header:1})[0]),EXTO_REV21_COLUMNS.map(c=>c.header));

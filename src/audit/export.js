@@ -894,7 +894,21 @@ export async function buildUpdatedRegistryBytes(sourceBytes,baselineSnapshot,cha
   for(const entry of entries){const file=XLSX.CFB.find(container,`/${entry.name}`);if(file){file.content=entry.data;file.size=entry.data.length;}else XLSX.CFB.utils.cfb_add(container,entry.name,entry.data);}
   return new Uint8Array(XLSX.CFB.write(container,{fileType:'zip',type:'array',compression:true}));
 }
-export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,options={}){
+export const AUDIT_UPDATE_BATCH_SIZE=1950;
+export function auditUpdateExportDate(date=new Date()){
+  return [date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');
+}
+export function auditUpdateExportSummary(summary){
+  if(!summary)return '';
+  return `${summary.exportedRows.toLocaleString()} equipment rows exported in ${summary.batches.length} ${summary.batches.length===1?'batch':'batches'} (${summary.batches.map(batch=>batch.rows.toLocaleString()).join(' / ')}). ${summary.excludedCompletedRows.toLocaleString()} completed rows excluded. ${summary.exportedCells.toLocaleString()} changed cells exported.`;
+}
+export function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,options={}){
+  return buildAuditUpdateData(sourceBytes,baseline,changes,{...options,batched:false});
+}
+export function buildAuditUpdateBatches(sourceBytes,baseline,changes,options={}){
+  return buildAuditUpdateData(sourceBytes,baseline,changes,{...options,uploadTemplate:true,batched:true});
+}
+async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   options.onStage?.(.05,'Reading original metadata');
   const bytes=sourceBytes instanceof ArrayBuffer?new Uint8Array(sourceBytes.slice(0)):ArrayBuffer.isView(sourceBytes)?new Uint8Array(sourceBytes.buffer,sourceBytes.byteOffset,sourceBytes.byteLength).slice():null;
   if(!bytes||bytes[0]!==0x50||bytes[1]!==0x4b)auditCorrectionFail('PACKAGE','Updated Registry requires the original XLSX workbook.');
@@ -902,7 +916,8 @@ export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,opt
   const plan=auditCorrectionPreflight(source,baseline,changes),byRow=new Map();
   for(const target of plan){const key=auditCorrectionSourceKey({sheet:target.sheetName,row:target.row}),cells=byRow.get(key)||new Map();cells.set(target.column,target);byRow.set(key,cells);}
   const completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
-  const selected=baseline.rows.filter(row=>byRow.has(auditCorrectionSourceKey(row._source))&&!completed.has(auditNormId(row.equipmentId)));
+  const changedRows=baseline.rows.filter(row=>byRow.has(auditCorrectionSourceKey(row._source)));
+  const selected=changedRows.filter(row=>!completed.has(auditNormId(row.equipmentId)));
   if(!selected.length)auditCorrectionFail('EMPTY','No changed, incomplete equipment remains to export.');
   const snapshots=new Map(),collect=snapshot=>{if(snapshot.snapshots)snapshot.snapshots.forEach(collect);else snapshots.set(snapshot.source.sheet,snapshot);};collect(baseline);
   const layouts=new Map(),columns=[],columnMap=new Map();
@@ -927,6 +942,7 @@ export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,opt
     layouts.set(name,layout);
   }
   options.onStage?.(.3,'Copying changed equipment with all metadata');
+  const makeWorkbook=selected=>{
   const sheet=XLSX.utils.aoa_to_sheet([columns.map(column=>column.label)]),yellow={patternType:'solid',fgColor:{rgb:'FFFFF2CC'},bgColor:{rgb:'FFFFF2CC'}};
   selected.forEach((row,index)=>{
     const origin=row._source,input=source.Sheets[origin.sheet],patch=byRow.get(auditCorrectionSourceKey(origin));
@@ -951,8 +967,36 @@ export async function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,opt
   sheet['!cols']=columns.map(column=>({wch:Math.min(48,Math.max(18,column.label.length+2))}));
   styleHeaderRow(sheet);sheetFreezeRows(sheet,1);sheetAutoFilter(sheet,`A1:${auditColumnName(columns.length-1)}${selected.length+1}`);
   const workbook=XLSX.utils.book_new();addSheet(workbook,sheet,'Upload Template');
+  return workbook;
+  };
+  if(options.batched){
+    const date=options.exportDate||auditUpdateExportDate();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))auditCorrectionFail('DATE','The export date is invalid.');
+    // Keep repeated physical rows for the same tag in one file, without
+    // dropping metadata or exceeding the equipment-row upload limit.
+    const byEquipment=new Map();
+    for(const row of selected){const key=auditNormId(row.equipmentId)||auditCorrectionSourceKey(row._source),group=byEquipment.get(key)||[];group.push(row);byEquipment.set(key,group);}
+    const chunks=[];let chunk=[];
+    for(const group of byEquipment.values()){
+      if(group.length>AUDIT_UPDATE_BATCH_SIZE)auditCorrectionFail('BATCH','One equipment tag has too many duplicate rows for an upload batch. Resolve its duplicate rows first.');
+      if(chunk.length+group.length>AUDIT_UPDATE_BATCH_SIZE){chunks.push(chunk);chunk=[];}
+      chunk.push(...group);
+    }
+    if(chunk.length)chunks.push(chunk);
+    const base=`Registry_Automated_Update_${date}`,width=Math.max(2,String(chunks.length).length),entries=[],batches=[];
+    for(const [index,rows] of chunks.entries()){
+      const name=`${base}_Batch${String(index+1).padStart(width,'0')}_of_${String(chunks.length).padStart(width,'0')}.xlsx`;
+      options.onStage?.(.3+.6*index/chunks.length,`Building batch ${index+1} of ${chunks.length}`);
+      const data=new Uint8Array(await workbookBytesCompact(makeWorkbook(rows),{onProgress:fraction=>options.onStage?.(.3+.6*(index+fraction)/chunks.length,`Packaging batch ${index+1} of ${chunks.length}`)}));
+      entries.push({name,data});batches.push({name,rows:rows.length});
+    }
+    // XLSX files are already compressed. A stored ZIP avoids recompressing
+    // them and also works without the browser's CompressionStream API.
+    const archive=await zipEntries(entries,fraction=>options.onStage?.(.9+.09*fraction,'Packaging upload batches'),{store:true});
+    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,0),batches}};
+  }
   options.onStage?.(.65,'Packaging changed rows');
-  return new Uint8Array(await workbookBytesCompact(workbook,{onProgress:options.onProgress}));
+  return new Uint8Array(await workbookBytesCompact(makeWorkbook(selected),{onProgress:options.onProgress}));
 }
 export async function exportUpdatedRegistryXlsx(){
   const session=S.session,bytes=session&&session.sourceBytes,baseline=session&&session.baselineSnapshot;
@@ -961,15 +1005,16 @@ export async function exportUpdatedRegistryXlsx(){
   if(!bytes){toast('The original workbook is not in memory — load the registry again first');return false;}
   if(!baseline){toast('The original audit baseline is missing; load the registry again first');return false;}
   if(!changes.length){toast('Nothing staged — action findings with a fix first');return false;}
-  const base=clean(session.name).replace(/\.[^.]+$/,'').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-+|-+$/g,'')||'SSM';
+  const exportDate=auditUpdateExportDate();
   try{
     await runWithProgress('Building the updated registry','Checking original cells and staged corrections',async(checkpoint,report)=>{
       report(.05,'Checking every correction against the original workbook');await checkpoint();
-      const {bytes:updated}=await prepareAuditReview(session,changes,session.milestoneMigration,false,report,{export:true});await checkpoint();
+      const {bytes:updated,filename,summary}=await prepareAuditReview(session,changes,session.milestoneMigration,false,report,{export:true,exportDate});await checkpoint();
       if(S.session!==session||session.changesRev!==revision)throw new Error('The registry changed while exporting. No copy was downloaded.');
-      report(1,'Corrected copy ready');downloadBlob(`${base}-Updated-Registry.xlsx`,new Blob([updated],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      report(1,'Upload batches ready');downloadBlob(filename,new Blob([updated],{type:'application/zip'}));session.lastRegistryExport=summary;
     });
-    toast(`Updated registry exported: ${changes.length.toLocaleString()} corrections written`);
+    const summary=session.lastRegistryExport;
+    toast(`${summary.exportedRows.toLocaleString()} equipment rows exported in ${summary.batches.length} upload ${summary.batches.length===1?'batch':'batches'}`);
     return true;
   }catch(error){toast(error.message||'The updated registry could not be built; no corrected copy was exported');return false;}
 }

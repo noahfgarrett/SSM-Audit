@@ -10,6 +10,7 @@ import { compareSsmRegistries } from '../src/audit/compare.js'
 import { auditMakeCorrection, auditRecommendationContext, auditProposeCorrection, auditApplyCorrections } from '../src/audit/actions.js'
 import { AUDIT_EXPORT_TICK, applyChangesToWorkbook, validateAuditCorrections, auditExportNestLevels, auditExportOrderRows, auditExportSheetName, buildAuditWorkbook, buildAuditCorrectionsWorkbook, buildAuditTrackerWorkbook, buildUpdatedRegistryBytes, buildAuditUpdateRowsBytes, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, exportSsmComparisonXlsx, exportSsmAuditXlsx, exportTrackerXlsx } from '../src/audit/export.js'
 import { S, resetSession } from '../src/state.js'
+import { buildAuditUpdateBatches } from '../src/audit/export.js'
 
 // Package tests use the browser's XML DOM, or @xmldom/xmldom supplied by this
 // optional test-only module path. The offline application has no new dependency.
@@ -1273,12 +1274,16 @@ packageTest('updated-registry session export uses the immutable baseline and nev
   const { downloads } = captureExportDownloads(t), { bytes, snapshot, change } = syntheticPackage(), original = bytes.slice()
   S.session.sourceBytes = bytes; S.session.baselineSnapshot = snapshot; S.session.changes = [change]
   const connection={pending:null,worker:{postMessage:async data=>{
-    try{const bytes=await buildAuditUpdateRowsBytes(S.session.sourceBytes,S.session.baselineSnapshot,data.changes);const p=connection.pending;connection.pending=null;p.resolve({bytes});}
+    try{const prepared=await buildAuditUpdateBatches(S.session.sourceBytes,S.session.baselineSnapshot,data.changes,{exportDate:data.exportDate});const p=connection.pending;connection.pending=null;p.resolve(prepared);}
     catch(error){const p=connection.pending;connection.pending=null;p.reject(error);}
   }}};S.session.reviewWorker=connection;
   S.session.snapshot = { ...snapshot, rows: snapshot.rows.map(row => ({ ...row, systemName: 'Corrected working draft' })) }
   assert.equal(await exportUpdatedRegistryXlsx(), true)
-  const output = XLSX.read(await downloads[0].arrayBuffer(), { type: 'array' })
+  assert.equal(downloads[0].type,'application/zip')
+  const batches=packageEntries(await downloads[0].arrayBuffer())
+  assert.equal(batches.size,1)
+  assert.equal(S.session.lastRegistryExport.exportedRows,1)
+  const output = XLSX.read([...batches.values()][0], { type: 'array' })
   assert.equal(output.Sheets['Upload Template'][addressOf(change)].v, 'After')
   assert.deepEqual(output.SheetNames,['Upload Template'])
   S.session.changes = [change, { ...correction(snapshot, 1), before: 'Conflict' }]
