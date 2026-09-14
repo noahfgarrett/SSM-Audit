@@ -1024,10 +1024,11 @@ test('upload-template updates map reordered columns, retain upload metadata and 
  const changes=snapshot.rows.map(row=>auditMakeCorrection(row,'Dependency Project',''));
  const output=await buildAuditUpdateRowsBytes(source,snapshot,changes,{uploadTemplate:true,completedEquipmentIds:['eq-2']});
  const result=XLSX.read(output,{type:'array',cellStyles:true}),sheet=result.Sheets['Upload Template'];
- assert.deepEqual(result.SheetNames,['Upload Template']);assert.deepEqual(grid(sheet)[0],headers);
- assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,1);
+ assert.deepEqual(result.SheetNames,['Upload Template']);assert.deepEqual(grid(sheet)[1],headers);
+ assert.deepEqual(grid(sheet)[0],EXTO_REV21_COLUMNS.map(c=>c.gating?'Gating':'Non Gating'));
+ assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,2);
  for(const column of EXTO_REV21_COLUMNS){
-   const cell=sheet[XLSX.utils.encode_cell({r:1,c:column.index})];
+   const cell=sheet[XLSX.utils.encode_cell({r:2,c:column.index})];
    assert.equal(cell?.v??'',column.field==='dependencyProject'||column.field==='retainCxSteps'?'':values[column.field],column.header);
    if(column.field==='dependencyProject')assert.equal(cell.s.fgColor.rgb,'FFF2CC');
    else assert.notEqual(cell?.s?.fgColor?.rgb,'FFF2CC');
@@ -1284,7 +1285,7 @@ packageTest('updated-registry session export uses the immutable baseline and nev
   assert.equal(batches.size,1)
   assert.equal(S.session.lastRegistryExport.exportedRows,1)
   const output = XLSX.read([...batches.values()][0], { type: 'array' })
-  assert.equal(output.Sheets['Upload Template'][addressOf(change)].v, 'After')
+  assert.equal(output.Sheets['Upload Template'].J3.v, 'After')
   assert.deepEqual(output.SheetNames,['Upload Template'])
   S.session.changes = [change, { ...correction(snapshot, 1), before: 'Conflict' }]
   assert.equal(await exportUpdatedRegistryXlsx(), false)

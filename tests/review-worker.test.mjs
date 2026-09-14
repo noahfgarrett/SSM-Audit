@@ -38,9 +38,10 @@ test('packaged review worker validates large drafts off-thread and reuses its so
   const archive=XLSX.CFB.read(exported.prepared.bytes,{type:'array'});
   const batch=XLSX.CFB.find(archive,'/'+exported.prepared.summary.batches[0].name);
   const output=XLSX.read(batch.content,{type:'array',cellStyles:true}),sheet=output.Sheets['Upload Template'];
-  assert.deepEqual([...output.SheetNames],['Upload Template']);assert.equal(sheet.K2.v,baseline.rows[1].equipmentId);assert.equal(sheet.AO2.v,'');assert.equal(sheet.AO2.s.fgColor.rgb,'FFF2CC');
-  assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,1);
-  assert.deepEqual(Array.from(XLSX.utils.sheet_to_json(sheet,{header:1})[0]),EXTO_REV21_COLUMNS.map(c=>c.header));
+  assert.deepEqual([...output.SheetNames],['Upload Template']);assert.equal(sheet.K3.v,baseline.rows[1].equipmentId);assert.equal(sheet.AO3.v,'');assert.equal(sheet.AO3.s.fgColor.rgb,'FFF2CC');
+  assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,2);
+  assert.deepEqual(Array.from(XLSX.utils.sheet_to_json(sheet,{header:1})[0]),EXTO_REV21_COLUMNS.map(c=>c.gating?'Gating':'Non Gating'));
+  assert.deepEqual(Array.from(XLSX.utils.sheet_to_json(sheet,{header:1})[1]),EXTO_REV21_COLUMNS.map(c=>c.header));
   assert.ok(ticks>0,'the calling thread remains responsive while the worker computes');
   console.log(JSON.stringify({reviewBenchmark:{rows:count,twoReviewsMs:Math.round(performance.now()-started),responsiveTicks:ticks,workbookReads:second.reads}}));
  }finally{clearInterval(timer);await worker.terminate();}

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.43.1",
+    "date": "2026-09-14",
+    "type": "fix",
+    "notes": "- Improved upload export formatting"
+  },
+  {
     "version": "1.43.0",
     "date": "2026-09-12",
     "type": "feature",

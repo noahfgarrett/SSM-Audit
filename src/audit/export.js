@@ -943,7 +943,9 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   }
   options.onStage?.(.3,'Copying changed equipment with all metadata');
   const makeWorkbook=selected=>{
-  const sheet=XLSX.utils.aoa_to_sheet([columns.map(column=>column.label)]),yellow={patternType:'solid',fgColor:{rgb:'FFFFF2CC'},bgColor:{rgb:'FFFFF2CC'}};
+  const headerRows=options.uploadTemplate?2:1,headings=[columns.map(column=>column.label)];
+  if(options.uploadTemplate)headings.unshift(EXTO_REV21_COLUMNS.map(column=>column.gating?'Gating':'Non Gating'));
+  const sheet=XLSX.utils.aoa_to_sheet(headings),yellow={patternType:'solid',fgColor:{rgb:'FFFFF2CC'},bgColor:{rgb:'FFFFF2CC'}};
   selected.forEach((row,index)=>{
     const origin=row._source,input=source.Sheets[origin.sheet],patch=byRow.get(auditCorrectionSourceKey(origin));
     for(const [c,outputColumn] of layouts.get(origin.sheet).entries()){
@@ -959,13 +961,25 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
       if(/^0{2,}$/.test(cell.z||''))cell.z+='""';
       if(cell.z)cell.s={...cell.s,numFmt:cell.z};
       if(change){cell.v=change.value;cell.t=typeof change.value==='number'?'n':typeof change.value==='boolean'?'b':'s';cell.s={...cell.s,fill:yellow};}
-      sheetSetCell(sheet,XLSX.utils.encode_cell({r:index+1,c:outputColumn}),cell);
+      sheetSetCell(sheet,XLSX.utils.encode_cell({r:index+headerRows,c:outputColumn}),cell);
     }
   });
   // Include every upload column even when the source has no corresponding value.
-  sheet['!ref']=`A1:${auditColumnName(columns.length-1)}${selected.length+1}`;
+  sheet['!ref']=`A1:${auditColumnName(columns.length-1)}${selected.length+headerRows}`;
   sheet['!cols']=columns.map(column=>({wch:Math.min(48,Math.max(18,column.label.length+2))}));
-  styleHeaderRow(sheet);sheetFreezeRows(sheet,1);sheetAutoFilter(sheet,`A1:${auditColumnName(columns.length-1)}${selected.length+1}`);
+  styleHeaderRow(sheet,headerRows-1);
+  if(options.uploadTemplate){
+    sheet['!rows'][0]={hpt:38.25};sheet['!rows'][1]={hpt:43.5};
+    for(const column of EXTO_REV21_COLUMNS){
+      sheetStyleCell(sheet,`${auditColumnName(column.index)}1`,{
+        font:{name:'Calibri',sz:11,bold:true,color:{rgb:column.gating?'9C0006':'9C6500'}},
+        fill:{patternType:'solid',fgColor:{rgb:column.gating?'FFC7CE':'FFEB9C'}},
+        alignment:{horizontal:'center',vertical:'center',wrapText:true},
+      });
+      sheet[`${auditColumnName(column.index)}2`].s.alignment={vertical:'center',wrapText:true};
+    }
+  }
+  sheetFreezeRows(sheet,headerRows);sheetAutoFilter(sheet,`A${headerRows}:${auditColumnName(columns.length-1)}${selected.length+headerRows}`);
   const workbook=XLSX.utils.book_new();addSheet(workbook,sheet,'Upload Template');
   return workbook;
   };

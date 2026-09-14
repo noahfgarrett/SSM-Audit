@@ -44,9 +44,14 @@ for(const [count,sizes] of [[1,[1]],[1950,[1950]],[1951,[1950,1]],[3900,[1950,19
    assert.equal(batch.name,`Registry_Automated_Update_2026-09-11_Batch${String(i+1).padStart(2,'0')}_of_${String(sizes.length).padStart(2,'0')}.xlsx`);
    const book=XLSX.read(files.get(batch.name),{type:'array',cellStyles:true}),sheet=book.Sheets['Upload Template'];
    assert.deepEqual(book.SheetNames,['Upload Template']);
-   const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});assert.deepEqual(rows[0],headers);
-   assert.equal(rows.length-1,sizes[i]);assert.ok(rows.length-1<=AUDIT_UPDATE_BATCH_SIZE);
-   for(let r=1;r<rows.length;r++){
+   const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+   assert.deepEqual(rows[0],EXTO_REV21_COLUMNS.map(c=>c.gating?'Gating':'Non Gating'));assert.deepEqual(rows[1],headers);
+   assert.equal(rows.length-2,sizes[i]);assert.ok(rows.length-2<=AUDIT_UPDATE_BATCH_SIZE);
+   assert.equal(sheet['!autofilter'].ref,`A2:AR${sizes[i]+2}`);
+   for(const c of EXTO_REV21_COLUMNS)assert.equal(sheet[`${XLSX.utils.encode_col(c.index)}1`].s.fgColor.rgb,c.gating?'FFC7CE':'FFEB9C');
+   const reimport=auditSnapshotFromAoa(rows,{sheet:'Upload Template'});
+   assert.equal(reimport.headerRow,2);assert.equal(reimport.rows.length,sizes[i]);assert.equal(reimport.rows[0]._source.row,3);
+   for(let r=2;r<rows.length;r++){
     const tag=sheet[`K${r+1}`].v;assert.ok(!seen.has(tag));seen.add(tag);
     const input=f.aoa[Number(tag.split('-').at(-1))+1];
     for(const c of EXTO_REV21_COLUMNS){
@@ -67,7 +72,8 @@ test('completed rows are removed before batching and summary distinguishes cells
  assert.deepEqual(result.summary.batches.map(b=>b.rows),[1950]);
  assert.equal(result.summary.excludedCompletedRows,2);assert.equal(result.summary.exportedCells,3900);
  const output=XLSX.read([...entries(result.bytes).values()][0],{type:'array'});
- const tags=XLSX.utils.sheet_to_json(output.Sheets['Upload Template']).map(r=>r['Equipment ID']);
+ const tags=XLSX.utils.sheet_to_json(output.Sheets['Upload Template'],{range:1}).map(r=>r['Equipment ID']);
+ assert.equal(tags.length,1950);
  assert.ok(!tags.includes('DEMO-EQ-0'));assert.ok(!tags.includes('DEMO-EQ-1'));
  assert.match(auditUpdateExportSummary(result.summary),/1,950 equipment rows exported in 1 batch \(1,950\).*2 completed rows excluded.*3,900 changed cells/);
 });
@@ -76,7 +82,7 @@ test('duplicate physical rows remain together without exceeding a batch limit',a
  const f=fixture(1951,{duplicateLast:true}),result=await buildAuditUpdateBatches(f.source,f.baseline,f.changes,{sourceWorkbook:f.book});
  assert.deepEqual(result.summary.batches.map(b=>b.rows),[1950,1]);
  const counts=[...entries(result.bytes).values()].map(bytes=>{
-  const book=XLSX.read(bytes,{type:'array'});return XLSX.utils.sheet_to_json(book.Sheets['Upload Template']).filter(r=>r['Equipment ID']==='DEMO-EQ-0').length;
+  const book=XLSX.read(bytes,{type:'array'});return XLSX.utils.sheet_to_json(book.Sheets['Upload Template'],{range:1}).filter(r=>r['Equipment ID']==='DEMO-EQ-0').length;
  });
  assert.deepEqual(counts,[2,0]);
 });
@@ -96,4 +102,19 @@ test('stored outer ZIP works without browser compression and has correct CRC and
  const data=new Uint8Array([1,2,3,4]),bytes=await zipEntries([{name:'batch.xlsx',data}],null,{store:true});
  const header=new DataView(bytes.buffer);assert.equal(header.getUint16(8,true),0);assert.equal(header.getUint32(14,true),crc32(data));
  assert.deepEqual(entries(bytes).get('batch.xlsx'),data);
+});
+
+test('a two-row upload export can be reloaded and corrected again without shifting milestone cells',async()=>{
+ const f=fixture(1),first=await buildAuditUpdateBatches(f.source,f.baseline,f.changes,{sourceWorkbook:f.book});
+ const source=[...entries(first.bytes).values()][0],book=XLSX.read(source,{type:'array',cellStyles:true});
+ const baseline=auditSnapshotFromAoa(XLSX.utils.sheet_to_json(book.Sheets['Upload Template'],{header:1,defval:''}),{sheet:'Upload Template'});
+ const changes=[auditMakeCorrection(baseline.rows[0],'L1 Milestone Parent','DEMO-L1-M1-10'),auditMakeCorrection(baseline.rows[0],'L2 Milestone','DEMO-L2-M1-20')];
+ const next=await buildAuditUpdateBatches(source,baseline,changes,{sourceWorkbook:book});
+ const output=XLSX.read([...entries(next.bytes).values()][0],{type:'array',cellStyles:true}),sheet=output.Sheets['Upload Template'];
+ assert.deepEqual(output.SheetNames,['Upload Template']);assert.equal(sheet.K3.v,'DEMO-EQ-0');
+ assert.equal(sheet.Y3.v,'DEMO-L2-M1-20');assert.equal(sheet.Z3.v,'DEMO-L1-M1-10');
+ assert.equal(sheet.Y3.s.fgColor.rgb,'FFF2CC');assert.equal(sheet.Z3.s.fgColor.rgb,'FFF2CC');
+ assert.equal(sheet.Y1.v,'Non Gating');assert.equal(sheet.Z1.v,'Non Gating');
+ assert.equal(sheet.Y2.v,'Milestone');assert.equal(sheet.Z2.v,'Milestone Parent');
+ assert.equal(next.summary.exportedRows,1);assert.equal(next.summary.exportedCells,2);
 });
