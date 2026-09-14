@@ -229,28 +229,36 @@ function auditRefItemBody(value,site=''){
 
 /** Confidence is 'verified' for register identity/parent relationships and 'review'
  * for catalog equivalents. Literal catalog membership never proves compatibility. */
-export function auditReferenceRecommendation(row,field,references){
+export function auditReferenceRecommendation(row,field,references,prepared={}){
+  if(prepared.itemReference!==references?.itemMasters){prepared.itemReference=references?.itemMasters;delete prepared.items;}
+  if(prepared.milestoneReference!==references?.milestones){prepared.milestoneReference=references?.milestones;delete prepared.milestones;delete prepared.parents;}
   const key=auditRefHeaderKey(field);
   if(['ITEMMASTER','ITEMMASTERNAME','ITEMMASTERID','ITEMMASTERUNIQUEIDENTIFIER'].includes(key)){
     const reference=references?.itemMasters,value=auditRefNorm(auditRefValue(row?.itemMaster));
     if(!value||!auditRefUsable(reference,'itemMasters'))return null;
-    const entries=reference.entries.filter(entry=>entry&&auditRefText(entry.name));
-    if(entries.some(entry=>[entry.name,entry.id].some(name=>auditRefNorm(name)===value)))return null;
-    const body=auditRefItemBody(row.itemMaster,row.site);if(!body)return null;
-    const candidates=new Map();
-    for(const entry of entries){
-      if(/^VF\d*_/.test(auditRefItemKey(entry.name))&&auditRefItemBody(entry.name)===body)candidates.set(auditRefEntryKey(entry,'itemMasters'),entry);
+    if(!prepared.items){
+      const members=new Set(),bodies=new Map();
+      for(const entry of reference.entries){
+        if(!entry||!auditRefText(entry.name))continue;
+        for(const name of [entry.name,entry.id])members.add(auditRefNorm(name));
+        if(/^VF\d*_/.test(auditRefItemKey(entry.name))){const body=auditRefItemBody(entry.name),matches=bodies.get(body)||new Map();matches.set(auditRefEntryKey(entry,'itemMasters'),entry);bodies.set(body,matches);}
+      }
+      prepared.items={members,bodies};
     }
+    if(prepared.items.members.has(value))return null;
+    const body=auditRefItemBody(row.itemMaster,row.site);if(!body)return null;
+    const candidates=prepared.items.bodies.get(body)||new Map();
     if(candidates.size!==1)return null;
     return {value:candidates.values().next().value.name,reason:'The selected current catalog contains one equivalent name with the same complete functional body after site-prefix normalization. The existing value is not a literal catalog member; that alone does not make a legacy prefix invalid. Equipment compatibility is unverified and requires review.',confidence:'review'};
   }
   const parent=['MILESTONEPARENT','L1MILESTONEPARENT','L1ID','L1MILESTONE'].includes(key),milestone=['MILESTONE','L2MILESTONE','MILESTONEID','L2ID'].includes(key);
   if(!parent&&!milestone)return null;
-  const match=auditMilestoneReferenceMatch(row,references?.milestones);if(match.status!=='matched')return null;
+  if(!Object.hasOwn(prepared,'milestones'))prepared.milestones=auditRefMilestoneIndex(references?.milestones);
+  const match=auditRefMatchMilestone(row,prepared.milestones);if(match.status!=='matched')return null;
   const entry=match.entry;
   if(parent&&(!auditRefValue(entry.parentId)||auditRefMilestoneParts(entry.parentId)?.level==='L2'))return null;
   const current=parent?row.milestoneParent:row.milestone,value=parent?auditRefJoin(entry.parentId,entry.parentTitle):auditRefJoin(entry.id,entry.title);
-  if(!value||(parent?auditRefParentMatches(current,entry,auditRefParentIndex(references.milestones)):auditRefMilestoneKey(current)===auditRefMilestoneKey(value)))return null;
+  if(!value||(parent?auditRefParentMatches(current,entry,prepared.parents||=auditRefParentIndex(references.milestones)):auditRefMilestoneKey(current)===auditRefMilestoneKey(value)))return null;
   return {value,reason:parent?'The selected authoritative register explicitly maps this uniquely matched L2 milestone to this L1 parent; no relationship was inferred from UPN.':'This is the uniquely matched milestone in the selected authoritative register; equipment applicability is not inferred.',confidence:'verified'};
 }
 

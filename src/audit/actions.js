@@ -22,6 +22,15 @@ export function auditActionPatternKey(finding){
 }
 
 export function auditCorrectionKey(change){return JSON.stringify([change.source?.sheet||'',change.source?.row||0,change.prop||AUDIT_ACTION_FIELDS[change.field]]);}
+export function auditReadyFindingIds(session){
+  const staged=new Map((session.changes||[]).map(change=>[auditCorrectionKey(change),change.value])),ready=new Set();
+  const resolved=session.draftResolved||new Set();
+  for(const review of session.reviewHistory||[]){
+    if(review.disposition!=='corrected-draft'||!(review.changes||[]).some(change=>staged.has(auditCorrectionKey(change))&&staged.get(auditCorrectionKey(change))===change.value))continue;
+    for(const id of review.findingIds||[])if(resolved.has(id))ready.add(id);
+  }
+  return ready;
+}
 export function auditActionIndex(snapshot){
   const bySource=new Map(),byTag=new Map(),bySystem=new Map();
   for(const row of snapshot.rows){
@@ -82,8 +91,8 @@ async function auditReviewDigest(value){
   const bytes=await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));
   return [...new Uint8Array(bytes)].map(value=>value.toString(16).padStart(2,'0')).join('');
 }
-export async function auditReviewDocument(session){
-  return {format:'ssm-audit-review',version:1,baselineRevision:await auditRegistryRevision(session.baselineSnapshot||session.snapshot),
+export async function auditReviewDocument(session,{baselineRevision}={}){
+  return {format:'ssm-audit-review',version:1,baselineRevision:baselineRevision||await auditRegistryRevision(session.baselineSnapshot||session.snapshot),
     referencesRevision:await auditReviewReferenceRevision(session.references),changes:session.changes||[],actioned:[...(session.actioned||[])],reviewed:[...(session.reviewedIds||session.actioned||[])],excluded:[...(session.excluded||[])],history:session.reviewHistory||[],filterViews:session.filterViews||[],
     milestoneMigration:session.milestoneMigration||{enabled:false,profile:null},createdAt:new Date().toISOString()};
 }
@@ -188,7 +197,7 @@ export function auditProposeCorrection(finding,context){
   let reason='',confidence='Review';
   try{
     if(['parent.cross-building','parent.cross-discipline','parent.cycle','dependency.precedence-cycle','logic.external-path-unverified'].includes(finding.rule.id))return null;
-    const reference=auditReferenceRecommendation(row,finding.field,context.references);
+    const reference=auditReferenceRecommendation(row,finding.field,context.references,context.referenceLookups||={});
     if(reference){add(finding.field,reference.value);reason=reference.reason;confidence=reference.confidence||'Reference';}
     else if(finding.rule.id==='milestone.incomplete-pair'){
       const recommendation=context.milestones.get(auditNormId(row.equipmentId));

@@ -21,7 +21,7 @@ test('packaged review worker validates large drafts off-thread and reuses its so
  const send=data=>new Promise((resolve,reject)=>{let prepared;const onError=error=>{worker.off('message',onMessage);reject(error);},onMessage=message=>{if(message.type==='error'){worker.off('message',onMessage);worker.off('error',onError);reject(new Error(message.message));}if(message.type==='result')prepared=message.prepared;if(message.type==='reads'){worker.off('message',onMessage);worker.off('error',onError);resolve({prepared,reads:message.reads});}};worker.on('message',onMessage);worker.once('error',onError);worker.postMessage({kind:'review',references:{},migration:{enabled:false,profile:null},migrationChanged:false,...data});});
  try{
   const initialResult=auditSessionResult(baseline);
-  const actionsExport=await send({kind:'actions-export',baseline,file,actionsWorkbook:{result:{...initialResult,findings:initialResult.findings.slice(0,100)},sessionName:'Demo',options:{}}});
+  const actionsExport=await send({kind:'actions-export',baseline,baselineResult:initialResult,file,actionsWorkbook:{result:{...initialResult,findings:initialResult.findings.slice(0,100)},sessionName:'Demo',options:{}}});
   assert.equal(actionsExport.reads,0,'Actions export needs no source-workbook parsing');
   const actionsBook=XLSX.read(actionsExport.prepared.bytes,{type:'array',cellStyles:true});
   assert.equal(actionsBook.SheetNames[0],'Actionable');assert.ok(actionsBook.SheetNames.length>1);

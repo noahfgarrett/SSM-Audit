@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.44.0",
+    "date": "2026-09-14",
+    "type": "feature",
+    "notes": "- Improved bulk actions and export readiness feedback\n- Improved review responsiveness"
+  },
+  {
     "version": "1.43.1",
     "date": "2026-09-14",
     "type": "fix",

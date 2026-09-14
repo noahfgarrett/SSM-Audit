@@ -11,7 +11,7 @@ import { auditExportPlanMode, auditUpdateExportSummary, exportSsmAuditXlsx, expo
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { AUDIT_ACTION_FIELDS, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditRegistryRevision, auditReviewDocument } from '../audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditReadyFindingIds, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditRegistryRevision, auditReviewDocument } from '../audit/actions.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
@@ -208,7 +208,7 @@ async function reviewAutosave(){
   const key=await reviewAutosaveKey(session);if(!key||S.session!==session)return;
   try{
     if(!reviewHasDecisions(session)){localStorage.removeItem(key);return;}
-    const data=await auditReviewDocument(session);if(S.session!==session)return;
+    const data=await auditReviewDocument(session,{baselineRevision:session.reviewRevision});if(S.session!==session)return;
     localStorage.setItem(key,JSON.stringify(data));session.autosaveFailed=false;
   }catch(_){
     /* Quota or private mode: the review file is the fallback, said once. */
@@ -270,7 +270,29 @@ function setExcluded(id,on){
    switched-off checks), so dismissed findings stay visible to restore. */
 function modifyBaseResult(){
   const raw=sessionEffectiveRaw();if(!raw)return null;
-  return applyRulePreferences(raw,S.rules.disabled);
+  const ready=modifyReadySet(),existing=new Set(raw.findings.map(f=>f.id));
+  const completed=S.session.status?.completed;
+  const retained=(S.session.baselineResult?.findings||[]).filter(f=>ready.has(f.id)&&!existing.has(f.id)&&!completed?.has(auditNormId(f.equipmentId)));
+  return applyRulePreferences(retained.length?{...raw,findings:[...raw.findings,...retained]}:raw,S.rules.disabled);
+}
+function modifyReadySet(){
+  const session=S.session,cached=session.readyCache;
+  if(cached&&cached.changes===session.changes&&cached.resolved===session.draftResolved&&cached.historyLength===(session.reviewHistory||[]).length)return cached.ids;
+  const ids=auditReadyFindingIds(session);
+  session.readyCache={changes:session.changes,resolved:session.draftResolved,historyLength:(session.reviewHistory||[]).length,ids};return ids;
+}
+function modifyReadyBadge(findings){
+  const ready=modifyReadySet(),count=findings.reduce((sum,f)=>sum+Number(ready.has(f.id)),0);
+  return count?`<span class="modify-ready" role="status">${ic('circle-check')}${count===findings.length?'Ready for export':`${count.toLocaleString()} ready for export`}</span>`:'';
+}
+function modifyRuleSelection(){return S.session.selectedActionRules||=(new Set());}
+function modifySelectableRules(){return modifyGroups().flatMap(group=>group.rules).filter(entry=>modifyActiveFindings(entry.matches).length);}
+function syncModifyRuleSelection(){
+  const entries=modifySelectableRules(),visible=new Set(entries.map(entry=>entry.rule.id)),selected=modifyRuleSelection();
+  for(const id of selected)if(!visible.has(id))selected.delete(id);
+  const all=$('#modifySelectAll');if(all){all.checked=!!entries.length&&selected.size===entries.length;all.indeterminate=selected.size>0&&selected.size<entries.length;all.disabled=!entries.length;}
+  const button=$('#modifyActionSelected');if(button){button.disabled=!selected.size;button.innerHTML=`${ic('zap')}Action selected${selected.size?` (${selected.size})`:''}`;}
+  $$('[data-mod-select-rule]').forEach(input=>{input.checked=selected.has(input.dataset.modSelectRule);});
 }
 function excludedInBase(){
   const excluded=S.session&&S.session.excluded;if(!excluded||!excluded.size)return 0;
@@ -535,11 +557,11 @@ function modifyGroupsBuild(){
   }).filter(group=>group.rules.length);
 }
 function modifyRowHtml(finding,compact){
-  const excluded=isExcludedId(finding.id);
-  const tag=finding.equipmentId?`<button type="button" class="modify-tag" data-mod-open="${esc(finding.id)}" title="Open this finding's details">${modifyHighlight(finding.equipmentId)}</button>`:'<b class="modify-tag"><i>Registry-wide</i></b>';
-  const action=`<button type="button" class="btn ghost sm" data-mod-review="${esc(finding.id)}">${ic('sliders-horizontal')}Review</button>`;
-  if(compact)return `<div class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}>${tag}<span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span>${action}</div>`;
-  return `<div class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}${modifyItemMasterSwap(finding)}</span><span class="modify-where">Row ${finding.row||'—'}</span>${action}</div>`;
+  const excluded=isExcludedId(finding.id),ready=modifyReadySet().has(finding.id);
+  const tag=ready?`<span class="modify-tag">${modifyHighlight(finding.equipmentId||'Registry-wide')}</span>`:finding.equipmentId?`<button type="button" class="modify-tag" data-mod-open="${esc(finding.id)}" title="Open this finding's details">${modifyHighlight(finding.equipmentId)}</button>`:'<b class="modify-tag"><i>Registry-wide</i></b>';
+  const action=ready?modifyReadyBadge([finding]):`<button type="button" class="btn ghost sm" data-mod-review="${esc(finding.id)}">${ic('sliders-horizontal')}Review</button>`;
+  if(compact)return `<div class="modify-row compact ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'} ${ready?'disabled':''}>${tag}<span class="modify-where">${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}</span>${action}</div>`;
+  return `<div class="modify-row ${excluded?'is-excluded':''}"><input type="checkbox" aria-label="Include finding" data-mod-finding="${esc(finding.id)}" ${excluded?'':'checked'} ${ready?'disabled':''}><span class="audit-severity ${esc(finding.severity)}">${esc(SEVERITY_LABELS[finding.severity]||finding.severity)}</span>${tag}<span class="modify-why" title="${esc(finding.why)}">${modifyHighlight(finding.why)}${modifyItemMasterSwap(finding)}</span><span class="modify-where">Row ${finding.row||'—'}</span>${action}</div>`;
 }
 function modifyItemMasterSwap(finding){
   if(!['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule.id))return '';
@@ -557,7 +579,7 @@ function modifyItemMasterCatalogStatus(rule){
    delegated handlers find a pattern's findings without re-deriving the groups. */
 let modifyPatternMap=new Map();
 function modifyPatternKey(ruleId,why){return auditFingerprint(ruleId+'|'+(why||''));}
-function modifyActiveFindings(findings){return findings.filter(finding=>!isExcludedId(finding.id));}
+function modifyActiveFindings(findings){const ready=modifyReadySet();return findings.filter(finding=>!isExcludedId(finding.id)&&!ready.has(finding.id));}
 function actionsExportFindings(){return modifyActiveFindings(modifyGroups().flatMap(group=>group.rules.flatMap(entry=>entry.matches)));}
 function modifyPatterns(entry){
   const byWhy=new Map();
@@ -568,16 +590,18 @@ function modifyPatterns(entry){
   return {groups,singles};
 }
 function modifyPatternCountText(findings){
+  const ready=modifyReadySet(),pending=findings.filter(f=>!ready.has(f.id));
+  if(pending.length!==findings.length)return `${pending.length.toLocaleString()} remaining`;
   const kept=findings.filter(finding=>!isExcludedId(finding.id)).length,pctMode=S.session&&S.session.modifyCountMode==='percent';
   if(kept!==findings.length)return `${modifyAmount(kept)} of ${modifyAmount(findings.length)} kept`;
   return pctMode?`${modifyAmount(findings.length)} of tags`:`${findings.length.toLocaleString()} kept`;
 }
 /* The equipment list inside a pattern is only built the first time it opens. */
 function modifyPatternHtml(group){
-  const kept=group.findings.filter(finding=>!isExcludedId(finding.id)).length;
+  const kept=modifyActiveFindings(group.findings).length;
   const severity=group.findings[0].severity;
-  return `<div class="modify-pattern ${kept?'':'is-excluded'}" data-mod-pattern="${group.key}">
-    <div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span><b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+return `<div class="modify-pattern ${kept?'':modifyReadyBadge(group.findings)?'is-ready':'is-excluded'}" data-mod-pattern="${group.key}">
+<div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span>${modifyReadyBadge(group.findings)}<b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
     ${modifyItemMasterSwap(group.findings[0])}<div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
@@ -882,7 +906,7 @@ function openActionDialog(label,findings,navigate,provided,prepared){
   }
   modifyRecommendationContext||=auditRecommendationContext(S.session.snapshot,auditMigrationReferences(S.session.references,S.session.milestoneMigration),{registries:S.session.milestoneReferences||[]});
   const context=prepared?.context||modifyRecommendationContext,suggestions=prepared?.suggestions||actionSuggestions(findings,context,'child',provided);
-  actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',mode:findings.length>1&&!provided?'bulk':'individual',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
+actionScope={label,findings,navigate,unsupported:findings.length-suggestions.length,suggestions,stage:'edit',mode:findings.length>1&&!provided&&new Set(findings.map(f=>f.rule.id)).size===1?'bulk':'individual',offset:0,session:S.session,revision:S.session.changesRev,context,target:'child',drafts:new Map(),canTarget:!provided&&findings.every(finding=>auditActionPolicy(finding).targets)};
   paintActionDialog();
   const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
   actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;$('#actionCancel').onclick=closeActionDialog;
@@ -911,12 +935,12 @@ function openChangesDialog(navigate,offset=0){
 function syncModifyPatternBox(key){
   const findings=modifyPatternMap.get(key);if(!findings)return;
   const box=$(`input[data-mod-group="${key}"]`);if(!box)return;
-  const kept=findings.filter(finding=>!isExcludedId(finding.id)).length;
-  box.checked=kept===findings.length;box.indeterminate=kept>0&&kept<findings.length;
+  const ready=modifyReadySet(),pending=findings.filter(finding=>!ready.has(finding.id)),kept=pending.filter(finding=>!isExcludedId(finding.id)).length;
+  box.checked=!!pending.length&&kept===pending.length;box.indeterminate=kept>0&&kept<pending.length;box.disabled=!pending.length;
   const count=$(`[data-mod-group-count="${key}"]`);if(count)count.textContent=modifyPatternCountText(findings);
-  const wrap=$(`[data-mod-pattern="${key}"]`);if(wrap)wrap.classList.toggle('is-excluded',!kept);
-  const button=$(`[data-mod-aside-group="${key}"]`);if(button){button.innerHTML=`${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}`;button.title=kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings';}
-  const action=$(`[data-mod-action-group="${key}"]`);if(action)action.disabled=!kept;
+  const wrap=$(`[data-mod-pattern="${key}"]`);if(wrap){wrap.classList.toggle('is-excluded',!!pending.length&&!kept);wrap.classList.toggle('is-ready',!pending.length);}
+  const button=$(`[data-mod-aside-group="${key}"]`);if(button){button.disabled=!pending.length;button.innerHTML=`${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}`;button.title=kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings';}
+  const action=$(`[data-mod-action-group="${key}"]`);if(action)action.disabled=!modifyActiveFindings(findings).length;
 }
 function syncAllModifyPatternBoxes(){for(const key of modifyPatternMap.keys())syncModifyPatternBox(key);}
 function setModifyPatternAside(key,on,navigate){
@@ -951,11 +975,14 @@ function modifyPctBtn(){
   return `<button class="modify-pct-toggle" type="button" data-mod-pct title="${pctMode?'Show counts':'Show as % of all tags'}">${pctMode?'#':'%'}</button>`;
 }
 function modifyRuleCountText(entry){
+  if(entry.findings.some(f=>modifyReadySet().has(f.id)))return `${modifyActiveFindings(entry.matches).length.toLocaleString()} remaining`;
   const aside=entry.findings.length-entry.kept,pctMode=S.session&&S.session.modifyCountMode==='percent';
   if(aside)return `${modifyAmount(entry.kept)} of ${modifyAmount(entry.findings.length)} kept`;
   return pctMode?`${modifyAmount(entry.findings.length)} of tags`:`${modifyAmount(entry.findings.length)} kept`;
 }
 function modifyCategoryCountText(group){
+  const findings=group.rules.flatMap(entry=>entry.matches),ready=modifyReadySet(),count=findings.filter(f=>ready.has(f.id)).length;
+  if(count)return `${modifyActiveFindings(findings).length.toLocaleString()} remaining · ${count.toLocaleString()} ready`;
   const aside=group.total-group.kept,pctMode=S.session&&S.session.modifyCountMode==='percent';
   if(aside)return `${modifyAmount(group.kept)} of ${modifyAmount(group.total)} kept`;
   return pctMode?`${modifyAmount(group.total)} of tags`:`${modifyAmount(group.total)} findings`;
@@ -968,7 +995,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-    <summary><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Dismiss every match shown for this check':'Dismiss every finding of this check'}">${ic('circle-x')}Dismiss all</button></span></summary>
+<summary><input type="checkbox" data-mod-select-rule="${esc(entry.rule.id)}" aria-label="Select ${esc(entry.rule.title)} for action" ${modifyRuleSelection().has(entry.rule.id)?'checked':''} ${modifyActiveFindings(entry.matches).length?'':'disabled'}><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}${modifyReadyBadge(entry.matches)}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-action-rule="${esc(entry.rule.id)}" ${modifyActiveFindings(entry.matches).length?'':'disabled'}>${ic('zap')}Action rule</button><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Dismiss every match shown for this check':'Dismiss every finding of this check'}">${ic('circle-x')}Dismiss all</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -991,6 +1018,7 @@ function updateModifyCounts(navigate){
   const included=$('#modifyIncluded');if(included&&result)included.textContent=`${result.summary.findings.toLocaleString()} counted`;
   const asideChip=$('#modifyAside');if(asideChip)asideChip.textContent=`${aside.toLocaleString()} dismissed`;
   const restore=$('#modifyRestore');if(restore)restore.disabled=!aside;
+  syncModifyRuleSelection();
   renderSideNav(navigate);
 }
 function milestoneMigrationControls(){
@@ -1065,17 +1093,26 @@ export function renderModifications(navigate){
     ${milestoneMigrationControls()}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands">${referencesButtonHtml()}<button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
-    <div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
+<div class="modify-selection"><label><input type="checkbox" id="modifySelectAll">Select all shown rules</label><button class="btn primary sm" type="button" id="modifyActionSelected" disabled>${ic('zap')}Action selected</button></div><div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!filtered&&(S.session.modifyClosedCats||[]).includes(group.category);
       return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,filtered)).join('')}</div></section>`;
     }).join(''):`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No findings match those filters':'Nothing to action'}</b><span>${filtered?'Try a different search, milestone, or discipline.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
   $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
   wireMilestoneMigration(navigate);
+  $('#modifySelectAll').onchange=event=>{const selected=modifyRuleSelection();selected.clear();if(event.target.checked)for(const entry of modifySelectableRules())selected.add(entry.rule.id);syncModifyRuleSelection();};
+  $('#modifyActionSelected').onclick=()=>{
+    const selected=modifyRuleSelection(),entries=modifySelectableRules().filter(entry=>selected.has(entry.rule.id));
+    const findings=modifyActiveFindings(entries.flatMap(entry=>entry.matches));
+    if(findings.length&&!S.session.reviewBusy)openActionDialog(`Selected rules (${entries.length})`,findings,navigate);
+  };
+  syncModifyRuleSelection();
   $('#exportActions').onclick=()=>{S.session.exportKind='actions';openExportOptions();};
   $('#exportUpdatedRegistry').onclick=async()=>{if(!S.session.reviewBusy&&await exportUpdatedRegistryXlsx()&&S.screen==='modify')rerenderModifications(navigate);};
   const body=$('#modifyBody');
   body.onchange=event=>{
+    const ruleBox=event.target.closest('[data-mod-select-rule]');
+    if(ruleBox){const selected=modifyRuleSelection();if(ruleBox.checked)selected.add(ruleBox.dataset.modSelectRule);else selected.delete(ruleBox.dataset.modSelectRule);syncModifyRuleSelection();return;}
     const groupBox=event.target.closest('[data-mod-group]');
     if(groupBox){
       setModifyPatternAside(groupBox.dataset.modGroup,!groupBox.checked,navigate);
@@ -1088,6 +1125,9 @@ export function renderModifications(navigate){
     updateModifyCounts(navigate);
   };
   body.onclick=event=>{
+    if(event.target.closest('[data-mod-select-rule]')){event.stopPropagation();return;}
+    const actionRule=event.target.closest('[data-mod-action-rule]');
+    if(actionRule){event.preventDefault();const entry=modifySelectableRules().find(entry=>entry.rule.id===actionRule.dataset.modActionRule);if(entry&&!S.session.reviewBusy)openActionDialog(entry.rule.title,modifyActiveFindings(entry.matches),navigate);return;}
     const asideGroup=event.target.closest('[data-mod-aside-group]');
     if(asideGroup){event.preventDefault();const key=asideGroup.dataset.modAsideGroup,findings=modifyPatternMap.get(key)||[];setModifyPatternAside(key,findings.some(finding=>!isExcludedId(finding.id)),navigate);return;}
     const review=event.target.closest('[data-mod-review]');
@@ -1425,7 +1465,7 @@ export async function addAuditTarget(file,navigate){
       const {bytes,snapshot,status,rawResult}=await importAuditWorkbook(file,{report});
       await checkpoint();
       const result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
-      S.session={...S.session,baselineSnapshot:snapshot,baselineResult:rawResult,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
+S.session={...S.session,baselineSnapshot:snapshot,baselineResult:rawResult,importResult:rawResult,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -1488,7 +1528,7 @@ async function addComparisonFile(file,side,navigate){
       snapshot=imported.snapshot;targetBytes=imported.bytes;statusReport=imported.status;auditResult=imported.rawResult;
       await checkpoint();report(1,side==='target'?`${auditResult.findings.length.toLocaleString()} audit findings`:'Reference ready');
     });
-    if(side==='target'){resetSession();S.session={...S.session,name:file.name,baselineSnapshot:snapshot,baselineResult:auditResult,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
+if(side==='target'){resetSession();S.session={...S.session,name:file.name,baselineSnapshot:snapshot,baselineResult:auditResult,importResult:auditResult,snapshot,rawResult:auditResult,result:applyRulePreferences(auditResult,S.rules.disabled),status:statusReport,sourceBytes:targetBytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';}
     else{S.comparison.referenceName=file.name;S.comparison.referenceSnapshot=snapshot;S.comparison.referenceError='';}
     S.comparison.result=null;S.comparison.selectedUpn='';S.comparison.detailTab='hierarchy';S.comparison.pairScrollTop=0;S.comparison.treeScrollTop=0;S.comparison.treeExpandedByUpn={};renderUpload(navigate);
     if(side==='target')await reviewAutosaveRestore(navigate);

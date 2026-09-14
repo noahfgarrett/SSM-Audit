@@ -6,7 +6,7 @@ import {esc} from '../src/core/text.js'
 import {auditActionPatternKey} from '../src/audit/actions.js'
 
 const source=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
-function harness(){
+function harness(ready=new Set()){
   const rule={id:'parent.cross-upn'},findings=[
     {id:'a',why:'Child UPN 650, parent UPN 101',rule},
     {id:'b',why:'Child UPN 650, parent UPN 101',rule},
@@ -17,7 +17,7 @@ function harness(){
   const nodes=new Map(),messages=[],calls={refresh:0,counts:0};
   const node=selector=>{if(!nodes.has(selector)){const classes=new Set();nodes.set(selector,{innerHTML:'',checked:true,disabled:false,classList:{toggle:(name,on)=>on?classes.add(name):classes.delete(name),contains:name=>classes.has(name)}});}return nodes.get(selector);};
   const context=vm.createContext({S:{session},esc,auditActionPatternKey,isExcludedId:id=>session.excluded.has(id),modifyPatternMap:new Map(),modifyPatternKey:(_rule,why)=>why,
-    modifyAmount:value=>String(value),modifyHighlight:esc,modifyPctBtn:()=>'',modifyItemMasterSwap:()=>'',ic:name=>`<i>${name}</i>`,SEVERITY_LABELS:{error:'Invalid'},
+    modifyReadySet:()=>ready,modifyReadyBadge:()=>'',modifyAmount:value=>String(value),modifyHighlight:esc,modifyPctBtn:()=>'',modifyItemMasterSwap:()=>'',ic:name=>`<i>${name}</i>`,SEVERITY_LABELS:{error:'Invalid'},
     $:node,$$:()=>[],saveExcluded:()=>{session.reviewDirty=true;},refreshSessionResult:()=>{calls.refresh++;},updateModifyCounts:()=>{calls.counts++;},toast:message=>messages.push(message)});
   vm.runInContext(source.slice(source.indexOf('function modifyActiveFindings('),source.indexOf('function modifyFillPatternRows(')),context);
   vm.runInContext(source.slice(source.indexOf('function syncModifyPatternBox('),source.indexOf('function modifyRuleSeverity(')),context);
@@ -26,6 +26,16 @@ function harness(){
   for(const group of groups)context.modifyPatternMap.set(group.key,group.findings);
   return {api,session,groups,node,calls,messages,findings};
 }
+
+test('fully applied patterns disable repeat actions and dismissal without crossing out the result',()=>{
+  const h=harness(new Set(['a','b'])),key=h.groups[0].key;
+  h.api.syncModifyPatternBox(key);
+  assert.equal(h.node(`input[data-mod-group="${key}"]`).disabled,true);
+  assert.equal(h.node(`[data-mod-action-group="${key}"]`).disabled,true);
+  assert.equal(h.node(`[data-mod-aside-group="${key}"]`).disabled,true);
+  assert.equal(h.node(`[data-mod-pattern="${key}"]`).classList.contains('is-ready'),true);
+  assert.equal(h.node(`[data-mod-pattern="${key}"]`).classList.contains('is-excluded'),false);
+});
 
 test('setting aside one pattern leaves its sibling active and preserves registry data and staged corrections',()=>{
   const h=harness(),before=JSON.stringify([h.session.snapshot,h.session.changes]),group=h.groups[0];

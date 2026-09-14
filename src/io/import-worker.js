@@ -14,7 +14,7 @@ self.onmessage=async({data})=>{
   const report=(fraction,label)=>self.postMessage({type:'progress',fraction,label});
   try{
     if(data.kind==='actions-export'){
-      if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;}
+      if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;auditReviewWorkerCache.importedResult=data.baselineResult;}
       const {result,sessionName,options}=data.actionsWorkbook;
       report(.05,'Grouping action findings');
       const workbook=buildAuditActionsWorkbook(result,sessionName,{...options,onProgress:fraction=>report(.1+fraction*.55,'Building rule tabs')});
@@ -23,7 +23,7 @@ self.onmessage=async({data})=>{
       report(1,'Actions workbook ready');self.postMessage({type:'result',prepared:{bytes}},[bytes.buffer]);return;
     }
     if(data.kind==='export'){
-      if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;}
+      if(data.baseline){auditReviewWorkerCache.baseline=data.baseline;auditReviewWorkerCache.file=data.file;auditReviewWorkerCache.workbook=null;auditReviewWorkerCache.importedResult=data.baselineResult;}
       if(!auditReviewWorkerCache.file)throw new Error('Open the original registry before exporting corrections.');
       report(.02,'Reading original workbook');
       const source=new Uint8Array(await auditReviewWorkerCache.file.arrayBuffer());

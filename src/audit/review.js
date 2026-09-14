@@ -17,7 +17,7 @@ export function auditSessionResult(snapshot,references={},migration){
 
 // This cache belongs to one worker and one original registry, never storage.
 export async function auditPrepareInWorker(cache,data,report=()=>{}){
-  if(data.baseline){cache.baseline=data.baseline;cache.file=data.file;cache.workbook=null;cache.contextKey=null;cache.previous=null;}
+  if(data.baseline){cache.baseline=data.baseline;cache.file=data.file;cache.workbook=null;cache.contextKey=null;cache.previous=null;cache.importedResult=data.baselineResult;}
   if(!cache.baseline)throw new Error('Open the original registry before reviewing changes.');
   const baseline=cache.baseline,{changes,references,migration,previousChanges}=data;
   report(.15,'Validating source cells');
@@ -29,7 +29,7 @@ export async function auditPrepareInWorker(cache,data,report=()=>{}){
   }
   const contextKey=JSON.stringify([references,migration]),previousKey=JSON.stringify(previousChanges),changesKey=JSON.stringify(changes);
   report(.4,'Running audit checks');
-  if(cache.contextKey!==contextKey){cache.baselineResult=auditSessionResult(baseline,references,migration);cache.previous=null;cache.contextKey=contextKey;}
+  if(cache.contextKey!==contextKey){cache.baselineResult=cache.importedResult&&!Object.keys(references||{}).length&&!migration?.enabled?cache.importedResult:auditSessionResult(baseline,references,migration);cache.previous=null;cache.contextKey=contextKey;}
   const before=cache.previous?.key===previousKey?cache.previous:{snapshot:auditApplyCorrections(baseline,previousChanges),result:null};
   before.result||=previousChanges.length?auditSessionResult(before.snapshot,references,migration):cache.baselineResult;
   const result=cache.previous?.key===changesKey?cache.previous.result:changes.length?auditSessionResult(snapshot,references,migration):cache.baselineResult;

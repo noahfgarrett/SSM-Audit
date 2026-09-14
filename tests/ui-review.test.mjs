@@ -6,7 +6,7 @@ import { clean, esc } from '../src/core/text.js'
 import { EXTO_REV21_COLUMNS, extoRev21SystemsForUpn } from '../src/exto/rev21-contract.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
-import { AUDIT_ACTION_FIELDS, auditFindingRow, auditCorrectionKey, auditProposeCorrection, auditRecommendationContext, auditCustomCorrection, auditMergeCorrections, auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, auditReadReviewDocument, auditRegistryRevision, auditReviewDocument } from '../src/audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditReadyFindingIds, auditFindingRow, auditCorrectionKey, auditProposeCorrection, auditRecommendationContext, auditCustomCorrection, auditMergeCorrections, auditApplyCorrections, auditCorrectionImpact, auditMakeCorrection, auditReadReviewDocument, auditRegistryRevision, auditReviewDocument } from '../src/audit/actions.js'
 import { auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES } from '../src/audit/references.js'
 import { validateAuditCorrections } from '../src/audit/export.js'
 import { resetSession } from '../src/state.js'
@@ -14,6 +14,7 @@ import { referenceHelpHtml } from '../src/ui/guide-content.js'
 import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
 import { auditActionEntry, auditActionPolicy } from '../src/audit/actions.js'
 import { auditSessionResult, auditPrepareInWorker } from '../src/audit/review.js'
+import { buildAuditUpdateBatches } from '../src/audit/export.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js', import.meta.url), 'utf8'), { filename: 'sheetjs.js' })
 const ui = readFileSync(new URL('../src/ui/audit.js', import.meta.url), 'utf8')
@@ -210,6 +211,27 @@ test('bulk action preparation shows progress and yields before displaying editab
   assert.ok(h.calls.progress>0);assert.ok(h.calls.checkpoints>20);
   assert.match(h.node('#actionPreviewRows').innerHTML,/value=""/);
   assert.equal(session.reviewBusy,false);assert.equal(session.changes.length,0);
+});
+
+test('multiple rules apply 500 cells together, show export readiness, round-trip, and undo',async()=>{
+  const values={equipmentId:'DEMO-EQ-0',building:'DEMO',upn:'602',discipline:'ELECTRICAL',systemName:'650  Facility Management System',closestParent:system,equipmentDescription:'Electrical panel',dependencyProject:'DEMO',project:'DEMO'};
+  const session=registry(values,Array.from({length:249},(_,i)=>({...values,equipmentId:`DEMO-EQ-${i+1}`}))),h=reviewHarness(session);
+  const findings=session.rawResult.findings.filter(f=>['metadata.system-upn-mismatch','dependency.project-not-needed'].includes(f.rule.id));
+  assert.equal(findings.length,500);
+  await h.api.openActionDialog('Selected rules (2)',findings);
+  assert.match(h.node('#actionModalBody').innerHTML,/data-action-mode="individual" aria-selected="true"/);
+  await h.node('#actionApply').onclick();assert.equal(session.changes.length,0,'preview does not apply edits');
+  await h.node('#actionApply').onclick();assert.equal(session.changes.length,500);
+  const ready=auditReadyFindingIds(session);
+  assert.ok(findings.every(finding=>ready.has(finding.id)),'all selected findings are ready, including any additional issues resolved by these edits');
+  assert.match(h.node('#actionModalBody').innerHTML,/Changes applied/);
+  const exported=await buildAuditUpdateBatches(session.sourceBytes,session.baselineSnapshot,session.changes);
+  assert.equal(exported.summary.exportedRows,250);assert.equal(exported.summary.exportedCells,500);
+  const zip=XLSX.CFB.read(exported.bytes,{type:'array'}),batch=XLSX.CFB.find(zip,'/'+exported.summary.batches[0].name);
+  const sheet=XLSX.read(batch.content,{type:'array',cellStyles:true}).Sheets['Upload Template'];
+  assert.equal(sheet.J3.v,system);assert.equal(sheet.AO3.v,'');
+  assert.equal(sheet.J3.s.fgColor.rgb,'FFF2CC');assert.equal(sheet.AO3.s.fgColor.rgb,'FFF2CC');
+  await h.api.reviewUndoLast();assert.equal(session.changes.length,0);assert.equal(auditReadyFindingIds(session).size,0);
 });
 
 test('large L1 reviews yield with controls locked before merging and validating every change',async()=>{
