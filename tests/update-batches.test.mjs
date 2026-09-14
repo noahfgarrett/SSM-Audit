@@ -32,6 +32,35 @@ function entries(bytes){
  return result;
 }
 
+test('VF upload rows receive Yes using final item masters with yellow changes and accurate counts',async()=>{
+ const f=fixture(7),item=26,association=38;
+ const values=[['VF1_PANEL',''],['VF_Blank','No'],['VF2_PANEL','Yes'],['DEMO_PANEL','No'],['DEMO_PANEL',''],['VF1_PANEL','No'],['VFD_PANEL','No']];
+ values.forEach(([im,fat],i)=>{f.aoa[i+1][item]=im;f.aoa[i+1][association]=fat;});
+ const baseline=auditSnapshotFromAoa(f.aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(f.aoa),'Registry');
+ const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'})),original=source.slice();
+ const changes=baseline.rows.map(row=>auditMakeCorrection(row,'UPN','603'));
+ changes.push(auditMakeCorrection(baseline.rows[4],'Item Master Unique Identifier','VF3_PANEL'));
+ changes.push(auditMakeCorrection(baseline.rows[5],'Item Master Unique Identifier','DEMO_PANEL'));
+ const result=await buildAuditUpdateBatches(source,baseline,changes);
+ const output=XLSX.read([...entries(result.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
+ assert.deepEqual(values.map((_,i)=>output[`AM${i+3}`]?.v),['Yes','Yes','Yes','No','Yes','No','No']);
+ for(const row of [3,4,7])assert.equal(output[`AM${row}`].s.fgColor.rgb,'FFF2CC');
+ assert.notEqual(output.AM5.s?.fgColor?.rgb,'FFF2CC','existing Yes is unchanged');
+ assert.equal(result.summary.exportedCells,12);assert.deepEqual(source,original);
+});
+
+test('VF association is supplied when the source has no association column',async()=>{
+ const f=fixture(1);f.aoa[1][26]='VF1_PANEL';
+ const aoa=f.aoa.map(row=>row.filter((_,index)=>index!==38));
+ const baseline=auditSnapshotFromAoa(aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+ const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
+ const result=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[0],'UPN','603')]);
+ const sheet=XLSX.read([...entries(result.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
+ assert.equal(sheet.AM3.v,'Yes');assert.equal(sheet.AM3.s.fgColor.rgb,'FFF2CC');assert.equal(result.summary.exportedCells,2);
+});
+
 for(const [count,sizes] of [[1,[1]],[1950,[1950]],[1951,[1950,1]],[3900,[1950,1950]],[4300,[1950,1950,400]]]){
  test(`upload export batches ${count} rows without loss, metadata changes or overlap`,async()=>{
   const f=fixture(count),original=f.source.slice(),stages=[];

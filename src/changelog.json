@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.44.1",
+    "date": "2026-09-14",
+    "type": "fix",
+    "notes": "- Improved upload export metadata"
+  },
+  {
     "version": "1.44.0",
     "date": "2026-09-14",
     "type": "feature",

@@ -942,6 +942,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     layouts.set(name,layout);
   }
   options.onStage?.(.3,'Copying changed equipment with all metadata');
+  let associationChanges=0;
   const makeWorkbook=selected=>{
   const headerRows=options.uploadTemplate?2:1,headings=[columns.map(column=>column.label)];
   if(options.uploadTemplate)headings.unshift(EXTO_REV21_COLUMNS.map(column=>column.gating?'Gating':'Non Gating'));
@@ -962,6 +963,18 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
       if(cell.z)cell.s={...cell.s,numFmt:cell.z};
       if(change){cell.v=change.value;cell.t=typeof change.value==='number'?'n':typeof change.value==='boolean'?'b':'s';cell.s={...cell.s,fill:yellow};}
       sheetSetCell(sheet,XLSX.utils.encode_cell({r:index+headerRows,c:outputColumn}),cell);
+    }
+    if(options.uploadTemplate){
+      const itemColumn=EXTO_REV21_COLUMNS.find(column=>column.field==='itemMaster').index;
+      const associationColumn=EXTO_REV21_COLUMNS.find(column=>column.field==='vfPorFatAssociation').index;
+      const item=sheet[XLSX.utils.encode_cell({r:index+headerRows,c:itemColumn})];
+      if(/^VF\d*(?:_|$)/i.test(clean(item?.v))){
+        const address=XLSX.utils.encode_cell({r:index+headerRows,c:associationColumn}),cell=sheet[address];
+        if(cell?.v!=='Yes'){
+          sheetSetCell(sheet,address,{...(cell||{}),t:'s',v:'Yes',s:{...cell?.s,fill:yellow}});
+          if(!patch.has(origin.columns?.vfPorFatAssociation))associationChanges++;
+        }
+      }
     }
   });
   // Include every upload column even when the source has no corresponding value.
@@ -1007,7 +1020,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     // XLSX files are already compressed. A stored ZIP avoids recompressing
     // them and also works without the browser's CompressionStream API.
     const archive=await zipEntries(entries,fraction=>options.onStage?.(.9+.09*fraction,'Packaging upload batches'),{store:true});
-    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,0),batches}};
+    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,associationChanges),batches}};
   }
   options.onStage?.(.65,'Packaging changed rows');
   return new Uint8Array(await workbookBytesCompact(makeWorkbook(selected),{onProgress:options.onProgress}));
