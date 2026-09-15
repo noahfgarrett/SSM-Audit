@@ -61,8 +61,7 @@ function reviewHarness(session) {
       return auditPrepareInWorker(reviewCache,{changes,previousChanges:s.changes||[],references:options.references||s.references||{},referencesChanged:options.references!==undefined,migration,migrationChanged,...(!reviewCache.baseline?{baseline:s.baselineSnapshot,file:new Blob([s.sourceBytes||new Uint8Array()])}:{})},report);
     },
     crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
-    auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,auditMilestoneMigrationRows,auditMigrationImpact,
-    auditSparrowMilestoneMigration:()=>auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Demo',mappings:[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 New scope'}]}),
+    auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,
     modifySuggestedFix:finding=>auditProposeCorrection(finding,auditRecommendationContext(session.snapshot,session.references)),
     auditApplyCorrections, auditCorrectionImpact, auditReadReferenceAoa, auditReadReferenceWorkbook, auditReferenceFindings, auditReferenceSheets, SSM_AUDIT_REFERENCE_RULES, runSsmAudit,
     auditReadReviewDocument: async (...args) => { calls.readReview++; return auditReadReviewDocument(...args) },
@@ -80,65 +79,9 @@ function reviewHarness(session) {
   })
   vm.runInContext(reviewSource, context, { filename: 'audit-review-helpers.js' })
   vm.runInContext(ui.slice(end,ui.indexOf('\nfunction syncModifyPatternBox(',end)),context)
-  vm.runInContext(ui.slice(ui.indexOf('function milestoneMigrationControls('),ui.indexOf('export function renderModifications(')),context)
-  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit,setMilestoneMigration,previewMilestoneMigration,milestoneMigrationControls,reviewMilestoneMappings,wireMilestoneMigration})', context)
+  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit})', context)
   return { context, api, calls, hooks, messages, node, lists }
 }
-
-test('project milestone replacement previews and applies only L1, then restores with undo',async()=>{
-  const session=registry({systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope',milestone:'DEMO-L2-M1-20 Equipment scope'}),h=reviewHarness(session);
-  const profile=auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Demo',mappings:[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 New scope'}]});
-  await h.api.setMilestoneMigration({enabled:true,profile});
-  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
-  assert.equal(session.milestoneMigration.enabled,true);
-  h.api.previewMilestoneMigration();
-  assert.match(h.node('#actionPreviewRows').innerHTML,/Milestone Parent/);
-  assert.match(h.node('#actionPreviewRows').innerHTML,/DEMO-L1-M1-02 New scope/);
-  await h.node('#actionApply').onclick();
-  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
-  await h.node('#actionApply').onclick();
-  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');
-  assert.equal(session.snapshot.rows[0].milestone,'DEMO-L2-M1-20 Equipment scope');
-  assert.equal(session.changes.length,1);
-  await h.api.reviewUndoLast();
-  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-01 Old scope');
-  assert.equal(session.milestoneMigration.enabled,true);
-});
-
-test('milestone mapping summary works while off and reviews every affected row before applying',async()=>{
-  const session=registry({systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope',milestone:'DEMO-L2-M1-20 Equipment scope'}),h=reviewHarness(session);
-  session.milestoneMigration={enabled:false,profile:auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Demo',mappings:[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 New scope'}]})};
-  session.modifySearch='not this equipment';
-  const controls=h.api.milestoneMigrationControls();assert.match(controls,/1 rows with replacements/);assert.doesNotMatch(controls,/disabled/);
-  h.api.wireMilestoneMigration();h.node('#migrationPreview').onclick();
-  assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-01/);assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-02/);assert.match(h.node('#actionModalBody').innerHTML,/1 equipment rows/);
-  assert.equal(session.milestoneMigration.enabled,false);assert.equal(session.changes.length,0);
-  await h.node('#migrationReviewApply').onclick();
-  assert.equal(session.milestoneMigration.enabled,true);assert.equal(session.changes.length,0);
-  assert.match(h.node('#actionPreviewRows').innerHTML,/DEMO-L1-M1-02 New scope/);
-  await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
-  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');assert.equal(session.snapshot.rows[0].milestone,'DEMO-L2-M1-20 Equipment scope');
-});
-
-test('built-in milestone replacements activate without reference or mapping files and start with a preview',async()=>{
-  const session=registry({systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope'}),h=reviewHarness(session);
-  const controls=h.api.milestoneMigrationControls();assert.doesNotMatch(controls,/disabled|checked|migrationFile|Load mapping/);assert.match(controls,/1 rows with replacements/);
-  h.api.wireMilestoneMigration();await h.node('#newMilestones').onchange({target:{checked:true}});
-  assert.equal(session.milestoneMigration.enabled,true);assert.equal(session.changes.length,0);
-  assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-01/);assert.match(h.node('#actionModalBody').innerHTML,/DEMO-L1-M1-02/);
-  await h.node('#migrationReviewApply').onclick();await h.node('#actionApply').onclick();await h.node('#actionApply').onclick();
-  assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');
-  assert.equal(session.snapshot.rows[0].milestone,'');assert.ok(session.rawResult.findings.some(finding=>finding.rule.id==='milestone.incomplete-pair'));
-  h.api.wireMilestoneMigration();await h.node('#newMilestones').onchange({target:{checked:false}});
-  assert.equal(session.milestoneMigration.enabled,false);assert.equal(session.snapshot.rows[0].milestoneParent,'DEMO-L1-M1-02 New scope');
-});
-
-test('built-in milestone preview with no matching equipment cannot apply replacements',()=>{
-  const session=registry({milestoneParent:'OTHER-L1-M1-01 Scope'}),h=reviewHarness(session);
-  h.api.reviewMilestoneMappings();assert.match(h.node('#actionModalBody').innerHTML,/0 equipment rows/);
-  assert.match(h.node('#actionModalBody').innerHTML,/id="migrationReviewApply" disabled/);
-  assert.equal(session.changes.length,0);assert.equal(session.milestoneMigration,undefined);
-});
 
 test('metadata target switch preserves edits and applies to the chosen parent row',async()=>{
   const session=registry({systemName:system,building:'DEMO-A',closestParent:'PARENT'},[{equipmentId:'PARENT',building:'DEMO-B',upn:'602',systemName:system,discipline:'ELECTRICAL',closestParent:system}]);
@@ -237,8 +180,11 @@ test('multiple rules apply 500 cells together, show export readiness, round-trip
 test('large L1 reviews yield with controls locked before merging and validating every change',async()=>{
   const values={systemName:system,milestoneParent:'DEMO-L1-M1-01 Old scope',milestone:'DEMO-L2-M1-10'};
   const session=registry(values,Array.from({length:499},(_,i)=>({...values,equipmentId:`EQ-${i+2}`,building:'DEMO',upn:'602',discipline:'ELECTRICAL',closestParent:system,equipmentDescription:'Electrical panel'}))),h=reviewHarness(session);
-  session.milestoneMigration={enabled:true,profile:h.context.auditSparrowMilestoneMigration()};
-  await h.api.previewMilestoneMigration();
+  const provided=new Map(),findings=session.snapshot.rows.map((row,index)=>{
+    const finding={id:`large:${index}`,sheet:row._source.sheet,row:row._source.row,equipmentId:row.equipmentId,field:'Milestone Parent',severity:'info',rule:{id:'demo.l1-replacement',title:'Demo replacement'},why:'Demo replacement'};
+    provided.set(finding.id,{row,finding,reason:'Demo replacement.',changes:[auditMakeCorrection(row,'Milestone Parent','DEMO-L1-M1-02 New scope',finding)]});return finding;
+  });
+  await h.api.openActionDialog('Large batch',findings,undefined,provided);
   const before=h.calls.checkpoints;let sawLocked=false;
   h.hooks.checkpoint=()=>{sawLocked||=session.reviewBusy&&h.node('#actionApply').disabled;};
   await h.node('#actionApply').onclick();

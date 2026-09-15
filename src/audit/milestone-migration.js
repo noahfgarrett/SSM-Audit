@@ -1,22 +1,7 @@
 import { clean } from '../core/text.js'
 
-export function auditSparrowMilestoneMigration(){
-  const groups=[
-    [['122','123'],'123','Utility and Sub Utility Trench Levels are HPM Ready'],
-    [['124','117','115'],'124','50% North side (AB-AR) ready for TI Prefac, PCD (UL & SF) and AMHS start'],
-    [['130_1','130'],'130_1','100% Ready for Prefac Start and AMHS Install'],
-    [['125'],'125','PSSS Rooms, BGY are HPM Ready'],
-    [['128'],'128','50% CR is ready for Data Collection start'],
-    [['129','127','126'],'126','50% North side (AB-AR) ready for First Tool Move-In, Set and sign off - partial HPM ready'],
-    [['132'],'128_1','100% CR is ready for Data Collection start'],
-    [['134','133','131'],'133','100% FAB, SubFab, Link and TTN are HPM Ready and ready for Tools Set'],
-  ];
-  return auditReadMilestoneMigration({format:'ssm-audit-milestone-map',version:1,project:'Sparrow',mappings:groups.flatMap(([from,to,title])=>from.map(code=>({
-    from:`SP-L1-M1-${code}`,to:`SP-L1-M1-${to}`,label:`SP-L1-M1-${to} - Sparrow Mod 1 - Level 1 Milestone - ${title}`,aliases:[],
-  })))});
-}
-
 function auditMigrationCode(value){return clean(value).match(/^((?:[A-Z0-9.]+[-_])*L1(?:[-_][A-Z0-9.]+)+)(?=\s|$)/i)?.[1].toUpperCase()||'';}
+
 export function auditReadMilestoneMigration(value){
   if(value?.format!=='ssm-audit-milestone-map'||value.version!==1||typeof value.project!=='string'||!clean(value.project)||value.project.length>100||!Array.isArray(value.mappings)||!value.mappings.length||value.mappings.length>1000)throw new Error('Select a valid project milestone mapping JSON.');
   const seen=new Map(),aliases=new Map(),targets=new Map(),mappings=[];

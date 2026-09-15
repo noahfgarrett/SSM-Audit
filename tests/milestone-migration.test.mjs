@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { auditSparrowMilestoneMigration, auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationValue, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
+import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigrationValue, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../src/audit/milestone-migration.js'
 import { auditReviewDocument, auditReadReviewDocument } from '../src/audit/actions.js'
 import { auditSnapshotFromAoa } from '../src/audit/model.js'
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
@@ -8,20 +8,6 @@ import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 const snapshotOf=rows=>auditSnapshotFromAoa([EXTO_REV21_COLUMNS.map(c=>c.header),...rows.map(row=>EXTO_REV21_COLUMNS.map(c=>row[c.field]||''))],{sheet:'Registry'});
 
 const map=(mappings=[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 Approved scope',aliases:['Old scope']}])=>({format:'ssm-audit-milestone-map',version:1,project:'Demonstration',mappings});
-test('built-in replacements use full project codes and independent settings without description-only matching',()=>{
- const profile=auditSparrowMilestoneMigration();assert.equal(profile.mappings.length,16);
- for(const entry of profile.mappings){
-   assert.equal(auditMigrationValue(entry.from+' Previous title',profile).to,entry.to);
-   assert.equal(auditMigrationValue(entry.from.replace(/^[^-]+/,'OTHER')+' Previous title',profile),null);
-   assert.equal(auditMigrationValue(entry.from.replace('-L1-','-L2-'),profile),null);
-   assert.equal(auditMigrationValue(entry.from+'_99',profile),null);
-   assert.equal(auditMigrationValue(entry.label,profile),null);
-   assert.deepEqual(entry.aliases,[]);
- }
- const first=profile.mappings[0];profile.mappings[0].label='Edited';
- assert.notEqual(auditSparrowMilestoneMigration().mappings[0].label,'Edited');
- assert.equal(auditMigrationValue(first.label.replace(/^.*? - /,''),auditSparrowMilestoneMigration()),null);
-});
 test('migration matches complete L1 identities, not numeric fragments or L2 values',()=>{
  const profile=auditReadMilestoneMigration(map());
  assert.equal(auditMigrationValue('DEMO-L1-M1-01 Old label',profile).to,'DEMO-L1-M1-02');

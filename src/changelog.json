@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.46.0",
+    "date": "2026-09-15",
+    "type": "fix",
+    "notes": "- Removed unnecessary options"
+  },
+  {
     "version": "1.45.1",
     "date": "2026-09-15",
     "type": "fix",
