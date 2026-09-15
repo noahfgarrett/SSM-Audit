@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs'
 import {EXTO_REV21_COLUMNS} from '../src/exto/rev21-contract.js'
 import {auditSnapshotFromAoa} from '../src/audit/model.js'
 import {auditMakeCorrection} from '../src/audit/actions.js'
-import {AUDIT_UPDATE_BATCH_SIZE,buildAuditUpdateBatches,auditUpdateExportDate,auditUpdateExportSummary} from '../src/audit/export.js'
+import {AUDIT_UPDATE_BATCH_SIZE,buildAuditUpdateBatches,auditUpdateExportDate,auditUpdateExportSummary,auditEmailDirectory} from '../src/audit/export.js'
 import {crc32,zipEntries} from '../src/core/zip.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.url),'utf8'));
@@ -146,4 +146,49 @@ test('a two-row upload export can be reloaded and corrected again without shifti
  assert.equal(sheet.Y1.v,'Non Gating');assert.equal(sheet.Z1.v,'Non Gating');
  assert.equal(sheet.Y2.v,'Milestone');assert.equal(sheet.Z2.v,'Milestone Parent');
  assert.equal(next.summary.exportedRows,1);assert.equal(next.summary.exportedCells,2);
+});
+
+test('an Emails tab fills the three email columns by corrected discipline, in yellow, and reports misses',async()=>{
+ const f=fixture(5),discipline=7,[pm,sup,cx]=[29,30,31];
+ const disciplines=['Mechanical','ELECTRICAL','I&C','Mechanical','Structural'];
+ disciplines.forEach((value,i)=>{f.aoa[i+1][discipline]=value;});
+ f.aoa[4][pm]='pm.mech@example.com';f.aoa[4][sup]='old.sup@example.com';   // row 4: PM already right, superintendent stale
+ const baseline=auditSnapshotFromAoa(f.aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(f.aoa),'Registry');
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([
+  ['Discipline','Intel PM Email Address','Superintendent Email Address','Cx Engineer Email Address'],
+  ['MECHANICAL','pm.mech@example.com','sup.mech@example.com','cx.mech@example.com'],
+  ['Electrical','pm.elec@example.com','sup.elec@example.com',''],
+  ['Facilities Monitoring System','pm.fms@example.com','sup.fms@example.com','cx.fms@example.com'],
+ ]),'Emails');
+ const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
+ const directory=auditEmailDirectory(XLSX.read(source,{type:'array'}));
+ assert.equal(directory.sheet,'Emails');assert.equal(directory.rows,3);assert.equal(directory.byDiscipline.get('MECHANICAL').cxEngineerEmail,'cx.mech@example.com');
+ const changes=baseline.rows.map(row=>auditMakeCorrection(row,'UPN','603'));
+ changes.push(auditMakeCorrection(baseline.rows[4],'Discipline','ELECTRICAL'));   // structural row corrected to electrical
+ const result=await buildAuditUpdateBatches(source,baseline,changes);
+ const sheet=XLSX.read([...entries(result.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
+ const cell=(r,c)=>sheet[XLSX.utils.encode_cell({r:r+2,c})];
+ assert.equal(cell(0,pm).v,'pm.mech@example.com');assert.equal(cell(0,sup).v,'sup.mech@example.com');assert.equal(cell(0,cx).v,'cx.mech@example.com');
+ for(const c of [pm,sup,cx])assert.equal(cell(0,c).s.fgColor.rgb,'FFF2CC');
+ assert.equal(cell(1,pm).v,'pm.elec@example.com');assert.equal(cell(1,cx).v,f.aoa[2][cx],'a blank Emails cell leaves the original value');assert.notEqual(cell(1,cx).s?.fgColor?.rgb,'FFF2CC');
+ assert.equal(cell(2,pm).v,'pm.fms@example.com','I&C maps to the FMS discipline');
+ assert.equal(cell(3,pm).v,'pm.mech@example.com');assert.notEqual(cell(3,pm).s?.fgColor?.rgb,'FFF2CC','an address already in place is not a change');
+ assert.equal(cell(3,sup).v,'sup.mech@example.com');assert.equal(cell(3,sup).s.fgColor.rgb,'FFF2CC');
+ assert.equal(cell(4,pm).v,'pm.elec@example.com','the corrected discipline decides the emails');assert.equal(cell(4,discipline).v,'ELECTRICAL');
+ assert.equal(result.summary.emailCells,3+2+3+2+2);assert.equal(result.summary.exportedCells,6+12);
+ assert.deepEqual(result.summary.emailMisses,[]);assert.equal(result.summary.emailsTab,'Emails');
+ assert.match(auditUpdateExportSummary(result.summary),/12 email cells filled from the Emails tab/);
+ const stranger=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[4],'UPN','603')]);
+ assert.deepEqual(stranger.summary.emailMisses,['Structural']);assert.match(auditUpdateExportSummary(stranger.summary),/No email entry for: Structural/);
+ const plain=await buildAuditUpdateBatches(f.source,f.baseline,f.changes.slice(0,2));
+ assert.equal(plain.summary.emailsTab,'');assert.doesNotMatch(auditUpdateExportSummary(plain.summary),/email/);
+});
+
+test('a malformed Emails tab stops the export instead of writing partial addresses',async()=>{
+ const f=fixture(1),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(f.aoa),'Registry');
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Discipline','Intel PM Email Address'],['Mechanical','pm@example.com']]),'Emails');
+ const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
+ await assert.rejects(buildAuditUpdateBatches(source,f.baseline,f.changes.slice(0,1)),/Emails tab is missing SUPERINTENDENT EMAIL ADDRESS, CX ENGINEER EMAIL ADDRESS/);
 });
