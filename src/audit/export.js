@@ -1,7 +1,7 @@
 import { clean, natCmp } from '../core/text.js'
 import { zipDeflateAvailable, zipEntries } from '../core/zip.js'
 import { downloadBlob, sheetAutoFilter, sheetCellStyle, sheetFormulaCell, sheetFreezeRows, sheetLinkCell, sheetSetCell, sheetStyleCell, sheetXmlExtras, styleHeaderRow, workbookBlob, workbookBlobCompact, workbookBytesCompact } from '../core/download.js'
-import { EXTO_REV21_COLUMNS, extoRev21Norm } from '../exto/rev21-contract.js'
+import { EXTO_REV21_COLUMNS, extoRev21EffectiveDiscipline, extoRev21Norm } from '../exto/rev21-contract.js'
 import { S } from '../state.js'
 import { prepareAuditReview } from '../io/import-client.js'
 import { runWithProgress, toast } from '../ui/feedback.js'
@@ -900,13 +900,37 @@ export function auditUpdateExportDate(date=new Date()){
 }
 export function auditUpdateExportSummary(summary){
   if(!summary)return '';
-  return `${summary.exportedRows.toLocaleString()} equipment rows exported in ${summary.batches.length} ${summary.batches.length===1?'batch':'batches'} (${summary.batches.map(batch=>batch.rows.toLocaleString()).join(' / ')}). ${summary.excludedCompletedRows.toLocaleString()} completed rows excluded. ${summary.exportedCells.toLocaleString()} changed cells exported.`;
+  const emails=summary.emailsTab?` ${(summary.emailCells||0).toLocaleString()} email cells filled from the ${summary.emailsTab} tab.${summary.emailMisses&&summary.emailMisses.length?` No email entry for: ${summary.emailMisses.join(', ')}.`:''}`:'';
+  return `${summary.exportedRows.toLocaleString()} equipment rows exported in ${summary.batches.length} ${summary.batches.length===1?'batch':'batches'} (${summary.batches.map(batch=>batch.rows.toLocaleString()).join(' / ')}). ${summary.excludedCompletedRows.toLocaleString()} completed rows excluded. ${summary.exportedCells.toLocaleString()} changed cells exported.${emails}`;
 }
 export function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,options={}){
   return buildAuditUpdateData(sourceBytes,baseline,changes,{...options,batched:false});
 }
 export function buildAuditUpdateBatches(sourceBytes,baseline,changes,options={}){
   return buildAuditUpdateData(sourceBytes,baseline,changes,{...options,uploadTemplate:true,batched:true});
+}
+/* ---- Emails tab ----
+   A registry workbook may carry an "Emails" tab: Discipline, Intel PM Email
+   Address, Superintendent Email Address, Cx Engineer Email Address. Every
+   exported equipment row then receives the addresses for its (corrected)
+   discipline, highlighted like any other change. */
+export const AUDIT_EMAIL_FIELDS=Object.freeze([['intelPmEmail','INTEL PM EMAIL ADDRESS'],['superintendentEmail','SUPERINTENDENT EMAIL ADDRESS'],['cxEngineerEmail','CX ENGINEER EMAIL ADDRESS']]);
+export function auditEmailDisciplineKey(value){return extoRev21Norm(extoRev21EffectiveDiscipline(value));}
+export function auditEmailDirectory(workbook){
+  const name=(workbook&&workbook.SheetNames||[]).find(name=>/^e-?mails?$/i.test(clean(name)));if(!name)return null;
+  const aoa=XLSX.utils.sheet_to_json(workbook.Sheets[name],{header:1,defval:'',raw:false});
+  const headerAt=aoa.findIndex(row=>row.some(cell=>extoRev21Norm(cell)==='DISCIPLINE')&&row.some(cell=>/EMAIL/i.test(String(cell))));
+  if(headerAt===-1)return {sheet:name,byDiscipline:new Map(),rows:0,error:'The Emails tab needs a Discipline column and the three email address columns.'};
+  const header=aoa[headerAt].map(cell=>extoRev21Norm(cell)),columns={discipline:header.indexOf('DISCIPLINE')};
+  for(const [field,label] of AUDIT_EMAIL_FIELDS)columns[field]=header.indexOf(label);
+  const missing=AUDIT_EMAIL_FIELDS.filter(([field])=>columns[field]===-1).map(([,label])=>label);
+  if(missing.length)return {sheet:name,byDiscipline:new Map(),rows:0,error:`The Emails tab is missing ${missing.join(', ')}.`};
+  const byDiscipline=new Map();let rows=0;
+  for(const row of aoa.slice(headerAt+1)){
+    const key=auditEmailDisciplineKey(row[columns.discipline]);if(!key||byDiscipline.has(key))continue;
+    byDiscipline.set(key,Object.fromEntries(AUDIT_EMAIL_FIELDS.map(([field])=>[field,clean(row[columns[field]])])));rows++;
+  }
+  return {sheet:name,byDiscipline,rows,error:''};
 }
 async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   options.onStage?.(.05,'Reading original metadata');
@@ -942,7 +966,9 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     layouts.set(name,layout);
   }
   options.onStage?.(.3,'Copying changed equipment with all metadata');
-  let associationChanges=0;
+  let associationChanges=0,emailChanges=0;
+  const emails=auditEmailDirectory(source),emailMisses=new Set();
+  if(emails&&emails.error)auditCorrectionFail('EMAILS',emails.error);
   const makeWorkbook=selected=>{
   const headerRows=options.uploadTemplate?2:1,headings=[columns.map(column=>column.label)];
   if(options.uploadTemplate)headings.unshift(EXTO_REV21_COLUMNS.map(column=>column.gating?'Gating':'Non Gating'));
@@ -974,6 +1000,20 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
           sheetSetCell(sheet,address,{...(cell||{}),t:'s',v:'Yes',s:{...cell?.s,fill:yellow}});
           if(!patch.has(origin.columns?.vfPorFatAssociation))associationChanges++;
         }
+      }
+    }
+    if(emails){
+      const disciplineColumn=origin.columns?.discipline,corrected=disciplineColumn!=null&&patch.has(disciplineColumn)?patch.get(disciplineColumn).value:row.discipline;
+      const entry=emails.byDiscipline.get(auditEmailDisciplineKey(corrected));
+      if(!entry)emailMisses.add(clean(corrected)||'(blank discipline)');
+      else for(const [field] of AUDIT_EMAIL_FIELDS){
+        const email=entry[field];if(!email)continue;
+        const outputColumn=options.uploadTemplate?EXTO_REV21_COLUMNS.find(column=>column.field===field).index:layouts.get(origin.sheet)[origin.columns?.[field]];
+        if(outputColumn==null)continue;
+        const address=XLSX.utils.encode_cell({r:index+headerRows,c:outputColumn}),cell=sheet[address];
+        if(clean(cell?.v)===email)continue;
+        sheetSetCell(sheet,address,{...(cell||{}),t:'s',v:email,s:{...cell?.s,fill:yellow}});
+        if(!patch.has(origin.columns?.[field]))emailChanges++;
       }
     }
   });
@@ -1020,7 +1060,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     // XLSX files are already compressed. A stored ZIP avoids recompressing
     // them and also works without the browser's CompressionStream API.
     const archive=await zipEntries(entries,fraction=>options.onStage?.(.9+.09*fraction,'Packaging upload batches'),{store:true});
-    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,associationChanges),batches}};
+    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,associationChanges+emailChanges),emailCells:emailChanges,emailsTab:emails?emails.sheet:'',emailMisses:[...emailMisses].sort(natCmp),batches}};
   }
   options.onStage?.(.65,'Packaging changed rows');
   return new Uint8Array(await workbookBytesCompact(makeWorkbook(selected),{onProgress:options.onProgress}));
