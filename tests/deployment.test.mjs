@@ -51,7 +51,7 @@ test('source and fixtures exclude confidential targets apart from the explicitly
       const start=text.indexOf(`export function ${factory}`),end=text.indexOf('function auditMigrationCode');
       assert.ok(start>=0&&end>start);
       const approved=text.slice(start,end);
-      assert.equal(createHash('sha256').update(approved).digest('hex'),'10ddd0111dd4855007074b7edecd162cf31f553616d64dcd05175c5a17c4ebbd');
+      assert.equal(createHash('sha256').update(approved).digest('hex'),'3b876be837ba6c25ee1e3579ae1b8e0f828a45b080d63c0ed2070e349e49fef5');
       text=text.slice(0,start)+text.slice(end);
     }
     if(name==='src/ui/guide-content.js')text=text.replace(`built-in ${siteName} L1 replacements`,'built-in replacements').replace(`complete ${siteName} L1 codes`,'complete project L1 codes');

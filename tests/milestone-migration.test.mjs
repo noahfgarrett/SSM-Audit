@@ -9,7 +9,7 @@ const snapshotOf=rows=>auditSnapshotFromAoa([EXTO_REV21_COLUMNS.map(c=>c.header)
 
 const map=(mappings=[{from:'DEMO-L1-M1-01',to:'DEMO-L1-M1-02',label:'DEMO-L1-M1-02 Approved scope',aliases:['Old scope']}])=>({format:'ssm-audit-milestone-map',version:1,project:'Demonstration',mappings});
 test('built-in replacements use full project codes and independent settings without description-only matching',()=>{
- const profile=auditSparrowMilestoneMigration();assert.equal(profile.mappings.length,13);
+ const profile=auditSparrowMilestoneMigration();assert.equal(profile.mappings.length,16);
  for(const entry of profile.mappings){
    assert.equal(auditMigrationValue(entry.from+' Previous title',profile).to,entry.to);
    assert.equal(auditMigrationValue(entry.from.replace(/^[^-]+/,'OTHER')+' Previous title',profile),null);

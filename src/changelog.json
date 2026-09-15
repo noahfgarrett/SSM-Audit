@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.45.1",
+    "date": "2026-09-15",
+    "type": "fix",
+    "notes": "- Built-in L1 replacements now cover every previous code, including the three that were missing"
+  },
+  {
     "version": "1.45.0",
     "date": "2026-09-15",
     "type": "feature",
