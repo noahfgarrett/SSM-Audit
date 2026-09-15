@@ -11,12 +11,12 @@ import { auditExportPlanMode, auditUpdateExportSummary, exportSsmAuditXlsx, expo
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
-import { AUDIT_ACTION_FIELDS, auditReadyFindingIds, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditMakeCorrection, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditRegistryRevision, auditReviewDocument } from '../audit/actions.js'
+import { AUDIT_ACTION_FIELDS, auditReadyFindingIds, auditActionPatternKey, auditActionPolicy, auditActionEntry, auditFindingRow, auditApplyCorrections, auditCorrectionImpact, auditCorrectionKey, auditMergeCorrections, auditProposeCorrection, auditReadReviewDocument, auditRecommendationContext, auditRegistryRevision, auditReviewDocument } from '../audit/actions.js'
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
 import { buildMilestoneReference } from '../audit/milestone-recommend.js'
-import { auditSparrowMilestoneMigration, auditReadMigrationSettings, auditMigrationReferences, auditMilestoneMigrationRows, auditMigrationImpact } from '../audit/milestone-migration.js'
+import { auditReadMigrationSettings, auditMigrationReferences } from '../audit/milestone-migration.js'
 
 const AUDIT_ROW_HEIGHT=64,AUDIT_OVERSCAN=18,AUDIT_MAX_ROWS=160;
 const COMPARE_ROW_HEIGHT=96,COMPARE_OVERSCAN=14,COMPARE_MAX_ROWS=120;
@@ -1021,61 +1021,6 @@ function updateModifyCounts(navigate){
   syncModifyRuleSelection();
   renderSideNav(navigate);
 }
-function milestoneMigrationControls(){
-  const settings=currentMilestoneMigration(),count=auditMilestoneMigrationRows(S.session.snapshot,{...settings,enabled:true}).length;
-  return `<div class="milestone-migration"><label><input id="newMilestones" type="checkbox" role="switch" aria-describedby="migrationStatus" ${settings.enabled?'checked':''}>New Milestones</label><button class="btn ghost sm" id="migrationPreview">Review replacements</button><span id="migrationStatus">${esc(settings.profile.project)} only: ${count.toLocaleString()} rows with replacements</span></div>`;
-}
-function currentMilestoneMigration(){
-  const settings=S.session.milestoneMigration;
-  return settings?.profile?settings:{enabled:false,profile:auditSparrowMilestoneMigration()};
-}
-async function setMilestoneMigration(settings,navigate){
-  const session=S.session;if(session.reviewBusy)return;
-  try{session.reviewBusy=true;const prepared=await reviewPrepare(session.changes,auditReadMigrationSettings(settings));
-    if(S.session!==session)return;reviewRememberUndo();reviewInstallDraft(prepared);rerenderModifications(navigate);
-    toast('Milestone mapping updated. Registry values change only after you review and apply replacements.');return true;
-  }catch(error){toast(error.message||'The mapping could not be loaded.');if(S.session===session)rerenderModifications(navigate);}
-  finally{session.reviewBusy=false;}
-}
-function reviewMilestoneMappings(navigate){
-  const session=S.session,settings=currentMilestoneMigration();if(session.reviewBusy)return;
-  const token={kind:'milestone-map-review'},entries=auditMilestoneMigrationRows(session.snapshot,{...settings,enabled:true}),counts=new Map();
-  for(const {mapping} of entries)counts.set(mapping.from,(counts.get(mapping.from)||0)+1);
-  const mappings=settings.profile?.mappings||[];
-  actionScope=token;
-  $('#actionModalBody').innerHTML=`<span class="eyebrow">New Milestones</span><h3 id="actionTitle">Review L1 replacements</h3>
-    <p>${esc(settings.profile.project)}: ${entries.length.toLocaleString()} equipment rows have replacements, including rows hidden by filters. Only Milestone Parent (L1) changes; L2 stays unchanged. Matching uses the complete L1 code.</p>
-    ${mappings.length?`<div class="action-preview"><table><thead><tr><th>Current L1</th><th>Replacement L1</th><th>Equipment rows</th></tr></thead><tbody>${mappings.map(mapping=>`<tr><td>${esc(mapping.from)}</td><td><b>${esc(mapping.to)}</b><small>${esc(mapping.label)}</small></td><td>${(counts.get(mapping.from)||0).toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:''}
-    <footer class="export-foot"><span>No registry values have changed.</span><div><button class="btn ghost" id="migrationReviewCancel">Cancel</button><button class="btn primary" id="migrationReviewApply" ${entries.length?'':'disabled'}>Review equipment changes</button></div></footer>`;
-  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
-  $('#actionModalClose').onclick=closeActionDialog;$('#migrationReviewCancel').onclick=closeActionDialog;modal.onclick=event=>{if(event.target===modal&&!session.reviewBusy)closeActionDialog();};
-  const revision=session.changesRev;
-  $('#migrationReviewApply').onclick=async()=>{
-    if(S.session!==session||actionScope!==token||session.reviewBusy)return;
-    if(session.changesRev!==revision){toast('The registry changed. Review the replacements again.');return;}
-    if(!settings.enabled&&!await setMilestoneMigration({...settings,enabled:true},navigate))return;
-    if(S.session!==session||actionScope!==token)return;
-    previewMilestoneMigration(navigate);
-  };
-}
-function previewMilestoneMigration(navigate){
-  const entries=auditMilestoneMigrationRows(S.session.snapshot,S.session.milestoneMigration),provided=new Map();
-  const findings=entries.map(({row,mapping},index)=>{
-    const finding={id:`milestone-migration:${index}`,sheet:row._source.sheet,row:row._source.row,equipmentId:row.equipmentId,field:'Milestone Parent',severity:'info',rule:{id:'project.milestone-replacement',title:'Milestone has a project-approved replacement'},why:`${mapping.from} is replaced by ${mapping.to} in the loaded project mapping.`};
-    provided.set(finding.id,{row,finding,reason:'Project-approved replacement. The existing L2 milestone is unchanged.',changes:[auditMakeCorrection(row,'Milestone Parent',mapping.label,finding)]});return finding;
-  });
-  if(!findings.length){toast('No milestone replacements remain.');return;}
-  return openActionDialog(`New Milestones: ${S.session.milestoneMigration.profile.project}`,findings,navigate,provided);
-}
-function wireMilestoneMigration(navigate){
-  $('#newMilestones').onchange=async event=>{
-    const settings=currentMilestoneMigration();
-    if(S.session.reviewBusy){event.target.checked=settings.enabled;return;}
-    const enabled=event.target.checked;
-    if(await setMilestoneMigration({...settings,enabled},navigate)&&enabled)reviewMilestoneMappings(navigate);
-  };
-  $('#migrationPreview').onclick=()=>reviewMilestoneMappings(navigate);
-}
 export function renderModifications(navigate){
   if(!(S.session&&S.session.rawResult)){navigate('upload');return;}
   teardownAuditFilters();document.body.classList.remove('audit-fullscreen');S.screen='modify';S.homeMode='audit';
@@ -1090,7 +1035,6 @@ export function renderModifications(navigate){
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div><div class="actions-exports"><button class="btn" id="exportActions" type="button">${ic('file-down')}Export Actions</button><button class="btn primary" id="exportUpdatedRegistry" type="button" ${changesCount&&S.session.sourceBytes?'':'disabled'}>${ic('file-spreadsheet')}Updated Registry</button></div></div>
     ${S.session.lastRegistryExport?`<p class="registry-export-summary" role="status"><b>Last export:</b> ${esc(auditUpdateExportSummary(S.session.lastRegistryExport))}</p>`:''}
-    ${milestoneMigrationControls()}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands">${referencesButtonHtml()}<button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
 <div class="modify-selection"><label><input type="checkbox" id="modifySelectAll">Select all shown rules</label><button class="btn primary sm" type="button" id="modifyActionSelected" disabled>${ic('zap')}Action selected</button></div><div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
@@ -1099,7 +1043,6 @@ export function renderModifications(navigate){
     }).join(''):`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No findings match those filters':'Nothing to action'}</b><span>${filtered?'Try a different search, milestone, or discipline.':'This registry has no findings from the checks that are switched on.'}</span></div>`}</div>
   </section>`;
   $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
-  wireMilestoneMigration(navigate);
   $('#modifySelectAll').onchange=event=>{const selected=modifyRuleSelection();selected.clear();if(event.target.checked)for(const entry of modifySelectableRules())selected.add(entry.rule.id);syncModifyRuleSelection();};
   $('#modifyActionSelected').onclick=()=>{
     const selected=modifyRuleSelection(),entries=modifySelectableRules().filter(entry=>selected.has(entry.rule.id));
