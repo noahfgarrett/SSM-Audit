@@ -8,6 +8,7 @@ import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
 import { auditColumnName, auditNormId } from './model.js'
 import { auditActionPatternKey } from './actions.js'
+import { AUDIT_FINDING_LEVELS } from './engineering-references.js'
 
 function addSheet(workbook,sheet,name){XLSX.utils.book_append_sheet(workbook,sheet,name);}
 function printable(value){return typeof value==='string'?value:JSON.stringify(value);}
@@ -27,8 +28,8 @@ const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerTex
    the same parent read as a band and a child is obviously a different band. All
    light enough for black text. Level 7+ cycles. */
 const AUDIT_EXPORT_NEST_FILLS=Object.freeze(['DCE8F4','DFF2E3','FFF0CC','EADDF6','D6F0F3','FBE0EA','ECEFD3','F4E3D2']);
-const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'INVALID',error:'RULE BROKEN',warning:'CHECK THIS',info:'NOTE'});
-const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'8C1D18',color:'FFFFFF'},error:{fill:'D9531E',color:'FFFFFF'},warning:{fill:'F2B441',color:'40320A'},info:{fill:'6E8598',color:'FFFFFF'}});
+const AUDIT_EXPORT_SEVERITY_LABELS=Object.freeze({blocker:'INVALID',error:'RULE BROKEN',warning:'CHECK THIS',info:'NOTE',missing:'MISSING TAGS'});
+const AUDIT_EXPORT_SEVERITY_COLORS=Object.freeze({blocker:{fill:'B42318',color:'FFFFFF'},error:{fill:'9A3412',color:'FFFFFF'},missing:{fill:'0F766E',color:'FFFFFF'},warning:{fill:'FEF3C7',color:'854D0E'},info:{fill:'315B8A',color:'FFFFFF'}});
 /* Milestone tab columns. Closest Parent and Dependencies sit side by side so a
    hierarchy question can be checked without scrolling. */
 /* Finding-tab columns, computed per layout: the level layout adds an
@@ -210,10 +211,15 @@ export function auditExportLevelGroups(result){
   const rows=result&&result.rows||[],findings=result&&result.findings||[],levelFor=auditExportNestLevels(rows);
   const rowByKey=new Map();for(const row of rows)rowByKey.set(auditExportRowKey(row),row);
   const groups=[];
-  for(const severity of ['blocker','error','warning','info']){
+  for(const severity of AUDIT_FINDING_LEVELS){
     const severityFindings=findings.filter(finding=>finding.severity===severity);if(!severityFindings.length)continue;
     const byEquipment=new Map();
-    for(const finding of severityFindings){const key=auditExportFindingKey(finding),entry=byEquipment.get(key)||{row:rowByKey.get(key)||null,findings:[]};entry.findings.push(finding);byEquipment.set(key,entry);}
+    for(const finding of severityFindings){
+      const key=auditExportFindingKey(finding);
+      // A coverage-only row belongs to the report, never to the registry draft.
+      const row=rowByKey.get(key)||(severity==='missing'?{equipmentId:finding.equipmentId,_source:{sheet:finding.sheet,row:finding.row}}:null);
+      const entry=byEquipment.get(key)||{row,findings:[]};entry.findings.push(finding);byEquipment.set(key,entry);
+    }
     const lines=[...byEquipment.values()].filter(entry=>entry.row).map(entry=>({row:entry.row,level:levelFor(entry.row),findings:entry.findings}))
       .sort((left,right)=>natCmp(clean(left.row.milestone),clean(right.row.milestone))||natCmp(clean(left.row.equipmentId),clean(right.row.equipmentId)));
     groups.push({label:AUDIT_EXPORT_SEVERITY_LABELS[severity],severity,sheetName:'',rows:lines.map(line=>line.row),lines,equipmentCount:lines.length,findingCount:severityFindings.length});
@@ -327,6 +333,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
     columns,
   ];
   const disciplineFirst=aoa.length+1;
+  if(severity.missing){aoa[7].splice(4,0,'Missing Tags');aoa[8].splice(4,0,severity.missing);}
   for(const discipline of disciplines)aoa.push([discipline.label,discipline.equipmentCount,discipline.findingCount,0,0,auditExportEmptyBar()]);
   if(!disciplines.length)aoa.push(['No equipment rows in this registry','','','','','']);
   const disciplineLast=disciplineFirst+Math.max(0,disciplines.length-1);
@@ -338,6 +345,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   const milestoneLast=milestoneFirst+Math.max(0,groups.length-1);
   const sheet=XLSX.utils.aoa_to_sheet(aoa);
   sheet['!cols']=[{wch:46},{wch:12},{wch:11},{wch:11},{wch:9},{wch:62}];
+  if(severity.missing)sheet['!cols'].push({wch:18});
   sheet['!merges']=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}},{s:{r:2,c:0},e:{r:2,c:5}},{s:{r:4,c:0},e:{r:4,c:5}},{s:{r:5,c:0},e:{r:5,c:4}}];
   sheet['!rows']=[{hpt:30},{hpt:18},{hpt:18},{hpt:10},{hpt:18},{hpt:46},{hpt:12},{hpt:18},{hpt:28},{hpt:14}];
   sheetStyleCell(sheet,'A1',AUDIT_EXPORT_STYLES.title);
@@ -349,7 +357,7 @@ function auditExportDashboardSheet(result,groups,disciplines,sessionName,generat
   if(overallPercent)sheetSetCell(sheet,'F6',sheetFormulaCell(overallPercent,0,AUDIT_EXPORT_STYLES.overallPercent));else sheetStyleCell(sheet,'F6',AUDIT_EXPORT_STYLES.overallPercent);
   if(overallPercent)sheetSetCell(sheet,'A6',auditExportBarCell('F6',AUDIT_EXPORT_STYLES.overallBar));else sheetStyleCell(sheet,'A6',AUDIT_EXPORT_STYLES.overallBar);
   for(const column of ['B','C','D','E'])sheetStyleCell(sheet,`${column}6`,AUDIT_EXPORT_STYLES.overallBar);
-  for(let column=0;column<6;column++){
+  for(let column=0;column<(severity.missing?7:6);column++){
     sheetStyleCell(sheet,`${auditColumnName(column)}8`,AUDIT_EXPORT_STYLES.kpiLabel);
     sheetStyleCell(sheet,`${auditColumnName(column)}9`,AUDIT_EXPORT_STYLES.kpiValue);
   }

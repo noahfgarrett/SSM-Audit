@@ -3,7 +3,7 @@ import { S, resetSession } from '../state.js'
 import { importAuditWorkbook, prepareAuditReview } from '../io/import-client.js'
 import { auditSessionResult } from '../audit/review.js'
 import { auditNormId, auditSplitReferences, auditFingerprint } from '../audit/model.js'
-import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SEVERITIES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
+import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIES, SSM_AUDIT_RULES, SSM_AUDIT_SOURCES } from '../audit/engine.js'
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
@@ -15,6 +15,7 @@ import { AUDIT_ACTION_FIELDS, auditReadyFindingIds, auditActionPatternKey, audit
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
+import { AUDIT_FINDING_LEVELS, AUDIT_ENGINEERING_KINDS, SSM_AUDIT_ENGINEERING_RULES, auditEngineeringRuleActive } from '../audit/engineering-references.js'
 import { buildMilestoneReference } from '../audit/milestone-recommend.js'
 import { auditReadMigrationSettings, auditMigrationReferences } from '../audit/milestone-migration.js'
 
@@ -24,12 +25,12 @@ const COMPARE_TREE_ROW_HEIGHT=52,COMPARE_TREE_OVERSCAN=10,COMPARE_TREE_MAX_ROWS=
 const HIERARCHY_ROW_HEIGHT=52,HIERARCHY_OVERSCAN=18,HIERARCHY_MAX_ROWS=180;
 const COMPARE_MAX_OBSERVATIONS=500;
 const SEARCH_DEBOUNCE_MS=150;
-const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
-const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups'};
+const CATEGORY_LABELS={structure:'Structure',dependencies:'Dependencies',metadata:'Metadata',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups','missing-tags':'Missing Tags'};
+const RULE_CATEGORY_LABELS={structure:'Hierarchy',dependencies:'Dependencies',metadata:'Registry consistency',milestones:'Milestones','item-masters':'Item Masters',headers:'Headers / Rollups','missing-tags':'Missing Tags'};
 const RULE_CONFIDENCE_LABELS={required:'Required',strong:'Strong pattern','description-rated':'Description based'};
-const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.',reference:'Milestone identities and parent relationships in the selected project register.'};
-const SEVERITY_LABELS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Note'};
-const SEVERITY_PLURALS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Notes'};
+const RULE_SOURCE_DESCRIPTIONS={registry:'Identity, references, and metadata consistency within the registry.',sop:'Required parent-child, dependency, sequencing, and header checks.',logic:'Confidence-rated control, electrical, and process-enabling relationships.',reference:'Selected project references: milestone assignments, engineering tags, metadata and connections.'};
+const SEVERITY_LABELS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Note',missing:'Missing Tags'};
+const SEVERITY_PLURALS={blocker:'Invalid',error:'Rule broken',warning:'Check this',info:'Notes',missing:'Missing Tags'};
 const AUDIT_UI_SOURCES=[...SSM_AUDIT_SOURCES,{id:'reference',label:'Selected references',icon:'file-spreadsheet'}];
 const SOURCE_LABELS=Object.fromEntries(AUDIT_UI_SOURCES.map(source=>[source.id,source.label]));
 let drawerTrapCleanup=null,searchDebounceTimer=0;
@@ -124,11 +125,11 @@ function highlightHtml(value,query){
   return out+esc(text.slice(from));
 }
 function debounceSearch(run){clearTimeout(searchDebounceTimer);searchDebounceTimer=setTimeout(run,SEARCH_DEBOUNCE_MS);}
-function severityRank(severity){return {blocker:4,error:3,warning:2,info:1}[severity]||0;}
+function severityRank(severity){const index=AUDIT_FINDING_LEVELS.indexOf(severity);return index<0?0:AUDIT_FINDING_LEVELS.length-index;}
 
 /* ------------------------------------------------------------- rules screen */
 
-function ruleCatalog(){return [...Object.values(SSM_AUDIT_RULES),...Object.values(SSM_AUDIT_REFERENCE_RULES)];}
+function ruleCatalog(){return [...Object.values(SSM_AUDIT_RULES),...Object.values(SSM_AUDIT_REFERENCE_RULES),...Object.values(SSM_AUDIT_ENGINEERING_RULES)];}
 /* ---- rule preferences ----
    The engine runs every check; the user decides which ones count. Switched-off
    checks are dropped from the result the rest of the app sees (findings,
@@ -140,14 +141,14 @@ export function loadRulePreferences(){
 }
 function saveRulePreferences(){try{localStorage.setItem(RULE_PREFERENCES_KEY,JSON.stringify(S.rules.disabled));}catch(_){/* private mode: the choice lasts for this session */}}
 export function isRuleActive(rule){return !!rule&&rule.enabled&&!(S.rules.disabled||[]).includes(rule.id);}
-export function activeRules(){return ruleCatalog().filter(rule=>isRuleActive(rule)&&(rule.source!=='reference'||!!S.session.references?.milestones));}
+export function activeRules(){return ruleCatalog().filter(rule=>isRuleActive(rule)&&(rule.source!=='reference'||(rule.id.startsWith('reference.engineering-')?auditEngineeringRuleActive(rule,S.session.references):!!S.session.references?.milestones)));}
 /* The result the app works from: the engine's output minus switched-off checks,
    with the summary recounted. `rawResult` keeps the engine output so toggling
    never needs the workbook again. */
 function auditUiRecount(result,findings){
-  const severity={blocker:0,error:0,warning:0,info:0},category=Object.fromEntries(SSM_AUDIT_CATEGORIES.map(key=>[key,0])),source=Object.fromEntries(AUDIT_UI_SOURCES.map(item=>[item.id,0]));let unverified=0;
+  const severity={blocker:0,error:0,warning:0,info:0,missing:0},category=Object.fromEntries(Object.keys(CATEGORY_LABELS).map(key=>[key,0])),source=Object.fromEntries(AUDIT_UI_SOURCES.map(item=>[item.id,0]));let unverified=0;
   for(const finding of findings){severity[finding.severity]++;category[finding.category]=(category[finding.category]||0)+1;source[finding.rule.source]=(source[finding.rule.source]||0)+1;if(finding.rule.id==='logic.external-path-unverified'||finding.rule.source==='reference'&&finding.severity==='info')unverified++;}
-  const status=severity.blocker?'blocked':severity.error||severity.warning||unverified?'review':'ready';
+  const status=severity.blocker?'blocked':severity.error||severity.warning||severity.missing||unverified?'review':'ready';
   return {...result,findings,summary:{...result.summary,findings:findings.length,severity,category,source,unverified,status}};
 }
 export function applyRulePreferences(raw,disabled){
@@ -342,7 +343,7 @@ function renderExportOptions(){
   const bySeverity=new Map();
   for(const finding of result.findings){const list=bySeverity.get(finding.severity)||new Map();list.set(finding.rule.id,{rule:finding.rule,count:(list.get(finding.rule.id)?.count||0)+1});bySeverity.set(finding.severity,list);}
   const summary=exportPlanSummary(result,plan);
-  const levelSections=SSM_AUDIT_SEVERITIES.filter(severity=>bySeverity.has(severity)).map(severity=>{
+  const levelSections=AUDIT_FINDING_LEVELS.filter(severity=>bySeverity.has(severity)).map(severity=>{
     const checks=[...bySeverity.get(severity).values()].sort((left,right)=>right.count-left.count);
     const total=checks.reduce((sum,entry)=>sum+entry.count,0);
     const levelMode=plan.levels[severity]==='pretick'||plan.levels[severity]==='skip'?plan.levels[severity]:'include';
@@ -386,7 +387,7 @@ function renderExportOptions(){
   $('#exportModalBody').innerHTML=`<span class="eyebrow">Excel report</span><h3 id="exportTitle">Choose what goes in the report</h3>${kindTabs}
     <div class="export-layout"><b>Report layout</b>
       <label class="export-layout-choice ${layout==='milestone'?'on':''}"><input type="radio" name="export-layout" value="milestone" ${layout==='milestone'?'checked':''}><span><b>One tab per L2 milestone</b><small>The full equipment tree of each phase, findings beside it — work phase by phase.</small></span></label>
-      <label class="export-layout-choice ${layout==='level'?'on':''}"><input type="radio" name="export-layout" value="level" ${layout==='level'?'checked':''}><span><b>One tab per finding level</b><small>Invalid, Rule broken, Check this, Note — flagged equipment only, ordered by milestone.</small></span></label>
+      <label class="export-layout-choice ${layout==='level'?'on':''}"><input type="radio" name="export-layout" value="level" ${layout==='level'?'checked':''}><span><b>One tab per finding level</b><small>Invalid, Rule broken, Missing Tags, Check this, Note — flagged equipment only, ordered by milestone.</small></span></label>
     </div>
     <p class="export-intro">${layout==='level'?'Level tabs list only flagged equipment; the milestone layout carries the full tree.':'Every equipment row is always exported.'} Findings follow the choice for their level — or for the individual check. <b>Pre-ticked</b> findings arrive with the Actioned box already ${esc('☑')} (the block is green and counts as done); <b>Leave out</b> findings are not written at all.</p>
     ${levelSections||'<p class="export-intro">This registry has no findings — the report will contain the equipment tree only.</p>'}
@@ -467,18 +468,28 @@ function renderRuleCatalog(navigate){
   if(count)count.textContent=`${rows.length} of ${ruleCatalog().length} checks`;
   if(!rows.length){container.innerHTML=`<div class="rule-reference-empty">${ic('search')}<b>No checks match that search</b><span>Try a shorter word, or set both menus back to All.</span><button class="btn" type="button" id="ruleClear">Clear the search</button></div>`;
     $('#ruleClear').onclick=()=>{S.rules.search='';S.rules.source='all';S.rules.category='all';renderRules(navigate);};return;}
-  container.innerHTML=AUDIT_UI_SOURCES.map(source=>{
-    const matches=rows.filter(rule=>rule.source===source.id);if(!matches.length)return '';
-    const categories=[...new Set(matches.map(rule=>rule.category))].sort((a,b)=>natCmp(RULE_CATEGORY_LABELS[a]||a,RULE_CATEGORY_LABELS[b]||b));
-    return `<section class="rule-source-section"><header><span>${ic(source.id==='sop'?'book-open':source.id==='logic'?'network':'shield-check')}</span><div><h3>${esc(source.label)}</h3><p>${esc(RULE_SOURCE_DESCRIPTIONS[source.id]||source.description)}</p></div><b>${matches.length}</b></header>
-      ${categories.map(category=>`<div class="rule-category"><h5>${esc(RULE_CATEGORY_LABELS[category]||category)}<span>${matches.filter(rule=>rule.category===category).length}</span></h5>${matches.filter(rule=>rule.category===category).map(rule=>ruleRowHtml(rule,counts,query)).join('')}</div>`).join('')}</section>`;
-  }).join('');
+  container.innerHTML=ruleGroupsHtml(rows,counts,query);
+  $$('[data-rule-group]',container).forEach(group=>{group.querySelector(':scope > summary').onclick=()=>{S.rules.expandedGroups||={};S.rules.expandedGroups[group.dataset.ruleGroup]=!group.open;};});
+  for(const [id,open] of [['ruleExpandAll',true],['ruleCollapseAll',false]]){
+    const button=$('#'+id);if(button)button.onclick=()=>{S.rules.autoExpand=false;S.rules.expandedGroups||={};for(const group of $$('[data-rule-group]',container)){S.rules.expandedGroups[group.dataset.ruleGroup]=open;group.open=open;}};
+  }
   $$('[data-rule-findings]',container).forEach(button=>button.onclick=()=>showOnlyRule(button.dataset.ruleFindings,navigate));
   $$('[data-rule-example]',container).forEach(button=>button.onclick=()=>openRuleExample(button.dataset.ruleExample));
   $$('[data-rule-toggle]',container).forEach(button=>button.onclick=()=>{setRuleDisabled(button.dataset.ruleToggle,button.getAttribute('aria-checked')==='true');renderRules(navigate);});
   const offCount=(S.rules.disabled||[]).filter(id=>ruleCatalog().some(rule=>rule.id===id&&rule.enabled)).length,banner=$('#ruleOffBanner');
   if(banner){banner.hidden=!offCount;banner.querySelector('b').textContent=`${offCount} check${offCount===1?' is':'s are'} switched off`;}
   const allOn=$('#ruleAllOn');if(allOn)allOn.onclick=()=>{S.rules.disabled=[];saveRulePreferences();refreshSessionResult();renderRules(navigate);};
+}
+export function ruleGroupsHtml(rows,counts,query=''){
+  const filtered=!!clean(S.rules.search)||S.rules.source!=='all'||S.rules.category!=='all';
+  const open=key=>(filtered&&S.rules.autoExpand!==false)||S.rules.expandedGroups?.[key]===true;
+  return AUDIT_UI_SOURCES.map(source=>{
+    const matches=rows.filter(rule=>rule.source===source.id);if(!matches.length)return '';
+    const categories=[...new Set(matches.map(rule=>rule.category))].sort((a,b)=>natCmp(RULE_CATEGORY_LABELS[a]||a,RULE_CATEGORY_LABELS[b]||b));
+    const key=`source:${source.id}`,found=matches.reduce((sum,rule)=>sum+(counts?.get(rule.id)||0),0);
+    return `<details class="rule-source-section rule-disclosure" data-rule-group="${esc(key)}" ${open(key)?'open':''}><summary><span class="rule-group-chevron">${ic('chevron-right')}</span><span class="rule-group-heading"><b>${esc(source.label)}</b><small>${esc(RULE_SOURCE_DESCRIPTIONS[source.id]||source.description)}</small></span><span class="rule-group-count">${matches.length} checks${counts?` &middot; ${found.toLocaleString()} found`:''}</span></summary>
+      ${categories.map(category=>{const categoryRows=matches.filter(rule=>rule.category===category),categoryKey=`${source.id}:${category}`;return `<details class="rule-category rule-disclosure" data-rule-group="${esc(categoryKey)}" ${open(categoryKey)?'open':''}><summary><span class="rule-group-chevron">${ic('chevron-right')}</span><b>${esc(RULE_CATEGORY_LABELS[category]||category)}</b><span class="rule-group-count">${categoryRows.length} checks</span></summary>${categoryRows.map(rule=>ruleRowHtml(rule,counts,query)).join('')}</details>`;}).join('')}</details>`;
+  }).join('');
 }
 /* `keepScope` leaves the four registry dimensions alone. The dashboard passes it
    so clicking a number inside a scoped dashboard stays inside that scope; the
@@ -957,7 +968,7 @@ function setExcludedMany(ids,on){
   S.session.excludedRev=(S.session.excludedRev||0)+1;saveExcluded();refreshSessionResult();
 }
 function modifyRuleSeverity(entry){
-  let top='info';for(const finding of entry.findings)if(severityRank(finding.severity)>severityRank(top))top=finding.severity;
+  let top='';for(const finding of entry.findings)if(severityRank(finding.severity)>severityRank(top))top=finding.severity;
   return top;
 }
 /* Counts can read as a share of every tag in the registry instead -- the tiny
@@ -1337,12 +1348,13 @@ export function renderRules(navigate){
     <div class="rules-overview"><div><span>Checks in use</span><b>${rules.length}</b><p>Applied to every equipment row.</p></div><div><span>Sources</span><b>${sources.size}</b><p>Registry integrity, the SSM SOP, and commissioning logic.</p></div><div><span>Topics</span><b>${topics.size}</b><p>Hierarchy, dependencies, consistency, milestones, and headers.</p></div></div>
     <div class="rules-toolbar"><div class="searchbox">${ic('search')}<input id="ruleSearch" aria-label="Search audit rules" placeholder="Search checks and explanations" value="${esc(S.rules.search)}"></div><select id="ruleSource" aria-label="Filter by rule source"><option value="all">All sources</option>${AUDIT_UI_SOURCES.map(source=>`<option value="${esc(source.id)}" ${S.rules.source===source.id?'selected':''}>${esc(source.label)}</option>`).join('')}</select><select id="ruleCategory" aria-label="Filter by topic"><option value="all">All topics</option>${Object.entries(RULE_CATEGORY_LABELS).filter(([key])=>rules.some(rule=>rule.category===key)).map(([key,label])=>`<option value="${esc(key)}" ${S.rules.category===key?'selected':''}>${esc(label)}</option>`).join('')}</select><span id="ruleResultCount"></span></div>
     <div class="rules-note rule-off-banner" id="ruleOffBanner" hidden>${ic('info')}<span><b></b> — switched-off checks are not counted in findings, the Dashboard, or the Excel report. The choice is remembered on this device.</span><button class="btn-link" type="button" id="ruleAllOn">Turn all on</button></div>
+    <div class="rule-group-controls"><button class="btn ghost sm" id="ruleExpandAll" type="button">${ic('chevron-down')}Expand all</button><button class="btn ghost sm" id="ruleCollapseAll" type="button">${ic('chevron-right')}Collapse all</button></div>
     <div class="rule-catalog" id="ruleCatalog"></div>
   </section>`;
   renderSideNav(navigate);
-  $('#ruleSearch').oninput=event=>{S.rules.search=event.target.value;debounceSearch(()=>renderRuleCatalog(navigate));};
-  $('#ruleSource').onchange=event=>{S.rules.source=event.target.value;renderRuleCatalog(navigate);};
-  $('#ruleCategory').onchange=event=>{S.rules.category=event.target.value;renderRuleCatalog(navigate);};
+  $('#ruleSearch').oninput=event=>{S.rules.search=event.target.value;S.rules.autoExpand=true;debounceSearch(()=>renderRuleCatalog(navigate));};
+  $('#ruleSource').onchange=event=>{S.rules.source=event.target.value;S.rules.autoExpand=true;renderRuleCatalog(navigate);};
+  $('#ruleCategory').onchange=event=>{S.rules.category=event.target.value;S.rules.autoExpand=true;renderRuleCatalog(navigate);};
   renderRuleCatalog(navigate);
 }
 
@@ -1370,6 +1382,7 @@ export function renderUpload(navigate){
     </div>
     <div id="importStatus">${importStatus()}</div>
     <input id="auditFile" type="file" accept=".xlsx,.xls" hidden>
+    ${engineeringUploadsHtml()}
     <div class="checks-panel">
       <div class="checks-head"><b>What gets checked</b><button class="btn-link" type="button" id="openRulesFromUpload">See every check${ic('arrow-right')}</button></div>
       <ul class="checks-list">
@@ -1383,8 +1396,71 @@ export function renderUpload(navigate){
   renderSideNav(navigate);wireUpload(navigate);
 }
 
+function engineeringUploadsHtml(){
+  const descriptions={mel:'Equipment Tag, UPN, Building / Bldg, Discipline and other equipment metadata.',easyPower:'Starting Source, numbered Downstream columns, Final Source and ID Name.',cable:'Load Name (To) and Panel (From).',pmd:'Instrument Tag and Panel.'};
+  return `<section class="engineering-inputs"><div class="checks-head"><h3>Project documents <small>Optional</small></h3></div><div class="engineering-grid">${Object.entries(AUDIT_ENGINEERING_KINDS).map(([kind,label])=>{
+    const input=S.session.engineeringInputs?.[kind],active=S.session.references?.[kind];
+    return `<section class="engineering-slot" data-engineering-drop="${kind}" aria-label="${esc(label)} workbook upload"><div class="engineering-title"><b>${esc(label)}</b><button class="btn sm" type="button" data-engineering-browse="${kind}">${ic('upload')}${input?'Replace':'Choose workbook'}</button></div><p>${esc(descriptions[kind])}</p><input type="file" accept=".xlsx,.xls" data-engineering-file="${kind}" hidden>${input?`<div class="engineering-file"><span title="${esc(input.name)}">${esc(input.name)}</span><button class="xbtn icon-btn" type="button" data-engineering-remove="${kind}" aria-label="Remove ${esc(label)}">${ic('x')}</button></div><fieldset class="engineering-sheets"><legend>Sheets to check</legend>${input.references.map((reference,index)=>`<label><input type="checkbox" data-engineering-sheet="${kind}" value="${index}" ${input.selected.includes(index)?'checked':''}><span>${esc(reference.sheetName)} <small>${reference.entries.length.toLocaleString()} entries</small></span></label>`).join('')}</fieldset><small role="status">${active?`${new Set(active.entries.map(entry=>auditNormId(entry.equipmentId))).size.toLocaleString()} tags selected`:'Select the project sheets to include'}</small>`:'<small>No document selected</small>'}</section>`;
+  }).join('')}</div></section>`;
+}
+async function installEngineeringInput(kind,input,navigate){
+  const session=S.session,references={...session.references};
+  const selected=input?.references.filter((_,index)=>input.selected.includes(index))||[];
+  if(selected.length)references[kind]={kind,sheetName:selected.map(reference=>reference.sheetName).join('; '),entries:selected.flatMap(reference=>reference.entries)};
+  else delete references[kind];
+  if(session.snapshot){
+    await runWithProgress('Checking project documents','Rechecking the current registry draft',async(checkpoint,report)=>{
+      await checkpoint();
+      const prepared=await prepareAuditReview(session,session.changes||[],auditReadMigrationSettings(session.milestoneMigration),false,report,{references});
+      if(S.session!==session)throw new Error('The registry changed. Select the project document again.');
+      session.references=references;session.baselineResult=prepared.baselineResult;session.reviewUndo=[];
+      const known=new Set([...prepared.baselineResult.findings,...prepared.result.findings].map(finding=>finding.id));
+      for(const key of ['actioned','reviewedIds','excluded'])session[key]=new Set([...(session[key]||[])].filter(id=>known.has(id)));
+      reviewInstallDraft({...prepared,changes:session.changes||[]});
+    });
+  }else session.references=references;
+  session.engineeringInputs={...session.engineeringInputs};
+  if(input)session.engineeringInputs[kind]=input;else delete session.engineeringInputs[kind];
+  renderUpload(navigate);
+}
+function wireEngineeringUploads(navigate){
+  let loading=false;
+  for(const kind of Object.keys(AUDIT_ENGINEERING_KINDS)){
+    const fileInput=$(`[data-engineering-file="${kind}"]`);
+    const fail=error=>{toast(error?.message||'The project document could not be loaded');renderUpload(navigate);};
+    $(`[data-engineering-browse="${kind}"]`)?.addEventListener('click',()=>fileInput?.click());
+    const loadFiles=async files=>{
+      if(loading){toast('Wait for the current document to finish loading');return;}
+      if(files.length>1){toast('Choose one workbook for each project document');return;}
+      const file=files[0];if(!file)return;
+      if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook (.xlsx or .xls)');return;}
+      loading=true;
+      try{
+        let parsed;
+        await runWithProgress(`Loading ${AUDIT_ENGINEERING_KINDS[kind]}`,file.name,async(checkpoint,report)=>{await checkpoint();parsed=await importAuditWorkbook(file,{referenceKind:kind,report});});
+        await installEngineeringInput(kind,{name:file.name,references:parsed.references,selected:parsed.references.length===1?[0]:[]},navigate);
+      }catch(error){fail(error);}finally{loading=false;}
+    };
+    if(fileInput)fileInput.onchange=()=>{const files=Array.from(fileInput.files||[]);fileInput.value='';return loadFiles(files);};
+    const drop=$(`[data-engineering-drop="${kind}"]`);
+    if(drop){
+      let dragDepth=0;
+      const isFileDrag=event=>Array.from(event.dataTransfer?.types||[]).includes('Files');
+      drop.ondragenter=event=>{if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();dragDepth++;drop.classList.add('dragging');};
+      drop.ondragover=event=>{if(!isFileDrag(event))return;event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect=loading?'none':'copy';drop.classList.add('dragging');};
+      drop.ondragleave=event=>{event.stopPropagation();dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)drop.classList.remove('dragging');};
+      drop.ondrop=event=>{event.preventDefault();event.stopPropagation();dragDepth=0;drop.classList.remove('dragging');return loadFiles(Array.from(event.dataTransfer?.files||[]));};
+    }
+    const remove=$(`[data-engineering-remove="${kind}"]`);if(remove)remove.onclick=()=>installEngineeringInput(kind,null,navigate).catch(fail);
+    for(const checkbox of $$(`[data-engineering-sheet="${kind}"]`))checkbox.onchange=()=>{
+      const input=S.session.engineeringInputs[kind],selected=$$(`[data-engineering-sheet="${kind}"]`).filter(element=>element.checked).map(element=>Number(element.value));
+      installEngineeringInput(kind,{...input,selected},navigate).catch(fail);
+    };
+  }
+}
 function chooseFile(){const input=$('#auditFile');if(input)input.click();}
 function wireUpload(navigate){
+  wireEngineeringUploads(navigate);
   const input=$('#auditFile'),drop=$('#dropzone'),browse=$('#auditBrowse'),again=$('#chooseAuditAgain');
   if(browse)browse.onclick=event=>{event.stopPropagation();chooseFile();};if(again)again.onclick=chooseFile;
   if(input)input.onchange=()=>{const file=input.files[0];input.value='';if(file)addAuditTarget(file,navigate);};
@@ -1401,7 +1477,8 @@ function wireUpload(navigate){
 
 export async function addAuditTarget(file,navigate){
   if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook (.xlsx or .xls)');return;}
-  resetSession();clearComparisonTarget();S.session.name=file.name;
+  const pendingReferences=S.session.snapshot?{}:S.session.references,pendingInputs=S.session.snapshot?{}:S.session.engineeringInputs;
+  resetSession();clearComparisonTarget();S.session.name=file.name;S.session.references=pendingReferences||{};S.session.engineeringInputs=pendingInputs||{};
   try{
     await runWithProgress('Running SSM Audit',file.name,async(checkpoint,report)=>{
       await checkpoint();
@@ -1409,6 +1486,10 @@ export async function addAuditTarget(file,navigate){
       await checkpoint();
       const result=applyRulePreferences(rawResult,S.rules.disabled);report(1,`${result.findings.length.toLocaleString()} findings`);
 S.session={...S.session,baselineSnapshot:snapshot,baselineResult:rawResult,importResult:rawResult,snapshot,rawResult,result,status,sourceBytes:bytes,error:'',auditedAt:Date.now()};loadActioned();loadExcluded();loadChanges();refreshSessionResult();
+      if(Object.keys(S.session.references).length){
+        const prepared=await prepareAuditReview(S.session,S.session.changes||[],auditReadMigrationSettings(S.session.milestoneMigration),false,report,{references:S.session.references});
+        S.session.baselineResult=prepared.baselineResult;reviewInstallDraft({...prepared,changes:S.session.changes||[]});
+      }
       S.comparison.targetName=file.name;S.comparison.targetSnapshot=snapshot;S.comparison.targetError='';S.comparison.result=null;
     });
     navigate('dashboard');
@@ -1546,7 +1627,7 @@ function filteredFindings(){
   if(S.session.filteredCacheKey===key&&S.session.filteredCacheRows)return S.session.filteredCacheRows;
   let rows=S.session.result.findings.filter(finding=>!(S.session.hideActioned&&isActioned(finding))&&!hiddenSources.has(finding.rule.source)&&!hiddenSeverities.has(finding.severity)&&!hiddenCategories.has(finding.category)&&!hiddenRules.has(finding.rule.id)&&(!query||finding.searchKey.includes(query))&&(!dimActive.length||dimRowMatches(finding,dimActive)));
   const natural=(a,b)=>String(a||'').localeCompare(String(b||''),undefined,{numeric:true,sensitivity:'base'}),sort=S.session.sort;
-  if(sort==='severity-asc')rows=[...rows].reverse();
+  if(sort==='severity-asc'||sort==='severity-desc')rows=[...rows].sort((a,b)=>(sort==='severity-asc'?1:-1)*(severityRank(a.severity)-severityRank(b.severity)));
   else if(sort==='equipment-asc'||sort==='equipment-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.equipmentId,b.equipmentId)||a.row-b.row));
   else if(sort==='rule-asc'||sort==='rule-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*(natural(a.rule.title,b.rule.title)||natural(a.rule.id,b.rule.id)||a.row-b.row));
   else if(sort==='row-asc'||sort==='row-desc')rows=[...rows].sort((a,b)=>(sort.endsWith('desc')?-1:1)*((a.row-b.row)||natural(a.sheet,b.sheet)));
@@ -1577,9 +1658,9 @@ function displayRows(){
   S.session.displayCacheKey=key;S.session.displayCacheRows=rows;return rows;
 }
 function severityStrip(summary){
-  const hidden=new Set(S.session.hiddenSeverities||[]),active=SSM_AUDIT_SEVERITIES.filter(level=>!hidden.has(level));
-  const chip=level=>`<button class="sev-chip ${level} ${hidden.has(level)?'':'on'}" type="button" data-audit-severity="${level}" aria-pressed="${hidden.has(level)?'false':'true'}"><span class="sev-dot"></span>${SEVERITY_PLURALS[level]}<b>${summary.severity[level].toLocaleString()}</b></button>`;
-  return `<div class="sev-strip"><button class="sev-chip all ${active.length===SSM_AUDIT_SEVERITIES.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${SSM_AUDIT_SEVERITIES.map(chip).join('')}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
+  const hidden=new Set(S.session.hiddenSeverities||[]),active=AUDIT_FINDING_LEVELS.filter(level=>!hidden.has(level));
+  const chip=level=>`<button class="sev-chip ${level} ${hidden.has(level)?'':'on'}" type="button" data-audit-severity="${level}" aria-pressed="${hidden.has(level)?'false':'true'}"><span class="sev-dot"></span>${SEVERITY_PLURALS[level]}<b>${(summary.severity[level]||0).toLocaleString()}</b></button>`;
+  return `<div class="sev-strip"><button class="sev-chip all ${active.length===AUDIT_FINDING_LEVELS.length?'on':''}" type="button" data-audit-severity="all">All findings<b>${summary.findings.toLocaleString()}</b></button>${AUDIT_FINDING_LEVELS.map(chip).join('')}<span class="sev-meta">${summary.rows.toLocaleString()} rows checked &middot; ${summary.checks.toLocaleString()} checks run</span></div>`;
 }
 /* ------------------------------------------------------------- filter panel */
 
@@ -1610,9 +1691,9 @@ function filterSectionOptions(section){
   const cache=S.session.filterOptionCache||(S.session.filterOptionCache={});
   if(cache[section.id])return cache[section.id];
   let options=[];
-  if(section.id==='severity')options=SSM_AUDIT_SEVERITIES.map(level=>({key:level,label:SEVERITY_LABELS[level],count:result.summary.severity[level]||0}));
+  if(section.id==='severity')options=AUDIT_FINDING_LEVELS.map(level=>({key:level,label:SEVERITY_LABELS[level],count:result.summary.severity[level]||0}));
   else if(section.id==='source')options=AUDIT_UI_SOURCES.map(source=>({key:source.id,label:source.label,count:result.summary.source[source.id]||0}));
-  else if(section.id==='category')options=SSM_AUDIT_CATEGORIES.filter(category=>(result.summary.category[category]||0)>0).map(category=>({key:category,label:CATEGORY_LABELS[category]||category,count:result.summary.category[category]||0}));
+  else if(section.id==='category')options=Object.keys(CATEGORY_LABELS).filter(category=>(result.summary.category[category]||0)>0).map(category=>({key:category,label:CATEGORY_LABELS[category]||category,count:result.summary.category[category]||0}));
   else if(section.id==='rule'){
     const counts=new Map();for(const finding of result.findings)counts.set(finding.rule.id,(counts.get(finding.rule.id)||0)+1);
     options=[...new Map(result.findings.map(finding=>[finding.rule.id,finding.rule])).values()]
@@ -1920,8 +2001,8 @@ function wireSeverityStrip(){
        pills add or remove levels; removing the last one goes back to all. */
     if(level==='all')S.session.hiddenSeverities=[];
     else{const hidden=new Set(S.session.hiddenSeverities||[]);
-      if(!hidden.size)S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);
-      else{if(hidden.has(level))hidden.delete(level);else hidden.add(level);if(hidden.size===SSM_AUDIT_SEVERITIES.length)hidden.clear();S.session.hiddenSeverities=[...hidden];}}
+      if(!hidden.size)S.session.hiddenSeverities=AUDIT_FINDING_LEVELS.filter(item=>item!==level);
+      else{if(hidden.has(level))hidden.delete(level);else hidden.add(level);if(hidden.size===AUDIT_FINDING_LEVELS.length)hidden.clear();S.session.hiddenSeverities=[...hidden];}}
     applyFilterChange();
   });
 }
@@ -2077,7 +2158,7 @@ function wireAuditResult(navigate){
    reads the same filters as the findings list so it can be scoped to one
    building, one discipline, or one phase. */
 const DASH_RANK_LIMIT=8,DASH_NO_MILESTONE='No L2 milestone',DASH_DEEP_NEST=6,DASH_MAX_CHAIN=64;
-const DASH_SEVERITY_MEANINGS={blocker:'Contradicts the registry or the approved lists',error:'Breaks an SSM SOP rule',warning:'A strong pattern says look',info:'Worth knowing'};
+const DASH_SEVERITY_MEANINGS={blocker:'Contradicts the registry or the approved lists',error:'Breaks an SSM SOP rule',warning:'A strong pattern says look',info:'Worth knowing',missing:'Tag coverage differs between selected documents'};
 
 /* Findings are already filtered by everything. Rows are narrowed by the four
    registry dimensions only: a level, source, topic, or check filter says which
@@ -2097,7 +2178,7 @@ function scopedResult(){
 }
 function dashIsScoped(){return filterActiveCount()>0||!!clean(S.session.search);}
 function dashSeverityCounts(findings){
-  const counts=Object.fromEntries(SSM_AUDIT_SEVERITIES.map(level=>[level,0]));
+  const counts=Object.fromEntries(AUDIT_FINDING_LEVELS.map(level=>[level,0]));
   for(const finding of findings)if(counts[finding.severity]!=null)counts[finding.severity]++;
   return counts;
 }
@@ -2148,7 +2229,7 @@ function dashMilestoneReadiness(scoped){
   for(const row of scoped.rows){
     const value=clean(row.milestone),key=auditNormId(value);
     let bucket=buckets.get(key);
-    if(!bucket){bucket={key,label:value||DASH_NO_MILESTONE,rows:0,clean:0,findings:0,blocker:0,error:0,warning:0,info:0};buckets.set(key,bucket);}
+    if(!bucket){bucket={key,label:value||DASH_NO_MILESTONE,rows:0,clean:0,findings:0,blocker:0,error:0,warning:0,info:0,missing:0};buckets.set(key,bucket);}
     const list=byRow.get(row)||[];
     bucket.rows++;if(!list.length)bucket.clean++;
     for(const finding of list){bucket.findings++;if(bucket[finding.severity]!=null)bucket[finding.severity]++;}
@@ -2169,7 +2250,7 @@ function dashMilestoneTableHtml(scoped){
         <td class="dash-table-name"><b>${esc(bucket.label)}</b></td>
         <td class="dash-table-num">${bucket.rows.toLocaleString()}</td>
         <td class="dash-table-num">${bucket.findings.toLocaleString()}</td>
-        <td class="dash-levels"><span class="dash-levels-flex">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityNumeral(level,bucket[level])).join('')}</span></td>
+        <td class="dash-levels"><span class="dash-levels-flex">${AUDIT_FINDING_LEVELS.map(level=>dashSeverityNumeral(level,bucket[level])).join('')}</span></td>
         <td class="dash-clean"><span class="dash-clean-bar"><i style="width:${percent}%"></i></span><small>${percent}%</small></td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
@@ -2349,9 +2430,9 @@ function dashBreakdownHtml(scoped,severityCounts){
   const open=!!S.session.dashBreakdownOpen;
   const toggle=`<button class="btn ghost sm dash-breakdown-toggle" type="button" id="dashBreakdownToggle" aria-expanded="${open?'true':'false'}">${ic(open?'chevron-down':'chevron-right')}${open?'Hide the breakdown by check':'Breakdown by check'}</button>`;
   if(!open)return `<div class="dash-breakdown-bar">${toggle}</div>`;
-  const byLevel=new Map(SSM_AUDIT_SEVERITIES.map(level=>[level,new Map()]));
+  const byLevel=new Map(AUDIT_FINDING_LEVELS.map(level=>[level,new Map()]));
   for(const finding of scoped.findings){const bucket=byLevel.get(finding.severity);if(!bucket)continue;const entry=bucket.get(finding.rule.id)||{rule:finding.rule,count:0};entry.count++;bucket.set(finding.rule.id,entry);}
-  const columns=SSM_AUDIT_SEVERITIES.map(level=>{
+  const columns=AUDIT_FINDING_LEVELS.map(level=>{
     const entries=[...byLevel.get(level).values()].sort((left,right)=>right.count-left.count||natCmp(left.rule.title,right.rule.title));
     return `<div class="dash-breakdown-col ${level}"><header><span class="audit-severity ${level}">${esc(SEVERITY_LABELS[level])}</span><b>${(severityCounts[level]||0).toLocaleString()}</b></header>
       ${entries.length?entries.map(entry=>`<button type="button" class="dash-breakdown-item" data-dash-breakdown="${level}||${esc(entry.rule.id)}" title="Open just these findings"><span>${esc(entry.rule.title)}</span><b>${entry.count.toLocaleString()}</b></button>`).join(''):'<p class="dash-empty">Nothing at this level.</p>'}
@@ -2439,7 +2520,7 @@ function dashShellHtml(){
   const severityCounts=dashSeverityCounts(levelScopeFindings),overview=dashCheckOverview(scoped);
   return `<section class="dash-shell" id="dashShell">
     ${head}
-    <div class="dash-tiles">${SSM_AUDIT_SEVERITIES.map(level=>dashSeverityTileHtml(level,severityCounts[level]||0)).join('')}</div>
+    <div class="dash-tiles">${AUDIT_FINDING_LEVELS.map(level=>dashSeverityTileHtml(level,severityCounts[level]||0)).join('')}</div>
     ${dashBreakdownHtml(scoped,severityCounts)}
     ${dashBlockHtml('Where the problems are','The same findings counted three ways. Pick a row to open the list narrowed to it.',
       `<div class="dash-rank-grid">${dashRankCardHtml('discipline','By discipline','Findings per discipline',scoped.findings)}${dashRankCardHtml('upn','By UPN and system','Findings per system',scoped.findings)}${dashRankCardHtml('milestone','By L2 milestone','Findings per L2 phase',scoped.findings)}</div>`)}
@@ -2479,7 +2560,7 @@ function wireDashboard(navigate){
   $('#dashOpenFindings')?.addEventListener('click',()=>dashOpenFindings(navigate));
   $('#dashExport')?.addEventListener('click',()=>openExportOptions());
   $('#dashSeeRules')?.addEventListener('click',()=>{S.homeMode='rules';navigate('rules');});
-  $$('[data-dash-severity]').forEach(tile=>tile.onclick=()=>{const level=tile.dataset.dashSeverity;dashOpenFindings(navigate,()=>{S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);});});
+  $$('[data-dash-severity]').forEach(tile=>tile.onclick=()=>{const level=tile.dataset.dashSeverity;dashOpenFindings(navigate,()=>{S.session.hiddenSeverities=AUDIT_FINDING_LEVELS.filter(item=>item!==level);});});
   $$('[data-dash-rank]').forEach(row=>row.onclick=()=>dashOpenFindings(navigate,()=>{dimFilterMap()[row.dataset.dashRank]=[auditNormId(row.dataset.dashValue)];}));
   $$('[data-dash-milestone]').forEach(row=>{
     const open=()=>dashOpenFindings(navigate,()=>{dimFilterMap().milestone=[row.dataset.dashMilestone];});
@@ -2494,7 +2575,7 @@ function wireDashboard(navigate){
   $$('[data-dash-breakdown]').forEach(button=>button.onclick=()=>{
     const [level,ruleId]=button.dataset.dashBreakdown.split('||');
     dashOpenFindings(navigate,()=>{
-      S.session.hiddenSeverities=SSM_AUDIT_SEVERITIES.filter(item=>item!==level);
+      S.session.hiddenSeverities=AUDIT_FINDING_LEVELS.filter(item=>item!==level);
       S.session.hiddenRules=[...new Set((S.session.result.findings||[]).map(finding=>finding.rule.id))].filter(id=>id!==ruleId);
     });
   });

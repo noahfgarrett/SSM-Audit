@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.47.0",
+    "date": "2026-09-18",
+    "type": "feature",
+    "notes": "- Added support for additional project documents\n- Improved finding organization and review styling"
+  },
+  {
     "version": "1.46.0",
     "date": "2026-09-15",
     "type": "fix",

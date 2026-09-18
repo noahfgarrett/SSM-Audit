@@ -76,6 +76,18 @@ test('comparison reference skips audit and does not return workbook bytes',async
   assert.equal(data.snapshot.rows.length,32);
 });
 
+for(const [kind,rows] of [
+  ['mel',[['Equipment Tag','UPN','Building'],['TEST-PUMP-0','111','TEST']]],
+  ['easyPower',[['Starting Source','Downstream 1','ID Name'],['TEST-GIS','TEST-PANEL','TEST-PUMP-0']]],
+  ['cable',[['Panel (From)','Load Name (To)'],['TEST-PANEL','TEST-PUMP-0']]],
+  ['pmd',[['Panel','Instrument Tag'],['TEST-RIO','TEST-INSTRUMENT']]],
+])test(`packaged background reader loads optional ${kind} without a registry`,async()=>{
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(rows),'Synthetic project');
+  const {data}=await background(XLSX.write(book,{type:'array',bookType:'xlsx'}),true,kind);
+  assert.equal(data.type,'result',data.message);assert.equal(data.references.length,1);assert.equal(data.references[0].kind,kind);
+  assert.ok(data.references[0].entries.length);assert.equal(data.snapshot,undefined);assert.equal(data.bytes,undefined);
+});
+
 test('large VF reference is parsed in the worker with reusable sheet results',async()=>{
   const workbook=XLSX.utils.book_new(),count=10000;
   for(const [name,rows] of [['VF Current',[['Item Master Name'],...Array.from({length:count},(_,i)=>[`VF_DEMO_TYPE_${i}`])]],['Alternate',[['Item Master Name'],['VF_DEMO_OTHER']]],['Empty',[['Item Master Name']]],['History',[['Item Master Name'],['VF_OLD']]]])XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(rows),name);

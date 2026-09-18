@@ -3,6 +3,7 @@ import { auditStatusFromWorkbook } from '../audit/status-report.js'
 import { runSsmAudit } from '../audit/engine.js'
 import { auditPrepareInWorker } from '../audit/review.js'
 import { auditReferenceSheets, auditReadReferenceWorkbook } from '../audit/references.js'
+import { AUDIT_ENGINEERING_KINDS, auditReadEngineeringWorkbook } from '../audit/engineering-references.js'
 import { buildAuditUpdateBatches, buildAuditActionsWorkbook } from '../audit/export.js'
 import { workbookBytesCompact } from '../core/download.js'
 
@@ -44,6 +45,12 @@ self.onmessage=async({data})=>{
       const registryRows=reference.rows.map(row=>({equipmentId:row.equipmentId,upn:row.upn,discipline:row.discipline,building:row.building,systemName:row.systemName,closestParent:row.closestParent,milestone:row.milestone,milestoneParent:row.milestoneParent}));
       report(1,'Reference registry ready');
       self.postMessage({type:'result',registryRows});return;
+    }
+    if(Object.hasOwn(AUDIT_ENGINEERING_KINDS,data.referenceKind||'')){
+      report(.2,'Reading engineering sheets');
+      const references=auditReadEngineeringWorkbook(workbook,data.referenceKind);
+      if(!references.length)throw new Error('No populated sheet with the expected column headers was found. Check the document type and headers.');
+      report(1,'Engineering reference ready');self.postMessage({type:'result',references});return;
     }
     if(data.referenceKind){
       report(.2,'Finding reference sheets');

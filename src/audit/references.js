@@ -60,7 +60,7 @@ function auditRefCellText(cell){
   // Format a copy: SheetJS may cache display text on the cell it receives.
   return auditRefText(typeof XLSX!=='undefined'&&cell.t?XLSX.utils.format_cell({...cell}):cell.v);
 }
-function auditRefSheetAoa(sheet,maxRows=Infinity){
+export function auditRefSheetAoa(sheet,maxRows=Infinity){
   const dense=Array.isArray(sheet)?sheet:sheet&&Array.isArray(sheet['!data'])?sheet['!data']:null;
   if(dense)return dense.slice(0,maxRows).map(row=>Array.isArray(row)?row.map(auditRefCellText):[]);
   if(!sheet||!sheet['!ref'])return [];

@@ -18,7 +18,7 @@ test('Tracker export selector keeps its choice and passes it to the download', a
     S: { session }, esc, ic: () => '', $: node,
     $$: selector => selector === 'input[name="tracker-signoff"]' ? inputs : [],
     exportPlan: () => ({ levels: {}, rules: {} }), exportPlanSummary: () => ({}),
-    SSM_AUDIT_SEVERITIES: [], closeExportOptions() {},
+    AUDIT_FINDING_LEVELS: [], closeExportOptions() {},
     exportTrackerXlsx: async mode => downloads.push(mode),
   })
   vm.runInContext(source.slice(start, end), context)
@@ -40,7 +40,7 @@ test('Actions export modal passes precisely its filtered findings to the Actions
   const findings=[{id:'selected'}],downloads=[],nodes=new Map();
   const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:''});return nodes.get(selector);};
   const context=vm.createContext({S:{session:{exportKind:'actions',result:{findings:[]}}},esc,ic:()=>'', $:node,$$:()=>[],
-    exportPlan:()=>({levels:{},rules:{}}),exportPlanSummary:()=>({}),SSM_AUDIT_SEVERITIES:[],closeExportOptions(){},
+    exportPlan:()=>({levels:{},rules:{}}),exportPlanSummary:()=>({}),AUDIT_FINDING_LEVELS:[],closeExportOptions(){},
     actionsExportFindings:()=>findings,exportActionsXlsx:async rows=>downloads.push(rows),
   });
   vm.runInContext(source.slice(start,end),context);vm.runInContext('renderExportOptions()',context);
@@ -56,7 +56,7 @@ test('Updated Registry modal explains the batches and refreshes the Actions summ
   const nodes=new Map(),S={screen:'modify',session:{exportKind:'updated',result:{findings:[]},changes:[{}],sourceBytes:new Uint8Array([1])}};
   let downloads=0,renders=0;
   const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:''});return nodes.get(selector);};
-  const context=vm.createContext({S,esc,ic:()=>'', $:node,$$:()=>[],exportPlan:()=>({levels:{},rules:{}}),exportPlanSummary:()=>({}),SSM_AUDIT_SEVERITIES:[],closeExportOptions(){},currentNavigate(){},
+  const context=vm.createContext({S,esc,ic:()=>'', $:node,$$:()=>[],exportPlan:()=>({levels:{},rules:{}}),exportPlanSummary:()=>({}),AUDIT_FINDING_LEVELS:[],closeExportOptions(){},currentNavigate(){},
     exportUpdatedRegistryXlsx:async()=>{downloads++;return true;},rerenderModifications:()=>renders++});
   vm.runInContext(source.slice(start,end),context);vm.runInContext('renderExportOptions()',context);
   assert.match(node('#exportModalBody').innerHTML,/1,950 changed equipment rows per file/);

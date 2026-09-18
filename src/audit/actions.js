@@ -12,11 +12,13 @@ export const AUDIT_ACTION_FIELDS=Object.freeze({
   'Dependencies':'dependencies','Dependency Project':'dependencyProject','L2 Milestone':'milestone',
   'L1 Milestone Parent':'milestoneParent','Milestone Parent':'milestoneParent',
   'Item Master Unique Identifier':'itemMaster','Equipment Classification':'equipmentClassification',
+  'Equipment Description':'equipmentDescription',
 });
 const AUDIT_ACTION_COLUMNS=new Map(EXTO_REV21_COLUMNS.map(column=>[column.field,column]));
 const AUDIT_ACTION_PROPS=new Set(Object.values(AUDIT_ACTION_FIELDS));
 
 export function auditActionPatternKey(finding){
+  if(finding.rule?.id.startsWith('reference.engineering-'))return JSON.stringify([finding.field,finding.actual,finding.expected]);
   const why=finding.why||'';
   return ['item-master.migration-advisory','item-master.standardized-assignment'].includes(finding.rule?.id)?JSON.stringify([why,finding.actual,finding.expected]):why;
 }
@@ -96,7 +98,7 @@ export async function auditReviewDocument(session,{baselineRevision}={}){
     referencesRevision:await auditReviewReferenceRevision(session.references),changes:session.changes||[],actioned:[...(session.actioned||[])],reviewed:[...(session.reviewedIds||session.actioned||[])],excluded:[...(session.excluded||[])],history:session.reviewHistory||[],filterViews:session.filterViews||[],
     milestoneMigration:session.milestoneMigration||{enabled:false,profile:null},createdAt:new Date().toISOString()};
 }
-function auditReviewReferenceRevision(references={}){return auditReviewDigest(['milestones','itemMasters'].map(kind=>[kind,references[kind]||null]));}
+function auditReviewReferenceRevision(references={}){return auditReviewDigest([...['milestones','itemMasters'].map(kind=>[kind,references[kind]||null]),...['mel','easyPower','cable','pmd'].filter(kind=>references[kind]).map(kind=>[kind,references[kind]])]);}
 function auditReviewFilterViews(views=[]){
   if(!Array.isArray(views)||views.length>100)throw new Error('The review file contains invalid filter views.');
   const list=values=>{
@@ -156,6 +158,9 @@ for(const [ids,fields] of [
   ['identity.duplicate-equipment-id identity.tag-looks-like-description header.unused',[]],
 ])for(const id of ids.split(' '))AUDIT_RULE_FIELDS.set(id,Object.freeze(fields));
 export function auditActionPolicy(finding){
+  if(['reference.engineering-missing-tag','reference.engineering-not-in-mel'].includes(finding.rule.id))return {fields:[],targets:false,known:true};
+  if(finding.rule.id==='reference.engineering-metadata'||finding.rule.id==='reference.engineering-conflicting-mel')return {fields:AUDIT_ACTION_FIELDS[finding.field]?[finding.field]:[],targets:false,known:true};
+  if(['reference.engineering-relationship','reference.engineering-mel-parent'].includes(finding.rule.id))return {fields:['Closest Parent','Dependencies'],targets:false,known:true};
   const metadata=AUDIT_METADATA_TARGETS[finding.rule.id];
   if(metadata)return {fields:metadata,targets:true};
   if(finding.rule.id==='sop.instrument-parent-upn'&&finding.field==='Equipment ID')return {fields:[],targets:false};
@@ -196,6 +201,7 @@ export function auditProposeCorrection(finding,context){
   const changes=[],add=(field,value)=>{if(clean(row[AUDIT_ACTION_FIELDS[field]])!==clean(value))changes.push(auditMakeCorrection(row,field,value,finding));};
   let reason='',confidence='Review';
   try{
+    if(finding.rule.id.startsWith('reference.engineering-'))return null;
     if(['parent.cross-building','parent.cross-discipline','parent.cycle','dependency.precedence-cycle','logic.external-path-unverified'].includes(finding.rule.id))return null;
     const reference=auditReferenceRecommendation(row,finding.field,context.references,context.referenceLookups||={});
     if(reference){add(finding.field,reference.value);reason=reference.reason;confidence=reference.confidence||'Reference';}
