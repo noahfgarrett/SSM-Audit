@@ -50,8 +50,8 @@ test('PMD repeated rows deduplicate findings and semicolon feeds are retained',(
 });
 test('power/control relationships accept a parent OR local dependency, not a remote one',()=>{
   const ref=parse([['Panel','Instrument Tag'],['TEST-RIO',row.equipmentId]],'pmd');
-  for(const changes of [{closestParent:'TEST-RIO'},{dependencies:'TEST-RIO'},{dependencies:'test-rio',site:'TEST',dependencyProject:'TEST;TEST'}])assert.equal(auditEngineeringFindings(snap([{...row,...changes},{...row,equipmentId:'TEST-RIO'}]),{pmd:ref}).length,0);
-  const findings=auditEngineeringFindings(snap([{...row,dependencies:'TEST-RIO',site:'TEST',dependencyProject:'REMOTE'},{...row,equipmentId:'TEST-RIO'}]),{pmd:ref});
+  for(const changes of [{closestParent:'TEST-RIO'},{dependencies:'TEST-RIO'},{dependencies:'test-rio',project:'TEST',site:'TEST-SITE',dependencyProject:'TEST;TEST'}])assert.equal(auditEngineeringFindings(snap([{...row,...changes},{...row,equipmentId:'TEST-RIO'}]),{pmd:ref}).length,0);
+  const findings=auditEngineeringFindings(snap([{...row,dependencies:'TEST-RIO',project:'TEST',site:'TEST-SITE',dependencyProject:'REMOTE'},{...row,equipmentId:'TEST-RIO'}]),{pmd:ref});
   assert.equal(findings.length,1);
 });
 test('case and whitespace normalize but suffixes remain separate tags',()=>{

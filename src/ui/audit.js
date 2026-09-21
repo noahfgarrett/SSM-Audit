@@ -15,7 +15,7 @@ import { AUDIT_ACTION_FIELDS, auditReadyFindingIds, auditActionPatternKey, audit
 import { downloadBlob } from '../core/download.js'
 import { referenceHelpHtml } from './guide-content.js'
 import { SSM_AUDIT_REFERENCE_RULES } from '../audit/references.js'
-import { AUDIT_FINDING_LEVELS, AUDIT_ENGINEERING_KINDS, SSM_AUDIT_ENGINEERING_RULES, auditEngineeringRuleActive } from '../audit/engineering-references.js'
+import { AUDIT_FINDING_LEVELS, AUDIT_ENGINEERING_KINDS, SSM_AUDIT_ENGINEERING_RULES, auditEngineeringRuleActive, auditCoverageRows } from '../audit/engineering-references.js'
 import { buildMilestoneReference } from '../audit/milestone-recommend.js'
 import { auditReadMigrationSettings, auditMigrationReferences } from '../audit/milestone-migration.js'
 
@@ -287,7 +287,8 @@ function modifyReadyBadge(findings){
   return count?`<span class="modify-ready" role="status">${ic('circle-check')}${count===findings.length?'Ready for export':`${count.toLocaleString()} ready for export`}</span>`:'';
 }
 function modifyRuleSelection(){return S.session.selectedActionRules||=(new Set());}
-function modifySelectableRules(){return modifyGroups().flatMap(group=>group.rules).filter(entry=>modifyActiveFindings(entry.matches).length);}
+function coverageReviewOnly(finding){return finding.rule?.category==='missing-tags';}
+function modifySelectableRules(){return modifyGroups().flatMap(group=>group.rules).filter(entry=>modifyActiveFindings(entry.matches).some(finding=>!coverageReviewOnly(finding)));}
 function syncModifyRuleSelection(){
   const entries=modifySelectableRules(),visible=new Set(entries.map(entry=>entry.rule.id)),selected=modifyRuleSelection();
   for(const id of selected)if(!visible.has(id))selected.delete(id);
@@ -545,9 +546,9 @@ function modifyDimActive(){return (S.session.modifyMilestone||'all')!=='all'||(S
 function modifyDimMatch(finding){
   const milestone=S.session.modifyMilestone||'all',discipline=S.session.modifyDiscipline||'all';
   if(milestone==='all'&&discipline==='all')return true;
-  const row=registryRowFor(finding);
-  if(milestone!=='all'){const value=clean(row&&row.milestone);if(milestone===MODIFY_DIM_NONE?value!=='':value!==milestone)return false;}
-  if(discipline!=='all'){const value=clean(row&&row.discipline);if(discipline===MODIFY_DIM_NONE?value!=='':value!==discipline)return false;}
+  const row=findingContextFor(finding);
+  if(milestone!=='all'){const value=clean(row&&row.milestone);if([MODIFY_DIM_NONE,'none'].includes(milestone)?value!=='':value!==milestone)return false;}
+  if(discipline!=='all'){const value=clean(row&&row.discipline);if([MODIFY_DIM_NONE,'none'].includes(discipline)?value!=='':value!==discipline)return false;}
   return true;
 }
 function modifyGroupsBuild(){
@@ -612,7 +613,7 @@ function modifyPatternHtml(group){
   const kept=modifyActiveFindings(group.findings).length;
   const severity=group.findings[0].severity;
 return `<div class="modify-pattern ${kept?'':modifyReadyBadge(group.findings)?'is-ready':'is-excluded'}" data-mod-pattern="${group.key}">
-<div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span>${modifyReadyBadge(group.findings)}<b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic('zap')}Action</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
+<div class="modify-pattern-head"><input type="checkbox" data-mod-group="${group.key}" ${kept===group.findings.length?'checked':''} aria-label="Keep every finding of this pattern"><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity]||severity)}</span><span class="modify-pattern-why">${modifyHighlight(group.why)}</span>${modifyReadyBadge(group.findings)}<b class="modify-pattern-count" data-mod-group-count="${group.key}">${modifyPatternCountText(group.findings)}</b>${modifyPctBtn()}<button class="btn ghost sm modify-pattern-aside" type="button" data-mod-aside-group="${group.key}" title="${kept?'Dismiss only this pattern without changing registry data':'Restore this pattern to active findings'}">${ic(kept?'circle-minus':'rotate-ccw')}${kept?'Dismiss':'Restore'}</button><button class="btn ghost sm modify-action-btn" type="button" data-mod-action-group="${group.key}" title="Action active findings of this pattern" ${kept?'':'disabled'}>${ic(group.findings.every(coverageReviewOnly)?'clipboard-list':'zap')}${group.findings.every(coverageReviewOnly)?'Review':'Action'}</button><button class="btn ghost sm modify-pattern-expand" type="button" data-mod-expand="${group.key}" aria-expanded="false">${ic('chevron-down')}Equipment</button></div>
     ${modifyItemMasterSwap(group.findings[0])}<div class="modify-pattern-rows" hidden data-mod-empty="1"></div>
   </div>`;
 }
@@ -894,8 +895,32 @@ function actionSuggestions(findings,context,target,provided){
     if(seen.has(key))return false;seen.add(key);return true;
   }).map(entry=>({...entry,changes:entry.changes.map(change=>({...change}))}));
 }
+function openCoverageReview(label,findings,navigate){
+  const session=S.session,scope={kind:'coverage-review',session,findings};actionScope=scope;
+  $('#actionModalBody').innerHTML=`<span class="eyebrow">Tag coverage</span><h3 id="actionTitle">${esc(label)}</h3>
+    <p>Compare these tags with the project documents. Add or correct equipment in the source registry where needed, then run the audit again.</p>
+    <p>Marking this review complete does not add equipment, change metadata, or prepare rows for upload. The findings remain counted unless dismissed.</p>
+    <div class="action-summary"><span>${findings.length.toLocaleString()} findings to review</span></div>
+    <ul>${findings.slice(0,50).map(finding=>`<li><b>${esc(finding.equipmentId)}</b>: ${esc(finding.why)}</li>`).join('')}</ul>
+    ${findings.length>50?'<p>Showing the first 50 findings. All selected findings will be marked reviewed.</p>':''}
+    <footer class="export-foot"><span>Registry values unchanged</span><div><button class="btn ghost" id="coverageCancel">Cancel</button><button class="btn primary" id="coverageReviewed">Mark reviewed</button></div></footer>`;
+  const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+  actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);
+  $('#actionModalClose').onclick=closeActionDialog;$('#coverageCancel').onclick=closeActionDialog;
+  modal.onclick=event=>{if(event.target===modal)closeActionDialog();};
+  $('#coverageReviewed').onclick=()=>{
+    if(S.session!==session||actionScope!==scope||session.reviewBusy)return;
+    reviewRememberUndo();setActionedMany(findings,true);
+    session.reviewHistory.push({id:crypto.randomUUID(),at:new Date().toISOString(),owner:session.reviewOwner||'',reason:'Tag coverage reviewed. Registry values unchanged.',disposition:'reviewed',findingIds:findings.map(finding=>finding.id),changes:[]});
+    closeActionDialog();invalidateFindingCaches();
+    if(S.screen==='modify')rerenderModifications(navigate||currentNavigate);else if(currentNavigate)renderAuditResult(currentNavigate);
+    toast('Marked reviewed. Registry values unchanged.');
+  };
+}
 function openActionDialog(label,findings,navigate,provided,prepared){
   findings=findings.filter(finding=>!isExcludedId(finding.id));if(!findings.length){toast('Restore findings before actioning them');return;}
+  if(findings.every(coverageReviewOnly))return openCoverageReview(label,findings,navigate);
+  findings=findings.filter(finding=>!coverageReviewOnly(finding));
   if(findings.length>200&&!prepared){
     const session=S.session,revision=session.changesRev,token={kind:'preparing-actions'};
     if(session.reviewBusy)return;session.reviewBusy=true;actionScope=token;
@@ -1006,7 +1031,7 @@ function modifyRuleHtml(entry,forceOpen){
   const open=forceOpen||(S.session.modifyOpenRules||[]).includes(entry.rule.id);
   const severity=modifyRuleSeverity(entry);
   return `<details class="modify-rule" data-mod-rule="${esc(entry.rule.id)}" ${open?'open':''}>
-<summary><input type="checkbox" data-mod-select-rule="${esc(entry.rule.id)}" aria-label="Select ${esc(entry.rule.title)} for action" ${modifyRuleSelection().has(entry.rule.id)?'checked':''} ${modifyActiveFindings(entry.matches).length?'':'disabled'}><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}${modifyReadyBadge(entry.matches)}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-action-rule="${esc(entry.rule.id)}" ${modifyActiveFindings(entry.matches).length?'':'disabled'}>${ic('zap')}Action rule</button><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Dismiss every match shown for this check':'Dismiss every finding of this check'}">${ic('circle-x')}Dismiss all</button></span></summary>
+<summary><input type="checkbox" data-mod-select-rule="${esc(entry.rule.id)}" aria-label="Select ${esc(entry.rule.title)} for action" ${modifyRuleSelection().has(entry.rule.id)?'checked':''} ${modifyActiveFindings(entry.matches).some(finding=>!coverageReviewOnly(finding))?'':'disabled'}><span class="audit-severity ${esc(severity)}">${esc(SEVERITY_LABELS[severity])}</span><span class="modify-rule-label"><b>${modifyHighlight(entry.rule.title)}</b>${modifyItemMasterCatalogStatus(entry.rule)}</span><span class="modify-rule-count" data-mod-count="${esc(entry.rule.id)}">${modifyRuleCountText(entry)}</span>${modifyPctBtn()}${modifyReadyBadge(entry.matches)}<span class="modify-rule-buttons"><button class="btn ghost sm" type="button" data-mod-action-rule="${esc(entry.rule.id)}" ${modifyActiveFindings(entry.matches).length?'':'disabled'}>${ic(entry.rule.category==='missing-tags'?'clipboard-list':'zap')}${entry.rule.category==='missing-tags'?'Review rule':'Action rule'}</button><button class="btn ghost sm" type="button" data-mod-keep="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Keep every match shown for this check':'Keep every finding of this check'}">${ic('check')}Keep all</button><button class="btn ghost sm" type="button" data-mod-aside="${esc(entry.rule.id)}" title="${modifyQueryNorm()?'Dismiss every match shown for this check':'Dismiss every finding of this check'}">${ic('circle-x')}Dismiss all</button></span></summary>
     ${open?modifyListHtml(entry):`<div class="modify-lazy" data-mod-lazy="${esc(entry.rule.id)}"></div>`}
   </details>`;
 }
@@ -1039,15 +1064,16 @@ export function renderModifications(navigate){
   const groups=modifyGroups(),query=clean(S.session.modifySearch),aside=excludedInBase(),result=S.session.result;
   const filtered=!!query||modifyDimActive();
   const matchTotal=filtered?groups.reduce((sum,group)=>sum+group.rules.reduce((inner,entry)=>inner+entry.matches.length,0),0):0;
-  const milestones=[...new Set((S.session.snapshot.rows||[]).map(row=>clean(row.milestone)).filter(Boolean))].sort(natCmp);
-  const disciplines=[...new Set((S.session.snapshot.rows||[]).map(row=>clean(row.discipline)).filter(Boolean))].sort(natCmp);
+  const contextRows=[...(S.session.snapshot.rows||[]),...coverageContextRows()];
+  const milestones=[...new Set(contextRows.map(row=>clean(row.milestone)).filter(Boolean))].sort(natCmp);
+  const disciplines=[...new Set(contextRows.map(row=>clean(row.discipline)).filter(Boolean))].sort(natCmp);
   const changesCount=(S.session.changes||[]).length;
   const scrollTop=S.session.modifyScrollTop||0;
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div><div class="actions-exports"><button class="btn" id="exportActions" type="button">${ic('file-down')}Export Actions</button><button class="btn primary" id="exportUpdatedRegistry" type="button" ${changesCount&&S.session.sourceBytes?'':'disabled'}>${ic('file-spreadsheet')}Updated Registry</button></div></div>
     ${S.session.lastRegistryExport?`<p class="registry-export-summary" role="status"><b>Last export:</b> ${esc(auditUpdateExportSummary(S.session.lastRegistryExport))}</p>`:''}
     <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands">${referencesButtonHtml()}<button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
-    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Action every finding shown — mark actioned and stage fixes">${ic('zap')}Action matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
+    <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Review available changes for the findings shown">${ic('clipboard-list')}Review matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
 <div class="modify-selection"><label><input type="checkbox" id="modifySelectAll">Select all shown rules</label><button class="btn primary sm" type="button" id="modifyActionSelected" disabled>${ic('zap')}Action selected</button></div><div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!filtered&&(S.session.modifyClosedCats||[]).includes(group.category);
       return `<section class="modify-category ${closed?'is-closed':''}" data-mod-cat="${esc(group.category)}"><header class="modify-cat-head" data-mod-cat-toggle="${esc(group.category)}"><span class="modify-cat-chevron" aria-hidden="true">${ic('chevron-down')}</span><h3>${esc(group.label)}</h3><b data-mod-cat-count="${esc(group.category)}">${modifyCategoryCountText(group)}</b>${modifyPctBtn()}</header><div class="modify-cat-body" ${closed?'hidden':''}>${group.rules.map(entry=>modifyRuleHtml(entry,filtered)).join('')}</div></section>`;
@@ -1081,7 +1107,7 @@ export function renderModifications(navigate){
   body.onclick=event=>{
     if(event.target.closest('[data-mod-select-rule]')){event.stopPropagation();return;}
     const actionRule=event.target.closest('[data-mod-action-rule]');
-    if(actionRule){event.preventDefault();const entry=modifySelectableRules().find(entry=>entry.rule.id===actionRule.dataset.modActionRule);if(entry&&!S.session.reviewBusy)openActionDialog(entry.rule.title,modifyActiveFindings(entry.matches),navigate);return;}
+    if(actionRule){event.preventDefault();const entry=modifyGroups().flatMap(group=>group.rules).find(entry=>entry.rule.id===actionRule.dataset.modActionRule);if(entry&&!S.session.reviewBusy)openActionDialog(entry.rule.title,modifyActiveFindings(entry.matches),navigate);return;}
     const asideGroup=event.target.closest('[data-mod-aside-group]');
     if(asideGroup){event.preventDefault();const key=asideGroup.dataset.modAsideGroup,findings=modifyPatternMap.get(key)||[];setModifyPatternAside(key,findings.some(finding=>!isExcludedId(finding.id)),navigate);return;}
     const review=event.target.closest('[data-mod-review]');
@@ -1245,7 +1271,7 @@ function openCompletedEquipment(entry,opener){
   $('#drawerTitle').textContent='Completed equipment';
   $('#drawerBody').innerHTML=`<div class="audit-drawer">
     <div class="audit-drawer-top"><span class="completed-steps">${completedStepChips(entry)}</span><span class="audit-drawer-tag">${copyTagHtml(entry.name)}</span></div>
-    <section class="finding-section"><h4>Finished on site</h4><p class="finding-why">The Equipment Status Report marks the ${esc(stepNames)} step${entry.steps.length===1?'':'s'} as Completed, so this equipment's findings are left out of the findings list, the Dashboard, and the exports.${row?'':' The tag does not match any row in the loaded registry, so nothing in the audit changed because of it.'}</p></section>
+    <section class="finding-section"><h4>Finished on site</h4><p class="finding-why">The Equipment Status Report marks the ${esc(stepNames)} step${entry.steps.length===1?'':'s'} as Completed, so this equipment's findings are left out of the findings list, the Dashboard, and the exports.${row?'':' No registry row matches this tag. Any matching project-document findings are also excluded.'}</p></section>
     ${registryContextHtml(row)}
     ${row?`<div class="finding-evidence">${ic('file-spreadsheet')}${esc(row._source&&row._source.sheet||'Registry')} &middot; row ${row._source&&row._source.row||'—'}</div>`:''}
     ${row?`<div class="finding-action-row"><button class="btn" type="button" id="completedInHierarchy">${ic('list-tree')}Show in hierarchy</button></div>`:''}
@@ -1581,6 +1607,21 @@ function registryRowFor(finding){
   const index=sessionRowIndex();
   return index.bySource.get(`${auditNormId(finding.sheet)}|${finding.row||0}`)||index.byId.get(auditNormId(finding.equipmentId))||null;
 }
+function coverageContextRows(){
+  const session=S.session,rows=session.snapshot?.rows||[],findings=session.rawResult?.findings||session.result?.findings||[];
+  const cached=session.coverageContext;
+  if(cached&&cached.rows===rows&&cached.findings===findings)return cached.values;
+  const values=auditCoverageRows({rows,findings});
+  const byKey=new Map();
+  for(const row of values)byKey.set(JSON.stringify([auditNormId(row.equipmentId),clean(row._source.sheet),row._source.row||0]),row);
+  session.coverageContext={rows,findings,values,byKey};
+  return values;
+}
+function findingContextFor(finding){
+  const row=registryRowFor(finding);if(row)return row;
+  coverageContextRows();
+  return S.session.coverageContext.byKey.get(JSON.stringify([auditNormId(finding.equipmentId),clean(finding.sheet),finding.row||0]))||null;
+}
 /* ------------------------------------------------- registry dimension filters */
 
 /* Four registry columns a finding does not carry itself, so every match runs
@@ -1608,7 +1649,7 @@ function dimOptions(dimension){
     .sort((a,b)=>(a.key?0:1)-(b.key?0:1)||natCmp(a.label,b.label));
   cache[dimension]=options;return options;
 }
-function dimOptionLabel(dimension,key){const match=dimOptions(dimension).find(option=>option.key===key);return match?match.label:key||DASH_NO_MILESTONE;}
+function dimOptionLabel(dimension,key){const match=dimOptions(dimension).find(option=>option.key===key);return match?match.label:key||(dimension==='milestone'?DASH_NO_MILESTONE:'Unassigned');}
 /* Ticking every value is the same as filtering on none of them. */
 function setDimSelection(dimension,keys){
   const options=dimOptions(dimension);
@@ -1616,7 +1657,7 @@ function setDimSelection(dimension,keys){
 }
 function dimActiveSets(){return DIM_KEYS.map(dimension=>[DIM_FIELDS[dimension],dimSelected(dimension)]).filter(entry=>entry[1].size);}
 function dimRowMatches(finding,active){
-  const row=registryRowFor(finding);if(!row)return false;
+  const row=findingContextFor(finding)||{};
   for(const [field,values] of active)if(!values.has(auditNormId(row[field])))return false;
   return true;
 }
@@ -1635,7 +1676,7 @@ function filteredFindings(){
 }
 function findingGroup(finding){
   if(S.session.groupBy==='rule')return {key:`rule|${finding.rule.id}`,label:finding.rule.title,note:SOURCE_LABELS[finding.rule.source]||finding.rule.source};
-  const row=registryRowFor(finding),milestone=clean(row&&row.milestone);
+  const row=findingContextFor(finding),milestone=clean(row&&row.milestone);
   return {key:`milestone|${auditNormId(milestone)}`,label:milestone||'No L2 milestone assigned',note:milestone?'L2 milestone':'These rows have no L2 milestone'};
 }
 /* One flat list of fixed-height rows — group headers and findings alike — so the
@@ -2089,7 +2130,7 @@ function openFinding(id,opener){
     ${finding.recommendation?findingSection('What to do',`<p class="finding-action">${esc(finding.recommendation)}</p>`,'action-section'):''}
     ${registryContextHtml(registryRowFor(finding))}
     <div class="finding-evidence">${ic('file-spreadsheet')}${esc(finding.sheet||'Registry')} &middot; row ${finding.row||'—'}${finding.field?' &middot; '+esc(finding.field):''}</div>
-    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Reviewed - click to undo':'Review finding'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is dismissed — click to have it count again':'Disagree with this finding? Dismiss it — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Dismissed — click to restore':'Dismiss'}</button>${finding.equipmentId?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
+    <div class="finding-action-row"><button class="btn ${isActioned(finding)?'done':''}" type="button" id="findingActioned" aria-pressed="${isActioned(finding)?'true':'false'}">${ic('check')}${isActioned(finding)?'Reviewed - click to undo':'Review finding'}</button><button class="btn ${isExcludedId(finding.id)?'done':''}" type="button" id="findingExclude" title="${isExcludedId(finding.id)?'This finding is dismissed — click to have it count again':'Disagree with this finding? Dismiss it — it leaves every metric until restored on the Modifications screen'}">${ic(isExcludedId(finding.id)?'rotate-ccw':'circle-x')}${isExcludedId(finding.id)?'Dismissed — click to restore':'Dismiss'}</button>${registryRowFor(finding)?`<button class="btn" type="button" id="findingInHierarchy">${ic('list-tree')}Show in hierarchy</button>`:''}</div>
     <div class="finding-steps"><button class="btn ghost sm" type="button" id="findingPrev" ${position>0?'':'disabled'}>${ic('chevron-left')}Previous</button><span>${position>=0?`${(position+1).toLocaleString()} of ${list.length.toLocaleString()}`:''}</span><button class="btn ghost sm" type="button" id="findingNext" ${position>=0&&position<list.length-1?'':'disabled'}>Next${ic('chevron-right')}</button></div>
   </div>`;
   wireCopyTags($('#drawerBody'));
@@ -2202,15 +2243,16 @@ function dashRuleCounts(scoped){
 function dashRankBuckets(kind,findings){
   const field=DIM_FIELDS[kind],buckets=new Map();
   for(const finding of findings){
-    const row=registryRowFor(finding);if(!row)continue;
-    const value=clean(row[field]);if(!value&&kind!=='milestone')continue;
+    const row=findingContextFor(finding)||{};
+    const value=clean(row[field]);
     const key=auditNormId(value);let bucket=buckets.get(key);
-    if(!bucket){bucket={value,label:value||DASH_NO_MILESTONE,count:0,worst:'',names:new Map()};buckets.set(key,bucket);}
+    if(!bucket){bucket={value,label:value||(kind==='milestone'?DASH_NO_MILESTONE:'Unassigned'),count:0,worst:'',names:new Map()};buckets.set(key,bucket);}
     bucket.count++;if(severityRank(finding.severity)>severityRank(bucket.worst))bucket.worst=finding.severity;
     const name=clean(row.systemName);if(name)bucket.names.set(name,(bucket.names.get(name)||0)+1);
   }
   const list=[...buckets.values()];
   if(kind==='upn')for(const bucket of list){
+    if(!bucket.value)continue;
     const common=[...bucket.names.entries()].sort((a,b)=>b[1]-a[1]||natCmp(a[0],b[0]))[0];
     /* Approved System Names already lead with the UPN ("602  Medium Voltage"),
        so only prefix it when the name does not. */
@@ -2234,6 +2276,13 @@ function dashMilestoneReadiness(scoped){
     bucket.rows++;if(!list.length)bucket.clean++;
     for(const finding of list){bucket.findings++;if(bucket[finding.severity]!=null)bucket[finding.severity]++;}
   }
+  for(const finding of scoped.findings){
+    if(registryRowFor(finding))continue;
+    const value=clean(findingContextFor(finding)?.milestone),key=auditNormId(value);
+    let bucket=buckets.get(key);
+    if(!bucket){bucket={key,label:value||DASH_NO_MILESTONE,rows:0,clean:0,findings:0,blocker:0,error:0,warning:0,info:0,missing:0};buckets.set(key,bucket);}
+    bucket.findings++;if(bucket[finding.severity]!=null)bucket[finding.severity]++;
+  }
   return [...buckets.values()].sort((a,b)=>b.blocker-a.blocker||b.findings-a.findings||natCmp(a.label,b.label));
 }
 function dashSeverityNumeral(level,count){
@@ -2251,7 +2300,7 @@ function dashMilestoneTableHtml(scoped){
         <td class="dash-table-num">${bucket.rows.toLocaleString()}</td>
         <td class="dash-table-num">${bucket.findings.toLocaleString()}</td>
         <td class="dash-levels"><span class="dash-levels-flex">${AUDIT_FINDING_LEVELS.map(level=>dashSeverityNumeral(level,bucket[level])).join('')}</span></td>
-        <td class="dash-clean"><span class="dash-clean-bar"><i style="width:${percent}%"></i></span><small>${percent}%</small></td></tr>`;
+        <td class="dash-clean"><span class="dash-clean-bar"><i style="width:${percent}%"></i></span><small>${bucket.rows?`${percent}%`:'Not applicable'}</small></td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
@@ -2515,8 +2564,8 @@ function dashShellHtml(){
   /* The level tiles are the level SUMMARY: they follow the dimension scope
      (discipline / milestone / UPN / building) but ignore the level filter itself,
      so a hidden level still shows how many findings it is hiding. */
-  const levelScopeRows=new Set(scoped.rows.map(row=>auditNormId(row.equipmentId)));
-  const levelScopeFindings=dimActiveSets().length?(S.session.result.findings||[]).filter(finding=>{const row=registryRowFor(finding);return row&&levelScopeRows.has(auditNormId(row.equipmentId));}):(S.session.result.findings||[]);
+  const levelDimensions=dimActiveSets();
+  const levelScopeFindings=levelDimensions.length?(S.session.result.findings||[]).filter(finding=>dimRowMatches(finding,levelDimensions)):(S.session.result.findings||[]);
   const severityCounts=dashSeverityCounts(levelScopeFindings),overview=dashCheckOverview(scoped);
   return `<section class="dash-shell" id="dashShell">
     ${head}
@@ -2548,7 +2597,7 @@ function dashOpenFindings(navigate,apply){
 }
 /* The scope and the four counting passes are pure given S.session, so they are
    exported for tests/ui-dashboard.test.mjs. The build strips the statement. */
-export { dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, scopedResult };
+export { dashCheckOverview, dashDependencyStats, dashHierarchyHealth, dashMilestoneReadiness, scopedResult, findingContextFor, dimRowMatches, dimOptions, modifyDimMatch, dashRankBuckets, coverageReviewOnly };
 /* Rebuild the dashboard without losing the page's scroll position. */
 function redrawDashHost(navigate){
   const host=$('#dashHost'),view=$('#view');if(!host)return;

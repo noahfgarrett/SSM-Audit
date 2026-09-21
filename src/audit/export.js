@@ -8,7 +8,7 @@ import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
 import { auditColumnName, auditNormId } from './model.js'
 import { auditActionPatternKey } from './actions.js'
-import { AUDIT_FINDING_LEVELS } from './engineering-references.js'
+import { AUDIT_FINDING_LEVELS, auditCoverageRows } from './engineering-references.js'
 
 function addSheet(workbook,sheet,name){XLSX.utils.book_append_sheet(workbook,sheet,name);}
 function printable(value){return typeof value==='string'?value:JSON.stringify(value);}
@@ -20,7 +20,7 @@ const EXPORT_SOURCE_LABELS={registry:'Registry Integrity',sop:'SSM SOP',logic:'C
    `Actioned` column with a tick-box dropdown (☐ / ☑). Index and Dashboard read
    those ticks back with live COUNTIF formulas, so progress updates itself. */
 const AUDIT_EXPORT_DASHBOARD_SHEET='Dashboard',AUDIT_EXPORT_INDEX_SHEET='Index',AUDIT_EXPORT_FINDINGS_SHEET='All Findings',AUDIT_EXPORT_RULES_SHEET='Rules',AUDIT_EXPORT_CALC_SHEET='Calc';
-const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_BACK_LINK='← Index';
+const AUDIT_EXPORT_NO_MILESTONE='No milestone',AUDIT_EXPORT_NO_DISCIPLINE='No discipline',AUDIT_EXPORT_BACK_LINK='← Index';
 export const AUDIT_EXPORT_TICK='☑',AUDIT_EXPORT_UNTICKED='☐';
 const AUDIT_EXPORT_ACTIONED_NOTE=`Click the Actioned cell on an equipment’s first line and choose ${AUDIT_EXPORT_TICK} when it is closed out. The row turns green, and Index and Dashboard progress update from those ticks. Cells shaded red are the ones the finding is about.`;
 const AUDIT_EXPORT_PALETTE=Object.freeze({ink:'173F5F',accent:'F26722',headerText:'FFFFFF',body:'21323F',black:'000000',muted:'8A96A3',repeat:'5B6773',band:'F4F7FA',line:'D9E1E9',link:'1B5FAA',flag:'FBE3E1',done:'E3F5E8',barTrack:'FDEFE6'});
@@ -117,6 +117,24 @@ function auditExportDate(value){
 function auditExportSheetRef(name){return `'${String(name).replace(/'/g,"''")}'`;}
 function auditExportRowKey(row){const source=row&&row._source||{};return `${auditNormId(row&&row.equipmentId)}${clean(source.sheet)}${source.row||0}`;}
 function auditExportFindingKey(finding){return `${auditNormId(finding&&finding.equipmentId)}${clean(finding&&finding.sheet)}${finding&&finding.row||0}`;}
+/* Report-only coverage rows carry source context for findings outside the
+   registry. They never enter the registry result or correction/export paths. */
+function auditExportReportRows(result){
+  const rows=[...(result&&result.rows||[])],known=new Set(rows.map(auditExportRowKey));
+  for(const row of auditCoverageRows(result)){
+    const key=auditExportRowKey(row);if(known.has(key))continue;
+    rows.push(row);known.add(key);
+  }
+  return rows;
+}
+function auditExportCombinedReportRows(...results){
+  const rowsByKey=new Map();
+  for(const result of results)for(const row of auditExportReportRows(result)){
+    const key=auditExportRowKey(row),current=rowsByKey.get(key);
+    if(!current||current._coverageOnly&&!row._coverageOnly||Boolean(current._coverageOnly)===Boolean(row._coverageOnly))rowsByKey.set(key,row);
+  }
+  return [...rowsByKey.values()];
+}
 
 /* Excel forbids [ ] : * ? / \ in a tab name, caps it at 31 characters, and will
    not open a workbook with two tabs sharing a name. Milestone names routinely
@@ -183,7 +201,7 @@ export function auditExportOrderRows(groupRows){
 }
 
 export function auditExportGroups(result){
-  const rows=result&&result.rows||[],findings=result&&result.findings||[],levelFor=auditExportNestLevels(rows);
+  const rows=auditExportReportRows(result),findings=result&&result.findings||[],levelFor=auditExportNestLevels(rows);
   const findingsByRow=new Map();
   for(const finding of findings){const key=auditExportFindingKey(finding),list=findingsByRow.get(key)||[];list.push(finding);findingsByRow.set(key,list);}
   const groups=new Map();
@@ -208,7 +226,7 @@ export function auditExportGroups(result){
 /* One group per finding level: only flagged equipment, ordered by milestone
    then tag, each entry carrying just that level's findings. */
 export function auditExportLevelGroups(result){
-  const rows=result&&result.rows||[],findings=result&&result.findings||[],levelFor=auditExportNestLevels(rows);
+  const rows=auditExportReportRows(result),findings=result&&result.findings||[],levelFor=auditExportNestLevels(rows);
   const rowByKey=new Map();for(const row of rows)rowByKey.set(auditExportRowKey(row),row);
   const groups=[];
   for(const severity of AUDIT_FINDING_LEVELS){
@@ -216,13 +234,12 @@ export function auditExportLevelGroups(result){
     const byEquipment=new Map();
     for(const finding of severityFindings){
       const key=auditExportFindingKey(finding);
-      // A coverage-only row belongs to the report, never to the registry draft.
-      const row=rowByKey.get(key)||(severity==='missing'?{equipmentId:finding.equipmentId,_source:{sheet:finding.sheet,row:finding.row}}:null);
+      const row=rowByKey.get(key);if(!row)continue;
       const entry=byEquipment.get(key)||{row,findings:[]};entry.findings.push(finding);byEquipment.set(key,entry);
     }
-    const lines=[...byEquipment.values()].filter(entry=>entry.row).map(entry=>({row:entry.row,level:levelFor(entry.row),findings:entry.findings}))
+    const lines=[...byEquipment.values()].map(entry=>({row:entry.row,level:levelFor(entry.row),findings:entry.findings}))
       .sort((left,right)=>natCmp(clean(left.row.milestone),clean(right.row.milestone))||natCmp(clean(left.row.equipmentId),clean(right.row.equipmentId)));
-    groups.push({label:AUDIT_EXPORT_SEVERITY_LABELS[severity],severity,sheetName:'',rows:lines.map(line=>line.row),lines,equipmentCount:lines.length,findingCount:severityFindings.length});
+    groups.push({label:AUDIT_EXPORT_SEVERITY_LABELS[severity],severity,sheetName:'',rows:lines.map(line=>line.row),lines,equipmentCount:lines.length,findingCount:lines.reduce((total,line)=>total+line.findings.length,0)});
   }
   return groups;
 }
@@ -249,7 +266,8 @@ function auditExportCalcSheet(groups,disciplines){
     const rowIndex=rowOffset+2,tab=auditExportSheetRef(group.sheetName);
     disciplines.forEach((discipline,columnOffset)=>{
       const value=String(discipline.label).replace(/"/g,'""');
-      sheetSetCell(sheet,`${auditColumnName(columnOffset+1)}${rowIndex}`,sheetFormulaCell(`COUNTIFS(${tab}!G:G,"${value}",${tab}!A:A,"${AUDIT_EXPORT_TICK}")`,0,AUDIT_EXPORT_STYLES.number));
+      const criterion=discipline.label===AUDIT_EXPORT_NO_DISCIPLINE?'':value;
+      sheetSetCell(sheet,`${auditColumnName(columnOffset+1)}${rowIndex}`,sheetFormulaCell(`COUNTIFS(${tab}!G:G,"${criterion}",${tab}!A:A,"${AUDIT_EXPORT_TICK}")`,0,AUDIT_EXPORT_STYLES.number));
     });
   });
   sheet['!cols']=[{wch:34},...disciplines.map(()=>({wch:14}))];
@@ -289,11 +307,11 @@ export function auditExportApplyPlan(result,plan,actionedIds){
 }
 
 function auditExportDisciplines(result){
-  const totals=new Map();
-  for(const row of result&&result.rows||[]){const label=clean(row.discipline)||'No discipline';const entry=totals.get(label)||{label,equipmentCount:0,findingCount:0};entry.equipmentCount++;totals.set(label,entry);}
-  const keyFor=row=>clean(row.discipline)||'No discipline';
-  const rowsByKey=new Map();for(const row of result&&result.rows||[])rowsByKey.set(auditExportRowKey(row),keyFor(row));
-  for(const finding of result&&result.findings||[]){const label=rowsByKey.get(auditExportFindingKey(finding));if(label&&totals.has(label))totals.get(label).findingCount++;}
+  const totals=new Map(),rows=auditExportReportRows(result);
+  for(const row of rows){const label=clean(row.discipline)||AUDIT_EXPORT_NO_DISCIPLINE;const entry=totals.get(label)||{label,equipmentCount:0,findingCount:0};entry.equipmentCount++;totals.set(label,entry);}
+  const keyFor=row=>clean(row.discipline)||AUDIT_EXPORT_NO_DISCIPLINE;
+  const rowsByKey=new Map();for(const row of rows)rowsByKey.set(auditExportRowKey(row),keyFor(row));
+  for(const finding of result&&result.findings||[]){const label=rowsByKey.get(auditExportFindingKey(finding))||AUDIT_EXPORT_NO_DISCIPLINE;const entry=totals.get(label)||{label,equipmentCount:0,findingCount:0};entry.findingCount++;totals.set(label,entry);}
   return [...totals.values()].sort((left,right)=>right.equipmentCount-left.equipmentCount||natCmp(left.label,right.label));
 }
 function auditExportHeaderRow(sheet,rowIndex,headers,alignments){
@@ -503,7 +521,7 @@ function auditExportFindingsSheet(result,groups){
   const milestoneByRow=new Map(),descriptionByRow=new Map();
   for(const group of groups)for(const line of group.lines){
     const key=auditExportRowKey(line.row);
-    milestoneByRow.set(key,group.label);descriptionByRow.set(key,clean(line.row.equipmentDescription));
+    milestoneByRow.set(key,clean(line.row.milestone)||AUDIT_EXPORT_NO_MILESTONE);descriptionByRow.set(key,clean(line.row.equipmentDescription));
   }
   const aoa=[[AUDIT_EXPORT_BACK_LINK],[...AUDIT_EXPORT_FINDING_HEADERS]];
   const findings=result&&result.findings||[];
@@ -1147,8 +1165,8 @@ export async function exportAuditCorrectionsXlsx(){
 export function buildAuditActionsWorkbook(result,sessionName,options={}){
   const workbook=XLSX.utils.book_new(),used=new Set(['index','actionable','_action queue']),byRule=new Map(),bySource=new Map(),byTag=new Map();
   const excluded=new Set(options.excludedIds||[]),disabled=new Set(options.disabledRules||[]),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
-  for(const row of result.rows||[]){
-    bySource.set(auditCorrectionSourceKey(row._source),row);
+  for(const row of auditExportReportRows(result)){
+    bySource.set(auditExportRowKey(row),row);
     const id=auditNormId(row.equipmentId),rows=byTag.get(id)||[];rows.push(row);byTag.set(id,rows);
   }
   for(const finding of result.findings||[]){
@@ -1171,7 +1189,7 @@ export function buildAuditActionsWorkbook(result,sessionName,options={}){
     for(const [patternAt,findings] of patterns.entries()){
       findings.sort((a,b)=>natCmp(a.equipmentId,b.equipmentId)||natCmp(a.sheet,b.sheet)||(a.row||0)-(b.row||0));
       for(const finding of findings){
-        const candidates=byTag.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditCorrectionSourceKey(finding))||(candidates.length===1?candidates[0]:{});
+        const candidates=byTag.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditExportFindingKey(finding))||(candidates.length===1?candidates[0]:{});
         aoa.push([AUDIT_EXPORT_UNTICKED,AUDIT_EXPORT_UNTICKED,patternAt+1,clean(finding.equipmentId),clean(row.equipmentDescription),clean(finding.why),printable(finding.actual)??'',printable(finding.expected)??'',clean(finding.recommendation),clean(finding.field),clean(row.closestParent),clean(row.dependencies),clean(row.upn),clean(row.systemName),clean(row.discipline),clean(row.building),clean(row.milestoneParent),clean(row.milestone),AUDIT_EXPORT_SEVERITY_LABELS[finding.severity]||finding.severity,'','',clean(finding.sheet),finding.row||'']);
         queueEntries.push({sheetName:group.sheetName,row:aoa.length,rule:group.rule.title});
         shading.push(patternAt%2);
@@ -1290,8 +1308,8 @@ export function buildAuditTrackerWorkbook(currentResult,sessionName,options={}){
   const disabled=new Set(options.disabledRules||[]),excluded=new Set(options.excludedIds||[]),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
   const inScope=finding=>!disabled.has(finding.rule?.id)&&!completed.has(auditNormId(finding.equipmentId))&&(!excluded.has(finding.id)||actioned.has(finding.id));
   const bySource=new Map(),byId=new Map();
-  for(const row of [...(currentResult&&currentResult.rows||[]),...(result&&result.rows||[])]){
-    if(row._source)bySource.set(auditCorrectionSourceKey(row._source),row);
+  for(const row of auditExportCombinedReportRows(currentResult,result)){
+    bySource.set(auditExportRowKey(row),row);
   }
   for(const row of bySource.values()){const key=auditNormId(row.equipmentId),rows=byId.get(key)||[];rows.push(row);byId.set(key,rows);}
   const findingKey=finding=>JSON.stringify([finding.sheet||'',finding.row||0,finding.rule?.id||finding.ruleId||'',finding.row?'':auditNormId(finding.equipmentId)]);
@@ -1299,7 +1317,7 @@ export function buildAuditTrackerWorkbook(currentResult,sessionName,options={}){
   for(const finding of currentResult&&currentResult.findings||[])if(inScope(finding)&&!baselineKeys.has(findingKey(finding))){findings.push(finding);baselineKeys.add(findingKey(finding));}
   const groups=new Map();
   for(const finding of findings){
-    const candidates=byId.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditCorrectionSourceKey(finding))||(candidates.length===1?candidates[0]:null);
+    const candidates=byId.get(auditNormId(finding.equipmentId))||[],row=bySource.get(auditExportFindingKey(finding))||(candidates.length===1?candidates[0]:null);
     const milestone=clean(row&&row.milestone)||'No L2 milestone';
     const discipline=clean(row&&row.discipline)||'No discipline';
     const name=byDiscipline?discipline:milestone;

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.47.1",
+    "date": "2026-09-21",
+    "type": "fix",
+    "notes": "- Improved finding filters and review controls\n- Fixed inconsistencies in reports and exports"
+  },
+  {
     "version": "1.47.0",
     "date": "2026-09-18",
     "type": "feature",

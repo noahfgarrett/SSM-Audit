@@ -33,6 +33,9 @@ test('rule selection scopes to shown pending findings and drops hidden or fully 
  assert.deepEqual(Array.from(api.modifyActiveFindings(groups[0].rules[0].matches),f=>f.id),['pending']);
  s.selectedActionRules.add('b');api.syncModifyRuleSelection();assert.equal(node('#modifySelectAll').checked,true);
  groups[0].rules=groups[0].rules.slice(1);api.syncModifyRuleSelection();assert.deepEqual([...s.selectedActionRules],['b']);
+ groups[0].rules.push({rule:{id:'coverage'},matches:[{id:'missing',rule:{category:'missing-tags'}}]});
+ s.selectedActionRules.add('coverage');api.syncModifyRuleSelection();
+ assert.deepEqual([...s.selectedActionRules],['b'],'review-only coverage cannot enter a metadata correction batch');
 });
 test('milestone lookups reuse their indexes across 500 suggestions and refresh for a new reference',()=>{
  const reference=auditReadReferenceAoa([['L2 ID','Title','L1 ID'],...Array.from({length:1000},(_,i)=>[`DEMO-L2-M1-${i+1}`,`Phase ${i+1}`,'DEMO-L1-M1-10'])],'milestones','Register');

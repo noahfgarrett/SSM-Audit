@@ -15,6 +15,7 @@ import { auditReadMilestoneMigration, auditReadMigrationSettings, auditMigration
 import { auditActionEntry, auditActionPolicy } from '../src/audit/actions.js'
 import { auditSessionResult, auditPrepareInWorker } from '../src/audit/review.js'
 import { buildAuditUpdateBatches } from '../src/audit/export.js'
+import { coverageReviewOnly } from '../src/ui/audit.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js', import.meta.url), 'utf8'), { filename: 'sheetjs.js' })
 const ui = readFileSync(new URL('../src/ui/audit.js', import.meta.url), 'utf8')
@@ -51,7 +52,7 @@ function reviewHarness(session) {
     return nodes.get(selector)
   }
   const context = vm.createContext({
-    S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,auditSessionResult,auditActionEntry,auditActionPolicy,
+    S: { session, comparison: { targetSnapshot: session.snapshot, result: null } }, XLSX, clean, esc,auditSessionResult,auditActionEntry,auditActionPolicy,coverageReviewOnly,
     importAuditWorkbook:async(file,{referenceKind})=>{
       const workbook=XLSX.read(file.bytes,{type:'array',dense:true});
       return {references:auditReferenceSheets(workbook,referenceKind).map(name=>auditReadReferenceWorkbook(workbook,referenceKind,name))};

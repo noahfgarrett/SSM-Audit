@@ -28,7 +28,8 @@ test('reference help and Guide share the same plain-language scope and limitatio
 test('Guide distinguishes drafts, reviewed findings, saved sessions and offline exports', () => {
   const body = GUIDE_SECTIONS.map(section => section.body).join('\n')
   for (const text of ['Apply changes', 'Cancel', 'Cleared in draft', 'Save review', 'Load review', 'Updated Registry', 'Correction Log', 'Tracker']) assert(body.includes(text))
-  assert.doesNotMatch(body,/Preview changes|Apply to draft|Mark reviewed|Accept an exception/)
+  assert.doesNotMatch(body,/Preview changes|Apply to draft|Accept an exception/)
+  assert.match(body,/Mark reviewed<\/b> records your review without adding equipment or changing the registry export/)
   assert.match(body, /Workbook ticks do not change Exto or sync back into the app/)
   assert.match(body, /different registry revision is rejected/)
   assert.match(body, /fallback checks may run/)
