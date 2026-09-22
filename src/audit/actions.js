@@ -13,6 +13,7 @@ export const AUDIT_ACTION_FIELDS=Object.freeze({
   'L1 Milestone Parent':'milestoneParent','Milestone Parent':'milestoneParent',
   'Item Master Unique Identifier':'itemMaster','Equipment Classification':'equipmentClassification',
   'Equipment Description':'equipmentDescription',
+  'Intel PM Email Address':'intelPmEmail','Superintendent Email Address':'superintendentEmail','Cx Engineer Email Address':'cxEngineerEmail',
 });
 const AUDIT_ACTION_COLUMNS=new Map(EXTO_REV21_COLUMNS.map(column=>[column.field,column]));
 const AUDIT_ACTION_PROPS=new Set(Object.values(AUDIT_ACTION_FIELDS));
@@ -96,7 +97,7 @@ async function auditReviewDigest(value){
 export async function auditReviewDocument(session,{baselineRevision}={}){
   return {format:'ssm-audit-review',version:1,baselineRevision:baselineRevision||await auditRegistryRevision(session.baselineSnapshot||session.snapshot),
     referencesRevision:await auditReviewReferenceRevision(session.references),changes:session.changes||[],actioned:[...(session.actioned||[])],reviewed:[...(session.reviewedIds||session.actioned||[])],excluded:[...(session.excluded||[])],history:session.reviewHistory||[],filterViews:session.filterViews||[],
-    milestoneMigration:session.milestoneMigration||{enabled:false,profile:null},createdAt:new Date().toISOString()};
+    milestoneMigration:session.milestoneMigration||{enabled:false,profile:null},updateEmails:session.updateEmails===true,createdAt:new Date().toISOString()};
 }
 function auditReviewReferenceRevision(references={}){return auditReviewDigest([...['milestones','itemMasters'].map(kind=>[kind,references[kind]||null]),...['mel','easyPower','cable','pmd'].filter(kind=>references[kind]).map(kind=>[kind,references[kind]])]);}
 function auditReviewFilterViews(views=[]){
@@ -114,6 +115,7 @@ function auditReviewFilterViews(views=[]){
   });
 }
 export async function auditReadReviewDocument(document,baseline,references={}){
+  if(document.updateEmails!==undefined&&typeof document.updateEmails!=='boolean')throw new Error('The review email setting is invalid.');
   if(document?.format!=='ssm-audit-review'||document.version!==1||document.baselineRevision!==await auditRegistryRevision(baseline))throw new Error('This review belongs to a different registry revision. No changes were loaded.');
   if(document.referencesRevision!==await auditReviewReferenceRevision(references))throw new Error('Select the same reference workbooks before loading this review.');
   if(!Array.isArray(document.changes)||document.changes.length>baseline.rows.length*AUDIT_ACTION_PROPS.size)throw new Error('The review file contains too many corrections.');
@@ -121,7 +123,7 @@ export async function auditReadReviewDocument(document,baseline,references={}){
   const ids=value=>{if(!Array.isArray(value)||value.length>1000000||value.some(id=>typeof id!=='string'||id.length>100))throw new Error('The review file contains invalid decisions.');return new Set(value);};
   const history=Array.isArray(document.history)?document.history:[];
   if(history.length>10000||history.some(entry=>!entry||typeof entry.id!=='string'||entry.id.length>100||!Number.isFinite(Date.parse(entry.at))||!['corrected-draft','reviewed','exception'].includes(entry.disposition)||typeof entry.reason!=='string'||entry.reason.length>4000||typeof entry.owner!=='string'||entry.owner.length>200||!Array.isArray(entry.findingIds)||entry.findingIds.length>1000000||entry.findingIds.some(id=>typeof id!=='string'||id.length>100)||!Array.isArray(entry.changes)||entry.changes.some(change=>!change||!AUDIT_ACTION_FIELDS[change.field]||typeof change.before!=='string'||typeof change.value!=='string'||change.before.length>32767||change.value.length>32767)))throw new Error('The review history is invalid.');
-  return {snapshot,changes:document.changes,actioned:ids(document.actioned),reviewed:ids(document.reviewed||document.actioned),excluded:ids(document.excluded),history,filterViews:auditReviewFilterViews(document.filterViews),milestoneMigration:auditReadMigrationSettings(document.milestoneMigration)};
+  return {snapshot,changes:document.changes,actioned:ids(document.actioned),reviewed:ids(document.reviewed||document.actioned),excluded:ids(document.excluded),history,filterViews:auditReviewFilterViews(document.filterViews),milestoneMigration:auditReadMigrationSettings(document.milestoneMigration),updateEmails:document.updateEmails===true};
 }
 
 export function auditRecommendationContext(snapshot,references={},extras={}){

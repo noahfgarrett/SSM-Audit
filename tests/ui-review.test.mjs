@@ -59,7 +59,7 @@ function reviewHarness(session) {
     },
     prepareAuditReview:async(s,changes,migration,migrationChanged,report,options={})=>{
       if(changes.length)calls.preflight++;
-      return auditPrepareInWorker(reviewCache,{changes,previousChanges:s.changes||[],references:options.references||s.references||{},referencesChanged:options.references!==undefined,migration,migrationChanged,...(!reviewCache.baseline?{baseline:s.baselineSnapshot,file:new Blob([s.sourceBytes||new Uint8Array()])}:{})},report);
+      return auditPrepareInWorker(reviewCache,{changes,previousChanges:s.changes||[],references:options.references||s.references||{},referencesChanged:options.references!==undefined,emailUpdateScope:options.emailUpdateScope,completedEquipmentIds:[...(s.status?.completed||[])],migration,migrationChanged,...(!reviewCache.baseline?{baseline:s.baselineSnapshot,file:new Blob([s.sourceBytes||new Uint8Array()])}:{})},report);
     },
     crypto:globalThis.crypto,AUDIT_ACTION_FIELDS,auditFindingRow,auditMakeCorrection,auditCorrectionKey,auditRecommendationContext,auditCustomCorrection,auditMergeCorrections,isExcludedId:()=>false,
     auditReadMilestoneMigration,auditReadMigrationSettings,auditMigrationReferences,
@@ -80,10 +80,47 @@ function reviewHarness(session) {
   })
   vm.runInContext(reviewSource, context, { filename: 'audit-review-helpers.js' })
   vm.runInContext(ui.slice(end,ui.indexOf('\nfunction syncModifyPatternBox(',end)),context)
-  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,sessionAudit})', context)
+  const api = vm.runInContext('({loadReviewFile,reviewPrepare,reviewRememberUndo,reviewInstallDraft,reviewUndoLast,openReferencesDialog,openActionDialog,openEmailUpdate,sessionAudit})', context)
   return { context, api, calls, hooks, messages, node, lists }
 }
 
+function addEmailDirectory(session){
+  const book=XLSX.read(session.sourceBytes,{type:'array'});
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([
+    ['Discipline','Intel PM Email Address','Superintendent Email Address','Cx Engineer Email Address'],
+    ['ELECTRICAL','pm@example.com','super@example.com','cx@example.com'],
+  ]),'Emails');
+  session.sourceBytes=XLSX.write(book,{type:'array',bookType:'xlsx'});
+}
+test('Update Emails previews the whole incomplete registry, supports cancel and undo, and leaves automatic updates off',async()=>{
+  const session=registry({},[{equipmentId:'EQ-2',discipline:'ELECTRICAL'}]);addEmailDirectory(session);
+  session.updateEmails=false;session.modifySearch='not-visible';session.status={completed:new Set(['EQ-2'])};
+  const h=reviewHarness(session);
+  await h.api.openEmailUpdate();
+  assert.equal(session.changes.length,0);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/pm@example.com/);
+  assert.doesNotMatch(h.node('#actionPreviewRows').innerHTML,/EQ-2/);
+  assert.doesNotMatch(h.node('#actionModalBody').innerHTML,/id="actionBack"/);
+  h.node('#actionCancel').onclick();assert.equal(session.changes.length,0);
+  await h.api.openEmailUpdate();await h.node('#actionApply').onclick();
+  assert.equal(session.changes.length,3);assert.equal(session.snapshot.rows[0].intelPmEmail,'pm@example.com');
+  assert.equal(session.updateEmails,false);
+  assert.match(h.node('#actionModalBody').innerHTML,/3 cells updated/);
+  h.node('#actionCancel').onclick();await h.api.reviewUndoLast();
+  assert.equal(session.changes.length,0);assert.equal(session.snapshot.rows[0].intelPmEmail,'');
+});
+test('opted-in emails appear in the metadata confirmation and apply in the same batch',async()=>{
+  const session=registry();addEmailDirectory(session);session.updateEmails=true;
+  const h=reviewHarness(session),issue=session.rawResult.findings.find(f=>f.rule.id==='metadata.system-upn-mismatch');
+  assert.ok(issue);
+  h.api.openActionDialog('System mismatch',[issue]);
+  await h.node('#actionApply').onclick();
+  assert.match(h.node('#actionPreviewRows').innerHTML,/pm@example.com/);
+  assert.equal(session.changes.length,0);
+  await h.node('#actionApply').onclick();
+  assert.equal(session.snapshot.rows[0].intelPmEmail,'pm@example.com');
+  assert.equal(session.changes.filter(c=>c.prop.endsWith('Email')).length,3);
+});
 test('metadata target switch preserves edits and applies to the chosen parent row',async()=>{
   const session=registry({systemName:system,building:'DEMO-A',closestParent:'PARENT'},[{equipmentId:'PARENT',building:'DEMO-B',upn:'602',systemName:system,discipline:'ELECTRICAL',closestParent:system}]);
   const h=reviewHarness(session),child={value:'child'},parent={value:'parent'};h.lists.set('input[name="actionTarget"]',[child,parent]);

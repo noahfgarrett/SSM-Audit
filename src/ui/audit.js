@@ -719,6 +719,7 @@ function openReferencesDialog(navigate){
 }
 function reviewRememberUndo(){
   S.session.reviewUndo.push({changes:[...(S.session.changes||[])],actioned:[...(S.session.actioned||[])],reviewed:[...(S.session.reviewedIds||[])],excluded:[...(S.session.excluded||[])],history:[...S.session.reviewHistory],filterViews:[...(S.session.filterViews||[])],milestoneMigration:S.session.milestoneMigration||{enabled:false,profile:null}});
+  S.session.reviewUndo.at(-1).updateEmails=S.session.updateEmails===true;
   if(S.session.reviewUndo.length>20)S.session.reviewUndo.shift();
 }
 function reviewInstallDraft(prepared){
@@ -730,7 +731,7 @@ function reviewInstallDraft(prepared){
   session.changesRev++;session.actionedRev++;session.auditedAt=Date.now();session.reviewDirty=true;scheduleReviewAutosave();
   modifyRecommendationContext=null;S.comparison.targetSnapshot=session.snapshot;S.comparison.result=null;refreshSessionResult();
 }
-async function reviewPrepare(changes,migration){
+async function reviewPrepare(changes,migration,options={}){
   const session=S.session,revision=session.changesRev;let prepared;
   await runWithProgress('Checking the draft','Original workbook unchanged',async(checkpoint,report)=>{
     report(.05,'Preparing background review');await checkpoint();
@@ -738,15 +739,15 @@ async function reviewPrepare(changes,migration){
     if(S.session!==session||session.changesRev!==revision)throw new Error('The draft changed. Preview the corrections again.');
     const settings=migration===undefined?session.milestoneMigration:auditReadMigrationSettings(migration);
     const migrationChanged=migration!==undefined&&JSON.stringify(settings)!==JSON.stringify(session.milestoneMigration||{enabled:false,profile:null});
-    const result=await prepareAuditReview(session,changes,settings,migrationChanged,report);await checkpoint();
-    prepared={...result,changes,revision};report(1,'Preview ready');
+    const result=await prepareAuditReview(session,changes,settings,migrationChanged,report,options);await checkpoint();
+    prepared={...result,changes:result.changes||changes,revision};report(1,'Preview ready');
   });
   if(S.session!==session||session.changesRev!==revision)throw new Error('The draft changed. Preview the corrections again.');
   return prepared;
 }
 async function reviewUndoLast(navigate){
   const session=S.session,undo=session.reviewUndo.pop();if(!undo)return;
-  try{const prepared=await reviewPrepare(undo.changes,undo.milestoneMigration);S.session.actioned=new Set(undo.actioned);S.session.reviewedIds=new Set(undo.reviewed);S.session.excluded=new Set(undo.excluded);S.session.reviewHistory=undo.history;S.session.filterViews=undo.filterViews||[];reviewInstallDraft(prepared);closeActionDialog();rerenderModifications(navigate||currentNavigate);toast('Previous review state restored');}
+  try{const prepared=await reviewPrepare(undo.changes,undo.milestoneMigration);S.session.actioned=new Set(undo.actioned);S.session.reviewedIds=new Set(undo.reviewed);S.session.excluded=new Set(undo.excluded);S.session.reviewHistory=undo.history;S.session.filterViews=undo.filterViews||[];S.session.updateEmails=undo.updateEmails===true;reviewInstallDraft(prepared);closeActionDialog();rerenderModifications(navigate||currentNavigate);toast('Previous review state restored');}
   catch(error){if(S.session===session)session.reviewUndo.push(undo);toast(error.message);}
 }
 async function saveReviewFile(){
@@ -780,7 +781,7 @@ async function restoreReviewDocument(saved,navigate,source,session=S.session,rev
     const prepared=await reviewPrepare(restored.changes,restored.milestoneMigration);checkSession();
     if(prepared.impact.unsafe.length)throw new Error('The saved corrections now introduce errors. No changes were loaded.');
     const known=new Set([...S.session.baselineResult.findings,...prepared.result.findings].map(finding=>finding.id));
-    reviewRememberUndo();S.session.actioned=new Set([...restored.actioned].filter(id=>known.has(id)));S.session.reviewedIds=new Set([...restored.reviewed].filter(id=>known.has(id)));S.session.excluded=new Set([...restored.excluded].filter(id=>known.has(id)));S.session.reviewHistory=restored.history;S.session.filterViews=restored.filterViews||[];reviewInstallDraft(prepared);
+    reviewRememberUndo();S.session.actioned=new Set([...restored.actioned].filter(id=>known.has(id)));S.session.reviewedIds=new Set([...restored.reviewed].filter(id=>known.has(id)));S.session.excluded=new Set([...restored.excluded].filter(id=>known.has(id)));S.session.reviewHistory=restored.history;S.session.filterViews=restored.filterViews||[];S.session.updateEmails=restored.updateEmails===true;reviewInstallDraft(prepared);
     if(autosave){navigate(S.screen==='upload'?'dashboard':S.screen);toast('Saved progress restored');}
     else{rerenderModifications(navigate);toast('Review restored and draft re-audited');}
   }catch(error){toast(autosave?`Saved progress could not be restored: ${error.message||'unknown error'}`:(error.message||'This review file could not be loaded'));}
@@ -816,6 +817,7 @@ function paintActionDialog(){
   const cells=scope.incoming?.length||0,cleared=scope.prepared?.impact.resolved.length||0;
   $('#actionModalBody').innerHTML=`<section class="action-simple"><span class="eyebrow">${success?'Completed in working draft':editing?'1. Review and edit':'2. Confirm changes'}</span><h3 id="actionTitle">${success?'Changes applied':esc(scope.label)}</h3>
     ${success?`<div class="action-success" role="status">${ic('circle-check')}<div><b>${cells.toLocaleString()} ${cells===1?'cell':'cells'} updated</b><span>${cleared.toLocaleString()} findings cleared. ${scope.prepared.impact.introduced.length.toLocaleString()} new findings.</span></div></div>`:`<p class="action-summary">${editing?`${scope.findings.length.toLocaleString()} findings${scope.unsupported?`; ${scope.unsupported.toLocaleString()} need a verified value`:''}`:`${cells.toLocaleString()} cells will change; ${cleared.toLocaleString()} findings will clear`}</p>`}
+    ${scope.prepared?.emailSummary?`<p class="action-summary">${esc(emailUpdateSummary(scope.prepared.emailSummary))}</p>`:''}
     ${editing&&scope.canTarget?`<fieldset class="action-target" ${scope.session.reviewBusy?'disabled':''}><legend>Edit metadata on</legend><div class="action-target-options">${['child','parent'].map(target=>`<label><input type="radio" name="actionTarget" value="${target}" ${scope.target===target?'checked':''}>${target==='child'?'Child':'Parent'}</label>`).join('')}</div></fieldset>`:''}
     ${editing&&scope.findings.length>1?`<div class="action-mode-tabs" role="tablist" aria-label="Edit mode"><button type="button" role="tab" data-action-mode="bulk" aria-selected="${scope.mode==='bulk'}" aria-controls="actionFields">Apply to All</button><button type="button" role="tab" data-action-mode="individual" aria-selected="${scope.mode!=='bulk'}" aria-controls="actionFields">Individual Equipment</button></div>`:''}
     ${!scope.suggestions.length?`<p class="action-empty">${scope.canTarget&&scope.target==='parent'?'The parent must resolve to one unique registry row before its metadata can be edited.':'This issue needs an engineering decision or source-row correction. No automatic cell edit is offered.'}</p>`:''}
@@ -823,7 +825,7 @@ function paintActionDialog(){
     <fieldset id="actionFields" class="action-fields"><div id="actionBulkFields" class="action-bulk-fields" ${editing&&scope.mode==='bulk'?'':'hidden'}>${editing&&scope.mode==='bulk'?actionBulkHtml(scope):''}</div><div class="action-preview" ${scope.suggestions.length&&!(editing&&scope.mode==='bulk')?'':'hidden'}><table><thead><tr><th>Equipment / ${editing?'issue':'field'}</th><th>Current</th><th>${editing?'Suggested / your value':success?'Applied':'New value'}</th></tr></thead><tbody id="actionPreviewRows"></tbody></table></div></fieldset>
     <div class="action-pager" id="actionPager"><button class="icon-btn btn ghost sm" id="actionPrevious" aria-label="Previous changes" title="Previous changes">${ic('chevron-left')}</button><span id="actionPage"></span><button class="icon-btn btn ghost sm" id="actionNext" aria-label="Next changes" title="Next changes">${ic('chevron-right')}</button></div>
     <div id="actionImpact" class="action-impact" role="status" aria-live="polite">${!editing&&scope.prepared.impact.migrationConflicts?.length?`${scope.prepared.impact.migrationConflicts.length} L1/L2 pairing conflicts remain flagged after these project-approved replacements. L2 assignments will not be changed.`:!editing&&!success&&scope.prepared.impact.introduced.length?`${scope.prepared.impact.introduced.length} new findings need review. No new errors were introduced.`:''}</div>
-    <footer class="export-foot"><span>${success?'Changed cells are highlighted yellow in Updated Registry.':'Original workbook unchanged'}</span><div>${!editing&&!success?'<button class="btn ghost" id="actionBack">Edit values</button>':''}<button class="btn ghost" id="actionCancel">${success?'Done':'Cancel'}</button><button class="btn primary" id="actionApply" ${scope.suggestions.length?'':'hidden disabled'}>${success?'View all changes':editing?'Review changes':'Apply changes'}</button></div></footer></section>`;
+    <footer class="export-foot"><span>${success?'Changed cells are highlighted yellow in Updated Registry.':'Original workbook unchanged'}</span><div>${!editing&&!success&&!scope.manualEmails?'<button class="btn ghost" id="actionBack">Edit values</button>':''}<button class="btn ghost" id="actionCancel">${success?'Done':'Cancel'}</button><button class="btn primary" id="actionApply" ${scope.suggestions.length?'':'hidden disabled'}>${success?'View all changes':editing?'Review changes':'Apply changes'}</button></div></footer></section>`;
   $('#actionCancel').onclick=closeActionDialog;
   $$('[data-action-mode]').forEach(button=>button.onclick=()=>{if(scope.session.reviewBusy||scope.stage!=='edit')return;scope.mode=button.dataset.actionMode;scope.offset=0;paintActionDialog();});
   $('#actionBulkFields').oninput=event=>{
@@ -872,7 +874,8 @@ async function processActionDialog(scope){
         }
         incoming=[...cells.values()];if(!incoming.length)throw new Error('No values have changed. Enter a correction or cancel.');
         return auditMergeCorrections(session.baselineSnapshot,session.changes,incoming);
-      });if(actionScope!==scope||S.session!==session)return;
+      },undefined,session.updateEmails?{emailUpdateScope:'changed'}:{});if(actionScope!==scope||S.session!==session)return;
+      if(prepared.emailUpdates?.length)incoming.push(...prepared.emailUpdates);
       if(prepared.impact.unsafe.length)throw new Error(`No changes applied. ${prepared.impact.unsafe[0].rule.title}. Adjust the values and review again.`);
       scope.incoming=incoming;scope.prepared=prepared;scope.stage='review';scope.offset=0;paintActionDialog();$('#actionApply').focus();
     }else{
@@ -894,6 +897,25 @@ function actionSuggestions(findings,context,target,provided){
     if(!entry)return false;const key=JSON.stringify(entry.changes.map(change=>[auditCorrectionKey(change),change.value]).sort());
     if(seen.has(key))return false;seen.add(key);return true;
   }).map(entry=>({...entry,changes:entry.changes.map(change=>({...change}))}));
+}
+function emailUpdateSummary(summary){
+  return [`${summary.changedCells.toLocaleString()} email cells matched using the original imported discipline.`,summary.missingDisciplines.length?`No directory match for: ${summary.missingDisciplines.join(', ')}.`:'',summary.unavailableFields.length?`Missing registry columns: ${summary.unavailableFields.join(', ')}.`:''].filter(Boolean).join(' ');
+}
+async function openEmailUpdate(navigate){
+  const session=S.session;if(session.reviewBusy)return;
+  const token={kind:'email-update',session};actionScope=token;session.reviewBusy=true;
+  try{
+    const prepared=await reviewPrepare(session.changes,undefined,{emailUpdateScope:'all'});
+    if(S.session!==session||actionScope!==token)return;
+    if(!prepared.emailUpdates?.length){toast(`No email changes prepared. ${emailUpdateSummary(prepared.emailSummary)}`);actionScope=null;return;}
+    if(prepared.impact.unsafe.length)throw new Error('Email changes could not be validated. No changes applied.');
+    actionScope={label:'Update Emails',session,revision:prepared.revision,prepared,incoming:prepared.emailUpdates,suggestions:[{changes:[]}],findings:[],stage:'review',offset:0,navigate,manualEmails:true};
+    paintActionDialog();
+    const modal=$('#actionModal');actionOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+    actionTrapCleanup?.();actionTrapCleanup=activateFocusTrap(modal,closeActionDialog);$('#actionModalClose').onclick=closeActionDialog;
+    modal.onclick=event=>{if(event.target===modal&&!session.reviewBusy)closeActionDialog();};
+  }catch(error){if(actionScope===token)actionScope=null;toast(error.message||'Email updates could not be prepared.');}
+  finally{session.reviewBusy=false;}
 }
 function openCoverageReview(label,findings,navigate){
   const session=S.session,scope={kind:'coverage-review',session,findings};actionScope=scope;
@@ -1072,7 +1094,7 @@ export function renderModifications(navigate){
   $('#view').innerHTML=`<section class="modify-shell">
     <div class="screen-heading"><div><span class="eyebrow">Your judgement, applied</span><h2>Actions</h2><p>${esc(S.session.name)}</p></div><div class="actions-exports"><button class="btn" id="exportActions" type="button">${ic('file-down')}Export Actions</button><button class="btn primary" id="exportUpdatedRegistry" type="button" ${changesCount&&S.session.sourceBytes?'':'disabled'}>${ic('file-spreadsheet')}Updated Registry</button></div></div>
     ${S.session.lastRegistryExport?`<p class="registry-export-summary" role="status"><b>Last export:</b> ${esc(auditUpdateExportSummary(S.session.lastRegistryExport))}</p>`:''}
-    <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands">${referencesButtonHtml()}<button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
+    <div class="review-toolbar"><div class="review-totals"><span><b>${S.session.draftResolved.size.toLocaleString()}</b> cleared in draft</span><span><b>${(S.session.reviewedIds?.size||0).toLocaleString()}</b> reviewed</span><span><b>${changesCount.toLocaleString()}</b> changed cells</span></div><div class="review-commands"><button class="btn ghost sm" id="updateEmails" type="button" ${S.session.reviewBusy?'disabled':''}>${ic('mail')}Update Emails</button><label class="email-update-toggle" title="Use imported discipline emails when applying future metadata changes"><input id="autoUpdateEmails" type="checkbox" role="switch" ${S.session.updateEmails?'checked':''} ${S.session.reviewBusy?'disabled':''}>Update emails with changes</label>${referencesButtonHtml()}<button class="btn ghost sm" id="reviewHistory">${ic('history')}History</button><button class="btn ghost sm" id="reviewSave">${ic('save')}Save review</button><button class="btn ghost sm" id="reviewLoad">${ic('folder-open')}Load review</button><button class="icon-btn btn ghost sm" id="reviewUndo" ${S.session.reviewUndo.length?'':'disabled'} aria-label="Undo last review batch" title="Undo last review batch">${ic('undo-2')}</button></div></div><input id="reviewFile" type="file" accept=".json" hidden>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="modifySearch" aria-label="Search findings" placeholder="Search tags and findings" value="${esc(S.session.modifySearch||'')}"></div><select id="modifyMilestone" class="modify-dim" aria-label="Filter by L2 milestone"><option value="all">All L2 milestones</option><option value="none" ${S.session.modifyMilestone==='none'?'selected':''}>No L2 milestone</option>${milestones.map(name=>`<option value="${esc(name)}" ${S.session.modifyMilestone===name?'selected':''}>${esc(name)}</option>`).join('')}</select><select id="modifyDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${S.session.modifyDiscipline==='none'?'selected':''}>No discipline</option>${disciplines.map(name=>`<option value="${esc(name)}" ${S.session.modifyDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select><span class="modify-chip" id="modifyIncluded">${result?result.summary.findings.toLocaleString():0} counted</span><span class="modify-chip aside" id="modifyAside">${aside.toLocaleString()} dismissed</span>${S.session.status&&S.session.status.matched?`<span class="modify-chip done" title="Marked Completed on the Equipment Status Report tab — their findings are out of every metric and are not listed here">${S.session.status.matched.toLocaleString()} completed on site</span>`:''}${filtered?`<span class="modify-chip match">${matchTotal.toLocaleString()} match${matchTotal===1?'':'es'}</span>`:''}${changesCount?`<button class="modify-chip changes" type="button" id="modifyChanges" title="Metadata corrections staged for the Updated Registry Export — click to review">${changesCount.toLocaleString()} change${changesCount===1?'':'s'} staged</button>`:''}<span class="spacer"></span>${filtered&&matchTotal?`<button class="btn ghost" type="button" id="modifyActionMatches" title="Review available changes for the findings shown">${ic('clipboard-list')}Review matches</button><button class="btn ghost" type="button" id="modifyKeepMatches" title="Keep every finding shown">${ic('check')}Keep matches</button><button class="btn ghost" type="button" id="modifyAsideMatches" title="Dismiss every finding shown">${ic('circle-x')}Dismiss matches</button>`:''}<button class="btn ghost" type="button" id="modifyExpandAll" title="Open every group and check">${ic('chevrons-down')}Expand all</button><button class="btn ghost" type="button" id="modifyCollapseAll" title="Close every group and check">${ic('chevrons-up')}Collapse all</button><button class="btn ghost" type="button" id="modifyRestore" ${aside?'':'disabled'}>${ic('rotate-ccw')}Restore all</button></div>
 <div class="modify-selection"><label><input type="checkbox" id="modifySelectAll">Select all shown rules</label><button class="btn primary sm" type="button" id="modifyActionSelected" disabled>${ic('zap')}Action selected</button></div><div class="modify-body" id="modifyBody">${groups.length?groups.map(group=>{
       const closed=!filtered&&(S.session.modifyClosedCats||[]).includes(group.category);
@@ -1081,6 +1103,11 @@ export function renderModifications(navigate){
   </section>`;
   $('#reviewSave').onclick=saveReviewFile;$('#reviewLoad').onclick=()=>$('#reviewFile').click();$('#reviewFile').onchange=event=>loadReviewFile(event.target.files[0],navigate);$('#reviewHistory').onclick=()=>openChangesDialog(navigate);$('#reviewUndo').onclick=()=>reviewUndoLast(navigate);$('#reviewReferences').onclick=()=>openReferencesDialog(navigate);
   $('#modifySelectAll').onchange=event=>{const selected=modifyRuleSelection();selected.clear();if(event.target.checked)for(const entry of modifySelectableRules())selected.add(entry.rule.id);syncModifyRuleSelection();};
+  $('#updateEmails').onclick=()=>openEmailUpdate(navigate);
+  $('#autoUpdateEmails').onchange=event=>{
+    if(S.session.reviewBusy){event.target.checked=!!S.session.updateEmails;return;}
+    S.session.updateEmails=event.target.checked;S.session.reviewDirty=true;scheduleReviewAutosave();
+  };
   $('#modifyActionSelected').onclick=()=>{
     const selected=modifyRuleSelection(),entries=modifySelectableRules().filter(entry=>selected.has(entry.rule.id));
     const findings=modifyActiveFindings(entries.flatMap(entry=>entry.matches));

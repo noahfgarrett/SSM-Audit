@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.48.0",
+    "date": "2026-09-22",
+    "type": "feature",
+    "notes": "- Added email update controls\n- Improved review and export consistency"
+  },
+  {
     "version": "1.47.1",
     "date": "2026-09-21",
     "type": "fix",

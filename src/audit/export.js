@@ -7,7 +7,7 @@ import { prepareAuditReview } from '../io/import-client.js'
 import { runWithProgress, toast } from '../ui/feedback.js'
 import { SSM_AUDIT_RULES } from './engine.js'
 import { auditColumnName, auditNormId } from './model.js'
-import { auditActionPatternKey } from './actions.js'
+import { auditActionPatternKey, auditMakeCorrection, auditMergeCorrections, auditCorrectionKey } from './actions.js'
 import { AUDIT_FINDING_LEVELS, auditCoverageRows } from './engineering-references.js'
 
 function addSheet(workbook,sheet,name){XLSX.utils.book_append_sheet(workbook,sheet,name);}
@@ -938,8 +938,7 @@ export function buildAuditUpdateBatches(sourceBytes,baseline,changes,options={})
 /* ---- Emails tab ----
    A registry workbook may carry an "Emails" tab: Discipline, Intel PM Email
    Address, Superintendent Email Address, Cx Engineer Email Address. Every
-   exported equipment row then receives the addresses for its (corrected)
-   discipline, highlighted like any other change. */
+   explicit email update uses the original imported discipline. */
 export const AUDIT_EMAIL_FIELDS=Object.freeze([['intelPmEmail','INTEL PM EMAIL ADDRESS'],['superintendentEmail','SUPERINTENDENT EMAIL ADDRESS'],['cxEngineerEmail','CX ENGINEER EMAIL ADDRESS']]);
 export function auditEmailDisciplineKey(value){return extoRev21Norm(extoRev21EffectiveDiscipline(value));}
 export function auditEmailDirectory(workbook){
@@ -953,10 +952,42 @@ export function auditEmailDirectory(workbook){
   if(missing.length)return {sheet:name,byDiscipline:new Map(),rows:0,error:`The Emails tab is missing ${missing.join(', ')}.`};
   const byDiscipline=new Map();let rows=0;
   for(const row of aoa.slice(headerAt+1)){
-    const key=auditEmailDisciplineKey(row[columns.discipline]);if(!key||byDiscipline.has(key))continue;
-    byDiscipline.set(key,Object.fromEntries(AUDIT_EMAIL_FIELDS.map(([field])=>[field,clean(row[columns[field]])])));rows++;
+    const key=auditEmailDisciplineKey(row[columns.discipline]);if(!key)continue;
+    const entry=Object.fromEntries(AUDIT_EMAIL_FIELDS.map(([field])=>[field,clean(row[columns[field]])]));
+    if(byDiscipline.has(key)){
+      if(AUDIT_EMAIL_FIELDS.some(([field])=>entry[field]!==byDiscipline.get(key)[field]))return {sheet:name,byDiscipline:new Map(),rows:0,error:'The Emails tab has conflicting entries for one discipline. Reconcile those entries before updating emails.'};
+      continue;
+    }
+    byDiscipline.set(key,entry);rows++;
   }
   return {sheet:name,byDiscipline,rows,error:''};
+}
+export function auditPlanEmailUpdates(baseline,changes,directory,options={}){
+  if(!directory)throw new Error('Add an Emails tab to the registry workbook before updating emails.');
+  if(directory.error)throw new Error(directory.error);
+  const fields=[['intelPmEmail','Intel PM Email Address'],['superintendentEmail','Superintendent Email Address'],['cxEngineerEmail','Cx Engineer Email Address']];
+  const emailProps=new Set(fields.map(([prop])=>prop)),current=new Map(changes.map(change=>[auditCorrectionKey(change),change]));
+  const previous=new Map((options.previousChanges||[]).map(change=>[auditCorrectionKey(change),change]));
+  const affected=new Set(),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
+  for(const [key,change] of [...current,...previous]){
+    if(!emailProps.has(change.prop)&&(current.has(key)!==previous.has(key)||clean(current.get(key)?.value)!==clean(previous.get(key)?.value)))affected.add(auditCorrectionSourceKey(change.source));
+  }
+  const incoming=[],missing=new Set(),unavailable=new Set();let matchedRows=0;
+  for(const row of baseline.rows){
+    if(completed.has(auditNormId(row.equipmentId))||options.scope==='changed'&&!affected.has(auditCorrectionSourceKey(row._source)))continue;
+    const entry=directory.byDiscipline.get(auditEmailDisciplineKey(row.discipline));
+    if(!entry){missing.add(clean(row.discipline)||'(blank discipline)');continue;}
+    matchedRows++;
+    for(const [prop,label] of fields){
+      const value=clean(entry[prop]);if(!value)continue;
+      if(row._source.columns?.[prop]==null){unavailable.add(label);continue;}
+      const change=auditMakeCorrection(row,label,value,null,'Email directory matched to the original imported discipline.');
+      const key=auditCorrectionKey(change),existing=current.get(key),before=existing?existing.value:row[prop];
+      if(options.scope==='changed'&&existing&&existing.value!==previous.get(key)?.value)continue;
+      if(clean(before)!==value)incoming.push({...change,before:clean(before)});
+    }
+  }
+  return {changes:auditMergeCorrections(baseline,changes,incoming),emailUpdates:incoming,emailSummary:{matchedRows,changedCells:incoming.length,missingDisciplines:[...missing].sort(natCmp),unavailableFields:[...unavailable].sort(natCmp)}};
 }
 async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   options.onStage?.(.05,'Reading original metadata');
@@ -993,7 +1024,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   }
   options.onStage?.(.3,'Copying changed equipment with all metadata');
   let associationChanges=0,emailChanges=0;
-  const emails=auditEmailDirectory(source),emailMisses=new Set();
+  const emails=options.updateEmails===true?auditEmailDirectory(source):null,emailMisses=new Set();
   if(emails&&emails.error)auditCorrectionFail('EMAILS',emails.error);
   const makeWorkbook=selected=>{
   const headerRows=options.uploadTemplate?2:1,headings=[columns.map(column=>column.label)];
@@ -1029,9 +1060,8 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
       }
     }
     if(emails){
-      const disciplineColumn=origin.columns?.discipline,corrected=disciplineColumn!=null&&patch.has(disciplineColumn)?patch.get(disciplineColumn).value:row.discipline;
-      const entry=emails.byDiscipline.get(auditEmailDisciplineKey(corrected));
-      if(!entry)emailMisses.add(clean(corrected)||'(blank discipline)');
+      const entry=emails.byDiscipline.get(auditEmailDisciplineKey(row.discipline));
+      if(!entry)emailMisses.add(clean(row.discipline)||'(blank discipline)');
       else for(const [field] of AUDIT_EMAIL_FIELDS){
         const email=entry[field];if(!email)continue;
         const outputColumn=options.uploadTemplate?EXTO_REV21_COLUMNS.find(column=>column.field===field).index:layouts.get(origin.sheet)[origin.columns?.[field]];

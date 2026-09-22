@@ -3,7 +3,7 @@ import { auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from './references.
 import { auditEngineeringFindings, auditEngineeringRuleActive, SSM_AUDIT_ENGINEERING_RULES, AUDIT_ENGINEERING_KINDS } from './engineering-references.js'
 import { auditMigrationReferences, auditMigrationImpact } from './milestone-migration.js'
 import { auditApplyCorrections, auditCorrectionImpact } from './actions.js'
-import { validateAuditCorrections } from './export.js'
+import { validateAuditCorrections, auditEmailDirectory, auditPlanEmailUpdates } from './export.js'
 
 export function auditSessionResult(snapshot,references={},migration){
   references=auditMigrationReferences(references,migration);
@@ -19,9 +19,17 @@ export function auditSessionResult(snapshot,references={},migration){
 
 // This cache belongs to one worker and one original registry, never storage.
 export async function auditPrepareInWorker(cache,data,report=()=>{}){
-  if(data.baseline){cache.baseline=data.baseline;cache.file=data.file;cache.workbook=null;cache.contextKey=null;cache.previous=null;cache.importedResult=data.baselineResult;}
+  if(data.baseline){cache.baseline=data.baseline;cache.file=data.file;cache.workbook=null;cache.emailDirectory=null;cache.contextKey=null;cache.previous=null;cache.importedResult=data.baselineResult;}
   if(!cache.baseline)throw new Error('Open the original registry before reviewing changes.');
-  const baseline=cache.baseline,{changes,references,migration,previousChanges}=data;
+  const baseline=cache.baseline,{references,migration,previousChanges}=data;
+  let changes=data.changes,emailPlan;
+  if(data.emailUpdateScope){
+    report(.08,'Matching emails to imported disciplines');
+    if(!cache.workbook){const bytes=new Uint8Array(await cache.file.arrayBuffer());if(bytes[0]!==0x50||bytes[1]!==0x4b)throw new Error('Email updates require an original XLSX registry.');cache.workbook=XLSX.read(bytes,{type:'array',cellStyles:true});}
+    cache.emailDirectory||=auditEmailDirectory(cache.workbook);
+    emailPlan=auditPlanEmailUpdates(baseline,changes,cache.emailDirectory,{scope:data.emailUpdateScope,previousChanges,completedEquipmentIds:data.completedEquipmentIds});
+    changes=emailPlan.changes;
+  }
   report(.15,'Validating source cells');
   const snapshot=auditApplyCorrections(baseline,changes);
   let exportCheck={cellCount:0,sheetCount:0};
@@ -39,5 +47,5 @@ export async function auditPrepareInWorker(cache,data,report=()=>{}){
   const impact=auditMigrationImpact(auditCorrectionImpact(before.result,result),before.snapshot,snapshot,migration);
   const draftResolvedIds=auditCorrectionImpact(cache.baselineResult,result).resolved.map(f=>f.id);
   cache.previous={key:changesKey,snapshot,result};
-  return {snapshot,result,exportCheck,impact,draftResolvedIds,...(data.migrationChanged?{milestoneMigration:migration}:{}),...(data.migrationChanged||data.referencesChanged?{baselineResult:cache.baselineResult}:{})};
+  return {snapshot,result,exportCheck,impact,draftResolvedIds,...(emailPlan?{changes,emailUpdates:emailPlan.emailUpdates,emailSummary:emailPlan.emailSummary}:{}),...(data.migrationChanged?{milestoneMigration:migration}:{}),...(data.migrationChanged||data.referencesChanged?{baselineResult:cache.baselineResult}:{})};
 }

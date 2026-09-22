@@ -148,7 +148,7 @@ test('a two-row upload export can be reloaded and corrected again without shifti
  assert.equal(next.summary.exportedRows,1);assert.equal(next.summary.exportedCells,2);
 });
 
-test('an Emails tab fills the three email columns by corrected discipline, in yellow, and reports misses',async()=>{
+test('email export is opt-in and uses imported discipline, with yellow changes and reported misses',async()=>{
  const f=fixture(5),discipline=7,[pm,sup,cx]=[29,30,31];
  const disciplines=['Mechanical','ELECTRICAL','I&C','Mechanical','Structural'];
  disciplines.forEach((value,i)=>{f.aoa[i+1][discipline]=value;});
@@ -166,7 +166,11 @@ test('an Emails tab fills the three email columns by corrected discipline, in ye
  assert.equal(directory.sheet,'Emails');assert.equal(directory.rows,3);assert.equal(directory.byDiscipline.get('MECHANICAL').cxEngineerEmail,'cx.mech@example.com');
  const changes=baseline.rows.map(row=>auditMakeCorrection(row,'UPN','603'));
  changes.push(auditMakeCorrection(baseline.rows[4],'Discipline','ELECTRICAL'));   // structural row corrected to electrical
- const result=await buildAuditUpdateBatches(source,baseline,changes);
+ const unchanged=await buildAuditUpdateBatches(source,baseline,changes);
+ const unchangedSheet=XLSX.read([...entries(unchanged.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
+ assert.equal(unchangedSheet[XLSX.utils.encode_cell({r:2,c:pm})].v,f.aoa[1][pm]);
+ assert.equal(unchanged.summary.emailCells,0);
+ const result=await buildAuditUpdateBatches(source,baseline,changes,{updateEmails:true});
  const sheet=XLSX.read([...entries(result.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
  const cell=(r,c)=>sheet[XLSX.utils.encode_cell({r:r+2,c})];
  assert.equal(cell(0,pm).v,'pm.mech@example.com');assert.equal(cell(0,sup).v,'sup.mech@example.com');assert.equal(cell(0,cx).v,'cx.mech@example.com');
@@ -175,11 +179,11 @@ test('an Emails tab fills the three email columns by corrected discipline, in ye
  assert.equal(cell(2,pm).v,'pm.fms@example.com','I&C maps to the FMS discipline');
  assert.equal(cell(3,pm).v,'pm.mech@example.com');assert.notEqual(cell(3,pm).s?.fgColor?.rgb,'FFF2CC','an address already in place is not a change');
  assert.equal(cell(3,sup).v,'sup.mech@example.com');assert.equal(cell(3,sup).s.fgColor.rgb,'FFF2CC');
- assert.equal(cell(4,pm).v,'pm.elec@example.com','the corrected discipline decides the emails');assert.equal(cell(4,discipline).v,'ELECTRICAL');
- assert.equal(result.summary.emailCells,3+2+3+2+2);assert.equal(result.summary.exportedCells,6+12);
- assert.deepEqual(result.summary.emailMisses,[]);assert.equal(result.summary.emailsTab,'Emails');
- assert.match(auditUpdateExportSummary(result.summary),/12 email cells filled from the Emails tab/);
- const stranger=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[4],'UPN','603')]);
+ assert.equal(cell(4,pm).v,f.aoa[5][pm],'unmatched original discipline keeps its emails');assert.equal(cell(4,discipline).v,'ELECTRICAL');
+ assert.equal(result.summary.emailCells,3+2+3+2);assert.equal(result.summary.exportedCells,6+10);
+ assert.deepEqual(result.summary.emailMisses,['Structural']);assert.equal(result.summary.emailsTab,'Emails');
+ assert.match(auditUpdateExportSummary(result.summary),/10 email cells filled from the Emails tab/);
+ const stranger=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[4],'UPN','603')],{updateEmails:true});
  assert.deepEqual(stranger.summary.emailMisses,['Structural']);assert.match(auditUpdateExportSummary(stranger.summary),/No email entry for: Structural/);
  const plain=await buildAuditUpdateBatches(f.source,f.baseline,f.changes.slice(0,2));
  assert.equal(plain.summary.emailsTab,'');assert.doesNotMatch(auditUpdateExportSummary(plain.summary),/email/);
@@ -190,5 +194,6 @@ test('a malformed Emails tab stops the export instead of writing partial address
  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(f.aoa),'Registry');
  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Discipline','Intel PM Email Address'],['Mechanical','pm@example.com']]),'Emails');
  const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
- await assert.rejects(buildAuditUpdateBatches(source,f.baseline,f.changes.slice(0,1)),/Emails tab is missing SUPERINTENDENT EMAIL ADDRESS, CX ENGINEER EMAIL ADDRESS/);
+ await buildAuditUpdateBatches(source,f.baseline,f.changes.slice(0,1));
+ await assert.rejects(buildAuditUpdateBatches(source,f.baseline,f.changes.slice(0,1),{updateEmails:true}),/Emails tab is missing SUPERINTENDENT EMAIL ADDRESS, CX ENGINEER EMAIL ADDRESS/);
 });

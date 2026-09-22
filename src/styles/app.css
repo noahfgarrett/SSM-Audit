@@ -2266,6 +2266,8 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .action-modal .btn.icon-btn,.modify-shell .btn.icon-btn{width:36px;height:36px;min-width:36px;padding:0;gap:0;flex:0 0 36px;justify-content:center;line-height:0}
 .action-modal .btn.icon-btn>.ic,.modify-shell .btn.icon-btn>.ic{margin:0}
 .review-commands .btn{min-height:36px}
+.email-update-toggle{display:inline-flex;align-items:center;gap:8px;min-height:36px;font-size:12px;cursor:pointer}
+.email-update-toggle input{width:16px;height:16px;margin:0;flex:0 0 16px;accent-color:var(--accent)}
 @media(max-width:640px){.reference-row{grid-template-columns:minmax(0,1fr) 36px}.reference-row>div{grid-column:1/-1}.reference-row [data-reference-pick]{justify-self:stretch}.reference-help{max-height:260px}.review-commands{width:100%;justify-content:flex-start}}
 @media(pointer:coarse){.action-modal .btn.icon-btn,.modify-shell .btn.icon-btn{width:44px;height:44px;min-width:44px;flex-basis:44px}.reference-row{grid-template-columns:minmax(0,1fr) auto 44px}}
 @media(pointer:coarse) and (max-width:640px){.reference-row{grid-template-columns:minmax(0,1fr) 44px}}
