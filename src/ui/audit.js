@@ -7,7 +7,7 @@ import { auditIsBlankItemMaster, auditPolarity, runSsmAudit, SSM_AUDIT_CATEGORIE
 import { extoRev21Canonical } from '../exto/rev21-contract.js'
 import { compareSsmRegistries, comparisonSystemTypes } from '../audit/compare.js'
 import { buildSsmHierarchy } from '../audit/hierarchy.js'
-import { auditExportPlanMode, auditUpdateExportSummary, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportAuditCorrectionsXlsx, exportActionsXlsx, validateAuditCorrections } from '../audit/export.js'
+import { auditExportPlanMode, auditUpdateExportSummary, exportSsmAuditXlsx, exportSsmComparisonXlsx, exportTrackerXlsx, exportUpdatedRegistryXlsx, exportRemainingRegistryXlsx, exportAuditCorrectionsXlsx, exportActionsXlsx, validateAuditCorrections } from '../audit/export.js'
 import { ic } from './icons.js'
 import { activateFocusTrap, copyTagHtml, runWithProgress, toast, wireCopyTags, animateOpen, animateClose } from './feedback.js'
 import { AUDIT_EXAMPLE_FIELD_LABELS, SSM_AUDIT_EXAMPLES, auditExampleColumns, auditExampleSnapshot } from '../audit/examples.js'
@@ -1345,7 +1345,7 @@ export function renderCompletedEquipment(navigate){
   const first=list.slice(0,COMPLETED_CHUNK).map(entry=>completedRowHtml(entry,byTag.get(auditNormId(entry.name)))).join('');
   const rest=list.length-COMPLETED_CHUNK;
   $('#view').innerHTML=`<section class="completed-shell">
-    <div class="screen-heading"><div><span class="eyebrow">Finished on site</span><h2>Completed Equipment</h2><p>${esc(S.session.name)} — equipment the Equipment Status Report marks as Completed. Their findings are left out of the findings list, the Dashboard, and the Excel report. Click any row for the full registry record.</p></div></div>
+    <div class="screen-heading"><div><span class="eyebrow">Finished on site</span><h2>Completed Equipment</h2><p>${esc(S.session.name)} — equipment the Equipment Status Report marks as Completed. Their findings are left out of the findings list, the Dashboard, and the Excel report. Click any row for the full registry record.</p></div><button class="btn" type="button" id="exportRemainingRegistry" title="Export all registry rows not marked complete, including applied edits. Unmatched tags are retained; display filters do not affect this export.">${ic('download')}Export Remaining Registry</button></div>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="completedSearch" aria-label="Search completed equipment" placeholder="Search tags and steps" value="${esc(S.session.completedSearch||'')}"></div>
       <span class="completed-step-filters" role="group" aria-label="Filter by completed step">${COMPLETED_STEP_ORDER.map(step=>`<button class="completed-step-filter ${stepFilter===step?'on':''}" type="button" data-completed-step="${esc(step)}" title="${esc(step)} — click to ${stepFilter===step?'clear the filter':'show only this step'}">${esc(COMPLETED_STEP_SHORT[step])}</button>`).join('')}</span>
       <select id="completedDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option><option value="none" ${disciplineFilter==='none'?'selected':''}>No discipline</option>${[...disciplineOptions].sort(natCmp).map(name=>`<option value="${esc(name)}" ${disciplineFilter===name?'selected':''}>${esc(name)}</option>`).join('')}</select>
@@ -1355,6 +1355,10 @@ export function renderCompletedEquipment(navigate){
       <span class="modify-chip done">${status.equipment.length.toLocaleString()} completed on the report</span><span class="modify-chip" title="Completed equipment whose tag matches a row in this registry — the count that changes the audit">${(status.matched||0).toLocaleString()} matched in this registry</span><span class="spacer"></span><span class="completed-count">${filtered?`${list.length.toLocaleString()} of ${all.length.toLocaleString()} shown`:''}</span></div>
     <div class="completed-body" id="completedBody">${list.length?`<div class="completed-list"><div class="completed-row completed-head"><b>Equipment</b><span>Step completed</span><span>Where it sits in this registry</span></div>${first}${rest>0?`<button class="btn ghost sm modify-more" type="button" id="completedMore" data-offset="${COMPLETED_CHUNK}">${ic('chevrons-down')}Show ${Math.min(rest,COMPLETED_CHUNK).toLocaleString()} more of ${rest.toLocaleString()}</button>`:''}</div>`:`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'No completed equipment matches those filters':'Nothing is marked Completed'}</b><span>${filtered?'Try a different search, step, discipline, milestone, or registry filter.':'The Equipment Status Report tab has no rows whose OA/BT step says Completed.'}</span></div>`}</div>
   </section>`;
+  $('#exportRemainingRegistry').onclick=async event=>{
+    const button=event.currentTarget;button.disabled=true;
+    try{await exportRemainingRegistryXlsx();}finally{button.disabled=false;}
+  };
   $('#completedSearch').oninput=event=>{S.session.completedSearch=event.target.value;debounceSearch(()=>{const focused=document.activeElement&&document.activeElement.id==='completedSearch';renderCompletedEquipment(navigate);if(focused){const input=$('#completedSearch');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}}});};
   $$('[data-completed-step]').forEach(button=>button.onclick=()=>{S.session.completedStep=S.session.completedStep===button.dataset.completedStep?'all':button.dataset.completedStep;renderCompletedEquipment(navigate);});
   $('#completedMatch').onchange=event=>{S.session.completedMatch=event.target.value;renderCompletedEquipment(navigate);};

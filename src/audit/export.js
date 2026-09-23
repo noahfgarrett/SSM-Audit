@@ -935,6 +935,9 @@ export function buildAuditUpdateRowsBytes(sourceBytes,baseline,changes,options={
 export function buildAuditUpdateBatches(sourceBytes,baseline,changes,options={}){
   return buildAuditUpdateData(sourceBytes,baseline,changes,{...options,uploadTemplate:true,batched:true});
 }
+export function buildAuditRemainingRegistry(sourceBytes,baseline,changes=[],options={}){
+  return buildAuditUpdateData(sourceBytes,baseline,changes,{...options,remainingRegistry:true,uploadTemplate:false,batched:false,updateEmails:false});
+}
 /* ---- Emails tab ----
    A registry workbook may carry an "Emails" tab: Discipline, Intel PM Email
    Address, Superintendent Email Address, Cx Engineer Email Address. Every
@@ -997,9 +1000,9 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   const plan=auditCorrectionPreflight(source,baseline,changes),byRow=new Map();
   for(const target of plan){const key=auditCorrectionSourceKey({sheet:target.sheetName,row:target.row}),cells=byRow.get(key)||new Map();cells.set(target.column,target);byRow.set(key,cells);}
   const completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
-  const changedRows=baseline.rows.filter(row=>byRow.has(auditCorrectionSourceKey(row._source)));
+  const changedRows=options.remainingRegistry?baseline.rows:baseline.rows.filter(row=>byRow.has(auditCorrectionSourceKey(row._source)));
   const selected=changedRows.filter(row=>!completed.has(auditNormId(row.equipmentId)));
-  if(!selected.length)auditCorrectionFail('EMPTY','No changed, incomplete equipment remains to export.');
+  if(!selected.length)auditCorrectionFail('EMPTY',options.remainingRegistry?'No incomplete equipment remains to export.':'No changed, incomplete equipment remains to export.');
   const snapshots=new Map(),collect=snapshot=>{if(snapshot.snapshots)snapshot.snapshots.forEach(collect);else snapshots.set(snapshot.source.sheet,snapshot);};collect(baseline);
   const layouts=new Map(),columns=[],columnMap=new Map();
   for(const row of selected){
@@ -1022,7 +1025,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     }
     layouts.set(name,layout);
   }
-  options.onStage?.(.3,'Copying changed equipment with all metadata');
+  options.onStage?.(.3,options.remainingRegistry?'Copying remaining equipment with all metadata':'Copying changed equipment with all metadata');
   let associationChanges=0,emailChanges=0;
   const emails=options.updateEmails===true?auditEmailDirectory(source):null,emailMisses=new Set();
   if(emails&&emails.error)auditCorrectionFail('EMAILS',emails.error);
@@ -1031,7 +1034,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
   if(options.uploadTemplate)headings.unshift(EXTO_REV21_COLUMNS.map(column=>column.gating?'Gating':'Non Gating'));
   const sheet=XLSX.utils.aoa_to_sheet(headings),yellow={patternType:'solid',fgColor:{rgb:'FFFFF2CC'},bgColor:{rgb:'FFFFF2CC'}};
   selected.forEach((row,index)=>{
-    const origin=row._source,input=source.Sheets[origin.sheet],patch=byRow.get(auditCorrectionSourceKey(origin));
+    const origin=row._source,input=source.Sheets[origin.sheet],patch=byRow.get(auditCorrectionSourceKey(origin))||new Map();
     for(const [c,outputColumn] of layouts.get(origin.sheet).entries()){
       if(outputColumn==null)continue;
       const original=input[XLSX.utils.encode_cell({r:origin.row-1,c})],change=patch.get(c);
@@ -1089,7 +1092,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     }
   }
   sheetFreezeRows(sheet,headerRows);sheetAutoFilter(sheet,`A${headerRows}:${auditColumnName(columns.length-1)}${selected.length+headerRows}`);
-  const workbook=XLSX.utils.book_new();addSheet(workbook,sheet,'Upload Template');
+  const workbook=XLSX.utils.book_new();addSheet(workbook,sheet,options.remainingRegistry?'Registry':'Upload Template');
   return workbook;
   };
   if(options.batched){
@@ -1118,8 +1121,32 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     const archive=await zipEntries(entries,fraction=>options.onStage?.(.9+.09*fraction,'Packaging upload batches'),{store:true});
     return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,associationChanges+emailChanges),emailCells:emailChanges,emailsTab:emails?emails.sheet:'',emailMisses:[...emailMisses].sort(natCmp),batches}};
   }
-  options.onStage?.(.65,'Packaging changed rows');
-  return new Uint8Array(await workbookBytesCompact(makeWorkbook(selected),{onProgress:options.onProgress}));
+  options.onStage?.(.65,options.remainingRegistry?'Packaging remaining registry':'Packaging changed rows');
+  const output=new Uint8Array(await workbookBytesCompact(makeWorkbook(selected),{onProgress:options.onProgress}));
+  if(options.remainingRegistry)return {bytes:output,filename:`Registry_Remaining_${auditUpdateExportDate()}.xlsx`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length}};
+  return output;
+}
+export async function exportRemainingRegistryXlsx(){
+  const session=S.session,revision=session?.changesRev,status=session?.status;
+  if(!session?.sourceBytes||!session.baselineSnapshot){toast('Load the original registry before exporting');return false;}
+  if(!status?.completed){toast('Load an Equipment Status Report before removing completed equipment');return false;}
+  if(session.remainingExportBusy||session.reviewBusy){toast('Wait for the current operation to finish');return false;}
+  session.remainingExportBusy=true;
+  try{
+    let summary;
+    await runWithProgress('Exporting remaining registry','Removing completed equipment',async(checkpoint,report)=>{
+      await checkpoint();
+      const prepared=await prepareAuditReview(session,session.changes||[],session.milestoneMigration,false,report,{export:true,remainingRegistry:true});
+      await checkpoint();
+      if(S.session!==session||session.changesRev!==revision||session.status!==status)throw new Error('The registry changed while exporting. No copy was downloaded.');
+      report(1,'Remaining registry ready');
+      downloadBlob(prepared.filename,new Blob([prepared.bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      summary=prepared.summary;
+    });
+    toast(`${summary.exportedRows.toLocaleString()} remaining equipment rows exported; ${summary.excludedCompletedRows.toLocaleString()} completed rows removed`);
+    return true;
+  }catch(error){toast(error.message||'The remaining registry could not be exported');return false;}
+  finally{session.remainingExportBusy=false;}
 }
 export async function exportUpdatedRegistryXlsx(){
   const session=S.session,bytes=session&&session.sourceBytes,baseline=session&&session.baselineSnapshot;

@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs'
 import {EXTO_REV21_COLUMNS} from '../src/exto/rev21-contract.js'
 import {auditSnapshotFromAoa} from '../src/audit/model.js'
 import {auditMakeCorrection} from '../src/audit/actions.js'
-import {AUDIT_UPDATE_BATCH_SIZE,buildAuditUpdateBatches,auditUpdateExportDate,auditUpdateExportSummary,auditEmailDirectory} from '../src/audit/export.js'
+import {AUDIT_UPDATE_BATCH_SIZE,buildAuditUpdateBatches,buildAuditRemainingRegistry,auditUpdateExportDate,auditUpdateExportSummary,auditEmailDirectory} from '../src/audit/export.js'
 import {crc32,zipEntries} from '../src/core/zip.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.url),'utf8'));
@@ -31,6 +31,53 @@ function entries(bytes){
  });
  return result;
 }
+
+test('remaining registry includes unchanged and unmatched rows with all metadata, without supporting tabs',async()=>{
+ const f=fixture(4),original=f.source.slice();
+ const result=await buildAuditRemainingRegistry(f.source,f.baseline,[],{completedEquipmentIds:[' demo-eq-0 ','DEMO-NOT-IN-REGISTRY']});
+ const book=XLSX.read(result.bytes,{type:'array',cellStyles:true}),sheet=book.Sheets.Registry;
+ assert.deepEqual(book.SheetNames,['Registry']);
+ assert.deepEqual(XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}),[headers,...f.aoa.slice(2)]);
+ assert.deepEqual(result.summary,{exportedRows:3,excludedCompletedRows:1});
+ assert.match(result.filename,/^Registry_Remaining_\d{4}-\d{2}-\d{2}\.xlsx$/);
+ assert.deepEqual(f.source,original);
+});
+
+test('remaining registry preserves custom columns and applied yellow edits without changing relationships or emails',async()=>{
+ const f=fixture(3),aoa=f.aoa.map((row,i)=>[...row,i?'Extra metadata '+i:'Local Custom Column']);
+ const field=key=>EXTO_REV21_COLUMNS.find(c=>c.field===key).index;
+ aoa[2][field('closestParent')]='DEMO-EQ-0';
+ aoa[2][field('itemMaster')]='VF1_PANEL';
+ aoa[2][field('vfPorFatAssociation')]='No';
+ const baseline=auditSnapshotFromAoa(aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+ const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'})),original=source.slice();
+ const changes=[auditMakeCorrection(baseline.rows[0],'UPN','603'),auditMakeCorrection(baseline.rows[1],'UPN','603')];
+ const result=await buildAuditRemainingRegistry(source,baseline,changes,{completedEquipmentIds:['DEMO-EQ-0'],updateEmails:true});
+ const sheet=XLSX.read(result.bytes,{type:'array',cellStyles:true}).Sheets.Registry;
+ const expected=aoa.slice(2).map(row=>[...row]);expected[0][field('upn')]='603';
+ assert.deepEqual(XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}),[aoa[0],...expected]);
+ assert.equal(sheet[XLSX.utils.encode_cell({r:1,c:field('upn')})].s.fgColor.rgb,'FFF2CC');
+ assert.notEqual(sheet[XLSX.utils.encode_cell({r:2,c:field('upn')})].s?.fgColor?.rgb,'FFF2CC');
+ assert.deepEqual(source,original);
+});
+
+test('remaining registry removes every physical row for completed tags and keeps duplicates for incomplete tags',async()=>{
+ const f=fixture(4,{duplicateLast:true});
+ const all=await buildAuditRemainingRegistry(f.source,f.baseline,[]);
+ assert.equal(all.summary.exportedRows,4);
+ const result=await buildAuditRemainingRegistry(f.source,f.baseline,[],{completedEquipmentIds:['DEMO-EQ-0']});
+ assert.deepEqual(result.summary,{exportedRows:2,excludedCompletedRows:2});
+ const rows=XLSX.utils.sheet_to_json(XLSX.read(result.bytes,{type:'array'}).Sheets.Registry);
+ assert.deepEqual(rows.map(row=>row['Equipment ID']),['DEMO-EQ-1','DEMO-EQ-2']);
+});
+
+test('remaining registry fails clearly for all-complete inputs and stale staged edits',async()=>{
+ const f=fixture(2);
+ await assert.rejects(buildAuditRemainingRegistry(f.source,f.baseline,[],{completedEquipmentIds:f.baseline.rows.map(r=>r.equipmentId)}),/No incomplete equipment remains/);
+ f.changes[0].before='Wrong baseline';
+ await assert.rejects(buildAuditRemainingRegistry(f.source,f.baseline,f.changes),/original|match|changed|conflict/i);
+});
 
 test('VF upload rows receive Yes using final item masters with yellow changes and accurate counts',async()=>{
  const f=fixture(7),item=26,association=38;

@@ -4,7 +4,7 @@ import { runSsmAudit } from '../audit/engine.js'
 import { auditPrepareInWorker } from '../audit/review.js'
 import { auditReferenceSheets, auditReadReferenceWorkbook } from '../audit/references.js'
 import { AUDIT_ENGINEERING_KINDS, auditReadEngineeringWorkbook } from '../audit/engineering-references.js'
-import { buildAuditUpdateBatches, buildAuditActionsWorkbook } from '../audit/export.js'
+import { buildAuditUpdateBatches, buildAuditRemainingRegistry, buildAuditActionsWorkbook } from '../audit/export.js'
 import { workbookBytesCompact } from '../core/download.js'
 
 const auditReviewWorkerCache={};
@@ -28,8 +28,9 @@ self.onmessage=async({data})=>{
       if(!auditReviewWorkerCache.file)throw new Error('Open the original registry before exporting corrections.');
       report(.02,'Reading original workbook');
       const source=new Uint8Array(await auditReviewWorkerCache.file.arrayBuffer());
-      const prepared=await buildAuditUpdateBatches(source,auditReviewWorkerCache.baseline,data.changes,{exportDate:data.exportDate,sourceWorkbook:auditReviewWorkerCache.workbook,completedEquipmentIds:data.completedEquipmentIds,onStage:report});
-      report(1,'Upload batches ready');self.postMessage({type:'result',prepared},[prepared.bytes.buffer]);return;
+      const build=data.remainingRegistry?buildAuditRemainingRegistry:buildAuditUpdateBatches;
+      const prepared=await build(source,auditReviewWorkerCache.baseline,data.changes,{exportDate:data.exportDate,sourceWorkbook:auditReviewWorkerCache.workbook,completedEquipmentIds:data.completedEquipmentIds,onStage:report,onProgress:fraction=>report(.65+fraction*.34,'Packaging remaining registry')});
+      report(1,data.remainingRegistry?'Remaining registry ready':'Upload batches ready');self.postMessage({type:'result',prepared},[prepared.bytes.buffer]);return;
     }
     if(data.kind==='review'){
       const prepared=await auditPrepareInWorker(auditReviewWorkerCache,data,report);

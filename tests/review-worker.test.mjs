@@ -42,6 +42,15 @@ test('packaged review worker validates large drafts off-thread and reuses its so
   assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,2);
   assert.deepEqual(Array.from(XLSX.utils.sheet_to_json(sheet,{header:1})[0]),EXTO_REV21_COLUMNS.map(c=>c.gating?'Gating':'Non Gating'));
   assert.deepEqual(Array.from(XLSX.utils.sheet_to_json(sheet,{header:1})[1]),EXTO_REV21_COLUMNS.map(c=>c.header));
+  const remaining=await send({kind:'export',remainingRegistry:true,changes,completedEquipmentIds:[baseline.rows[0].equipmentId]});
+  assert.equal(remaining.reads,1,'remaining registry export reuses the source workbook');
+  assert.equal(remaining.prepared.summary.exportedRows,count-1);assert.equal(remaining.prepared.summary.excludedCompletedRows,1);
+  const remainingBook=XLSX.read(remaining.prepared.bytes,{type:'array',cellStyles:true});
+  assert.deepEqual([...remainingBook.SheetNames],['Registry']);
+  assert.equal(remainingBook.Sheets.Registry.K2.v,baseline.rows[1].equipmentId);
+  assert.equal(remainingBook.Sheets.Registry.AO2.v,'');
+  assert.equal(remainingBook.Sheets.Registry.AO2.s.fgColor.rgb,'FFF2CC');
+  assert.equal(remainingBook.Sheets.Registry.AO3.v,'Old project','unchanged incomplete equipment is also exported');
   assert.ok(ticks>0,'the calling thread remains responsive while the worker computes');
   console.log(JSON.stringify({reviewBenchmark:{rows:count,twoReviewsMs:Math.round(performance.now()-started),responsiveTicks:ticks,workbookReads:second.reads}}));
  }finally{clearInterval(timer);await worker.terminate();}
