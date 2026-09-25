@@ -15,7 +15,7 @@ test('the Equipment Status Report tab is found by name, forgiving of spacing and
   assert.equal(auditStatusSheetName(['Full Export', 'Summary']), '')
 })
 
-test('equipment counts as completed only when a step says Completed and none says Not Started', () => {
+test('every listed tag is completed regardless of step statuses or conflicting cells', () => {
   const status = auditStatusCompleted([
     ['Some banner row'],
     HEADERS,
@@ -28,9 +28,9 @@ test('equipment counts as completed only when a step says Completed and none say
     ['', 'FAB', 'Completed', '', '', ''],
   ])
   assert.equal(status.totalRows, 6)
-  assert.equal(status.completedRows, 3)
-  assert.deepEqual([...status.completed].sort(), ['B1-AHU-1', 'B1-AHU-5', 'B1-AHU-6'].map(auditNormId).sort())
-  assert.ok(!status.completed.has(auditNormId('B1-AHU-4')), 'Completed beside Not Started is treated as not started')
+  assert.equal(status.completedRows, 6)
+  assert.deepEqual([...status.completed].sort(), Array.from({length:6},(_,i)=>`B1-AHU-${i+1}`))
+  assert.ok(status.completed.has(auditNormId('B1-AHU-4')), 'step statuses never override membership in the completed-only report')
 })
 
 test('a sheet without the expected headers yields nothing instead of guessing', () => {
@@ -63,17 +63,27 @@ test('completed equipment leaves the metrics entirely while registry-wide findin
   assert.equal(applyCompletedEquipment(raw, new Set()), raw, 'no completed equipment returns the result untouched')
 })
 
-test('each completed equipment records which OA/BT step said Completed', () => {
+test('duplicate tags merge by normalized identity without step-based classification', () => {
   const status = auditStatusCompleted([
     HEADERS,
     ['B1-AHU-1', 'FAB', 'Completed', '', '', ''],
     ['B1-AHU-5', 'FAB', 'Completed', 'In Progress', '', ''],
     ['B1-AHU-6', 'FAB', '', '', '', 'completed'],
-    ['B1-AHU-6', 'FAB', '', 'Completed', '', ''],
+    [' b1-ahu-6 ', 'FAB', '', 'Not Started', '', ''],
   ])
-  const byName = Object.fromEntries(status.equipment.map(entry => [entry.name, entry.steps]))
-  assert.deepEqual(byName['B1-AHU-1'], ['RR OA/BT'])
-  assert.deepEqual(byName['B1-AHU-5'], ['RR OA/BT'], 'In Progress columns are not listed as completed steps')
-  assert.deepEqual(byName['B1-AHU-6'].sort(), ['DIST OA/BT', 'SYS OA/BT'], 'duplicate rows merge their steps')
+  assert.deepEqual(status.equipment,[{name:'B1-AHU-1'},{name:'B1-AHU-5'},{name:'B1-AHU-6'}])
   assert.equal(status.completedRows, 3, 'completed count is distinct equipment, not rows')
+  assert.equal(status.totalRows,4)
 })
+
+for(const header of ['Equipment ID','Equipment Tag','Equipment Name','Equipment Tag/ID','Equipment Tag / ID'])test(`completed-only report accepts ${header} without status columns`,()=>{
+  const status=auditStatusCompleted([['Report banner'],[header],['TAG-1'],[''],[null],['TAG-2'],['TAG-2-A']]);
+  assert.deepEqual([...status.completed],['TAG-1','TAG-2','TAG-2-A']);
+  assert.equal(status.totalRows,3);
+});
+
+test('explicit equipment identity takes precedence over descriptive names',()=>{
+  const status=auditStatusCompleted([['Equipment Name','Equipment ID','Other Completion Step'],['Pump','DEMO-PUMP-1','Approved'],['Second pump','DEMO-PUMP-2',''],['No ID','','Completed']]);
+  assert.deepEqual([...status.completed],['DEMO-PUMP-1','DEMO-PUMP-2']);
+  assert.equal(status.completed.has('PUMP'),false);
+});

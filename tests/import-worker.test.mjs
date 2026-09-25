@@ -7,6 +7,8 @@ import { auditSnapshotFromWorkbook } from '../src/audit/model.js'
 import { runSsmAudit } from '../src/audit/engine.js'
 import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 import { applyCompletedEquipment } from '../src/ui/audit.js'
+import { buildAuditRemainingRegistry, buildAuditUpdateBatches } from '../src/audit/export.js'
+import { auditMakeCorrection } from '../src/audit/actions.js'
 
 const root=new URL('../',import.meta.url);
 const html=readFileSync(new URL('SSM-Audit.html',root),'utf8');
@@ -59,7 +61,7 @@ for(const withStatus of [false,true])test(`background import matches synchronous
   assert.deepEqual(data.rawResult,runSsmAudit(expected));
   assert.deepEqual(data.bytes,new Uint8Array(bytes),'original workbook bytes survive intact');
   if(withStatus){
-    assert.equal(data.status.matched,16);assert.equal(data.status.completed.size,17);
+    assert.equal(data.status.matched,32);assert.equal(data.status.completed.size,33);
     assert.ok(data.status.completed instanceof Set);
     const filtered=applyCompletedEquipment(data.rawResult,data.status.completed);
     assert.ok(filtered.findings.every(f=>!f.equipmentId||!data.status.completed.has(f.equipmentId)));
@@ -74,6 +76,33 @@ test('comparison reference skips audit and does not return workbook bytes',async
   const {data}=await background(fixture(),false);
   assert.equal(data.type,'result');assert.equal(data.rawResult,null);assert.equal(data.status,null);assert.equal(data.bytes,null);
   assert.equal(data.snapshot.rows.length,32);
+});
+
+test('completed-only report drives audit and both registry exports without any BT columns',async()=>{
+  const book=XLSX.read(fixture(5,false),{type:'array'});
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([
+    ['Equipment ID','Other completion step'],
+    ['test-pump-0','Approved'],['TEST-PUMP-1',''],['TEST-PUMP-2','Not Started'],
+    ['TEST-PUMP-2','Completed'],['UNMATCHED','Approved'],['','Completed'],
+  ]),'Equipment Status Report');
+  const bytes=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'}));
+  const {data}=await background(bytes);
+  assert.equal(data.type,'result',data.message);
+  assert.equal(data.status.matched,3);assert.equal(data.status.completed.size,4);
+  const filtered=applyCompletedEquipment(data.rawResult,data.status.completed);
+  assert.ok(filtered.findings.every(f=>!f.equipmentId||!data.status.completed.has(f.equipmentId)));
+  assert.equal(data.snapshot.rows.length,5,'completion does not remove hierarchy anchors from the audit model');
+  const options={completedEquipmentIds:data.status.completed};
+  const remaining=await buildAuditRemainingRegistry(bytes,data.snapshot,[],options);
+  const rows=XLSX.utils.sheet_to_json(XLSX.read(remaining.bytes,{type:'array'}).Sheets.Registry);
+  assert.deepEqual(Array.from(rows,row=>row['Equipment ID']),['TEST-PUMP-3','TEST-PUMP-4']);
+  assert.ok(rows.every(row=>row['Closest Parent']==='TEST-PUMP-0'),'completed parent references are preserved');
+  const changes=data.snapshot.rows.map(row=>auditMakeCorrection(row,'Building','UPDATED'));
+  const updated=await buildAuditUpdateBatches(bytes,data.snapshot,changes,options);
+  assert.equal(updated.summary.exportedRows,2);assert.equal(updated.summary.excludedCompletedRows,3);
+  const archive=XLSX.CFB.read(updated.bytes,{type:'array'}),batch=XLSX.CFB.find(archive,'/'+updated.summary.batches[0].name);
+  const upload=XLSX.utils.sheet_to_json(XLSX.read(batch.content,{type:'array'}).Sheets['Upload Template'],{range:1});
+  assert.deepEqual(Array.from(upload,row=>row['Equipment ID']),['TEST-PUMP-3','TEST-PUMP-4']);
 });
 
 for(const [kind,rows] of [
@@ -113,7 +142,7 @@ test('legacy XLS workbooks use the same offline worker and audit rules',async()=
   const expected=await auditSnapshotFromWorkbook(XLSX.read(bytes,{type:'array',dense:true}),'synthetic.xlsx');
   const {data}=await background(bytes);
   assert.equal(data.type,'result');assert.deepEqual(data.rawResult,runSsmAudit(expected));
-  assert.equal(data.status.matched,6);
+  assert.equal(data.status.matched,12);
 });
 
 test('multiple registry tabs retain physical source rows and duplicate evidence',async()=>{
@@ -134,7 +163,7 @@ test('large background import leaves the controlling event loop responsive',asyn
   let imported;
   try{imported=await background(bytes);}finally{clearInterval(timer);}
   assert.equal(imported.data.type,'result');assert.equal(imported.data.snapshot.rows.length,count);
-  assert.equal(imported.data.status.matched,Math.ceil(count/2));
+  assert.equal(imported.data.status.matched,count);
   assert.ok(ticks>=3,'timer continues while workbook processing runs');
   t.diagnostic(`${count} synthetic rows: ${Math.round(performance.now()-started)} ms, ${ticks} timer ticks, largest timer gap ${Math.round(maxGap)} ms`);
 });

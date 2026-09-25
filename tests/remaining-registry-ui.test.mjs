@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import {readFileSync} from 'node:fs'
+import {clean,esc,natCmp} from '../src/core/text.js'
+import {auditNormId} from '../src/audit/model.js'
 
 const source=readFileSync(new URL('../src/audit/export.js',import.meta.url),'utf8');
 const start=source.indexOf('export async function exportRemainingRegistryXlsx()');
@@ -67,4 +69,23 @@ test('Completed Equipment offers a guarded export button and the guide documents
  assert.match(completed,/button\.disabled=true;[\s\S]*await exportRemainingRegistryXlsx\(\);[\s\S]*button\.disabled=false/);
  assert.match(guide,/In-progress, incomplete and unmatched tags remain/);
  assert.match(guide,/Display filters do not limit this export/);
+});
+
+test('completed screen lists report members without steps and ignores obsolete BT filters',()=>{
+ const ui=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
+ const code=ui.slice(ui.indexOf('const COMPLETED_CHUNK='),ui.indexOf('function rerenderModifications(')).replace('export function','function');
+ const nodes=new Map(),node=selector=>{
+  if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',setAttribute(){},focus(){}});
+  return nodes.get(selector);
+ };
+ const session={name:'Synthetic registry',rawResult:{},status:{equipment:[{name:'DEMO-2'},{name:'DEMO-1'}],matched:1},snapshot:{rows:[{equipmentId:'DEMO-1',upn:'111',_source:{row:2}}]},completedStep:'RR OA/BT',completedSort:'step'};
+ const context=vm.createContext({S:{session},clean,esc,natCmp,auditNormId,$:node,ic:()=>'',document:{body:{classList:{remove(){}}}},teardownAuditFilters(){},exportRemainingRegistryXlsx(){}});
+ vm.runInContext(code,context);
+ context.renderCompletedEquipment(()=>assert.fail('Should not redirect'));
+ const html=node('#view').innerHTML;
+ assert.match(html,/data-completed-open="DEMO-1"/);assert.match(html,/data-completed-open="DEMO-2"/);
+ assert.ok(html.indexOf('data-completed-open="DEMO-1"')<html.indexOf('data-completed-open="DEMO-2"'));
+ assert.match(html,/This report must contain only completed equipment/);
+ assert.doesNotMatch(html,/Step completed|By step|data-completed-step|OA\/BT/);
+ assert.equal(typeof node('#exportRemainingRegistry').onclick,'function');
 });
