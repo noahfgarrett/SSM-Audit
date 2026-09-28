@@ -92,20 +92,21 @@ function addEmailDirectory(session){
   ]),'Emails');
   session.sourceBytes=XLSX.write(book,{type:'array',bookType:'xlsx'});
 }
-test('Update Emails previews the whole incomplete registry, supports cancel and undo, and leaves automatic updates off',async()=>{
+test('Update Emails previews the whole registry including completed rows, supports cancel and undo, and leaves automatic updates off',async()=>{
   const session=registry({},[{equipmentId:'EQ-2',discipline:'ELECTRICAL'}]);addEmailDirectory(session);
   session.updateEmails=false;session.modifySearch='not-visible';session.status={completed:new Set(['EQ-2'])};
   const h=reviewHarness(session);
   await h.api.openEmailUpdate();
   assert.equal(session.changes.length,0);
   assert.match(h.node('#actionPreviewRows').innerHTML,/pm@example.com/);
-  assert.doesNotMatch(h.node('#actionPreviewRows').innerHTML,/EQ-2/);
+  assert.match(h.node('#actionPreviewRows').innerHTML,/EQ-2/);
   assert.doesNotMatch(h.node('#actionModalBody').innerHTML,/id="actionBack"/);
   h.node('#actionCancel').onclick();assert.equal(session.changes.length,0);
   await h.api.openEmailUpdate();await h.node('#actionApply').onclick();
-  assert.equal(session.changes.length,3);assert.equal(session.snapshot.rows[0].intelPmEmail,'pm@example.com');
+  assert.equal(session.changes.length,6);assert.equal(session.snapshot.rows[0].intelPmEmail,'pm@example.com');
+  assert.equal(session.snapshot.rows[1].intelPmEmail,'pm@example.com');
   assert.equal(session.updateEmails,false);
-  assert.match(h.node('#actionModalBody').innerHTML,/3 cells updated/);
+  assert.match(h.node('#actionModalBody').innerHTML,/6 cells updated/);
   h.node('#actionCancel').onclick();await h.api.reviewUndoLast();
   assert.equal(session.changes.length,0);assert.equal(session.snapshot.rows[0].intelPmEmail,'');
 });

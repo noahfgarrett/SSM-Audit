@@ -222,14 +222,14 @@ test('email export is opt-in and uses imported discipline, with yellow changes a
  const cell=(r,c)=>sheet[XLSX.utils.encode_cell({r:r+2,c})];
  assert.equal(cell(0,pm).v,'pm.mech@example.com');assert.equal(cell(0,sup).v,'sup.mech@example.com');assert.equal(cell(0,cx).v,'cx.mech@example.com');
  for(const c of [pm,sup,cx])assert.equal(cell(0,c).s.fgColor.rgb,'FFF2CC');
- assert.equal(cell(1,pm).v,'pm.elec@example.com');assert.equal(cell(1,cx).v,f.aoa[2][cx],'a blank Emails cell leaves the original value');assert.notEqual(cell(1,cx).s?.fgColor?.rgb,'FFF2CC');
+ assert.equal(cell(1,pm).v,'pm.elec@example.com');assert.equal(cell(1,cx).v,'','a blank Emails cell clears the original value');assert.equal(cell(1,cx).s?.fgColor?.rgb,'FFF2CC');
  assert.equal(cell(2,pm).v,'pm.fms@example.com','I&C maps to the FMS discipline');
  assert.equal(cell(3,pm).v,'pm.mech@example.com');assert.notEqual(cell(3,pm).s?.fgColor?.rgb,'FFF2CC','an address already in place is not a change');
  assert.equal(cell(3,sup).v,'sup.mech@example.com');assert.equal(cell(3,sup).s.fgColor.rgb,'FFF2CC');
  assert.equal(cell(4,pm).v,f.aoa[5][pm],'unmatched original discipline keeps its emails');assert.equal(cell(4,discipline).v,'ELECTRICAL');
- assert.equal(result.summary.emailCells,3+2+3+2);assert.equal(result.summary.exportedCells,6+10);
+ assert.equal(result.summary.emailCells,3+3+3+2);assert.equal(result.summary.exportedCells,6+11);
  assert.deepEqual(result.summary.emailMisses,['Structural']);assert.equal(result.summary.emailsTab,'Emails');
- assert.match(auditUpdateExportSummary(result.summary),/10 email cells filled from the Emails tab/);
+ assert.match(auditUpdateExportSummary(result.summary),/11 email cells filled from the Emails tab/);
  const stranger=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[4],'UPN','603')],{updateEmails:true});
  assert.deepEqual(stranger.summary.emailMisses,['Structural']);assert.match(auditUpdateExportSummary(stranger.summary),/No email entry for: Structural/);
  const plain=await buildAuditUpdateBatches(f.source,f.baseline,f.changes.slice(0,2));

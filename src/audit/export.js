@@ -976,24 +976,23 @@ export function auditPlanEmailUpdates(baseline,changes,directory,options={}){
   if(!directory)throw new Error('Add an Emails tab to the registry workbook before updating emails.');
   if(directory.error)throw new Error(directory.error);
   const fields=[['intelPmEmail','Intel PM Email Address'],['superintendentEmail','Superintendent Email Address'],['cxEngineerEmail','Cx Engineer Email Address']];
-  const emailProps=new Set(fields.map(([prop])=>prop)),current=new Map(changes.map(change=>[auditCorrectionKey(change),change]));
+  const current=new Map(changes.map(change=>[auditCorrectionKey(change),change]));
   const previous=new Map((options.previousChanges||[]).map(change=>[auditCorrectionKey(change),change]));
-  const affected=new Set(),completed=new Set([...(options.completedEquipmentIds||[])].map(auditNormId));
+  const affected=new Set();
   for(const [key,change] of [...current,...previous]){
-    if(!emailProps.has(change.prop)&&(current.has(key)!==previous.has(key)||clean(current.get(key)?.value)!==clean(previous.get(key)?.value)))affected.add(auditCorrectionSourceKey(change.source));
+    if(current.has(key)!==previous.has(key)||clean(current.get(key)?.value)!==clean(previous.get(key)?.value))affected.add(auditCorrectionSourceKey(change.source));
   }
   const incoming=[],missing=new Set(),unavailable=new Set();let matchedRows=0;
   for(const row of baseline.rows){
-    if(completed.has(auditNormId(row.equipmentId))||options.scope==='changed'&&!affected.has(auditCorrectionSourceKey(row._source)))continue;
+    if(options.scope==='changed'&&!affected.has(auditCorrectionSourceKey(row._source)))continue;
     const discipline=auditEmailTargetDiscipline(row),entry=directory.byDiscipline.get(auditEmailDisciplineKey(discipline));
     if(!entry){missing.add(discipline||'(blank discipline)');continue;}
     matchedRows++;
     for(const [prop,label] of fields){
-      const value=clean(entry[prop]);if(!value)continue;
+      const value=clean(entry[prop]);
       if(row._source.columns?.[prop]==null){unavailable.add(label);continue;}
       const change=auditMakeCorrection(row,label,value,null,`Email directory matched to ${discipline} using original imported metadata; UPN 630, 650 and SEC take precedence over discipline.`);
       const key=auditCorrectionKey(change),existing=current.get(key),before=existing?existing.value:row[prop];
-      if(options.scope==='changed'&&existing&&existing.value!==previous.get(key)?.value)continue;
       if(clean(before)!==value)incoming.push({...change,before:clean(before)});
     }
   }
@@ -1073,7 +1072,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
       const discipline=auditEmailTargetDiscipline(row),entry=emails.byDiscipline.get(auditEmailDisciplineKey(discipline));
       if(!entry)emailMisses.add(discipline||'(blank discipline)');
       else for(const [field] of AUDIT_EMAIL_FIELDS){
-        const email=entry[field];if(!email)continue;
+        const email=clean(entry[field]);
         const outputColumn=options.uploadTemplate?EXTO_REV21_COLUMNS.find(column=>column.field===field).index:layouts.get(origin.sheet)[origin.columns?.[field]];
         if(outputColumn==null)continue;
         const address=XLSX.utils.encode_cell({r:index+headerRows,c:outputColumn}),cell=sheet[address];

@@ -68,19 +68,20 @@ test('missing override directory entries never fall back to a conflicting discip
   assert.deepEqual(plan.emailSummary.missingDisciplines,['FACILITIES MONITORING SYSTEM','LIFE SAFETY SYSTEM','SECURITY']);
 });
 
-test('UPN override keeps blank email cells and excludes completed equipment',()=>{
+test('UPN override copies blank email cells and includes completed equipment',()=>{
   const f=fixture([{equipmentId:'DEMO-DONE',upn:'630',discipline:'Mechanical'},{equipmentId:'DEMO-OPEN',upn:'SEC',discipline:''}]);
   f.directory.byDiscipline.get('SECURITY').superintendentEmail='';
   const plan=auditPlanEmailUpdates(f.baseline,[],f.directory,{completedEquipmentIds:['demo-done']});
-  assert.equal(plan.emailUpdates.length,2);
-  assert.ok(plan.emailUpdates.every(c=>c.tag==='DEMO-OPEN'&&c.prop!=='superintendentEmail'));
+  assert.equal(plan.emailUpdates.length,6);
+  assert.equal(plan.emailUpdates.filter(c=>c.tag==='DEMO-DONE').length,3);
+  assert.equal(plan.emailUpdates.find(c=>c.tag==='DEMO-OPEN'&&c.prop==='superintendentEmail').value,'');
 });
 
 test('changing a non-override UPN to an override preserves its original discipline emails',()=>{
   const f=fixture([{equipmentId:'DEMO-1',upn:'101',discipline:'Mechanical'}]),row=f.baseline.rows[0];
   for(const upn of ['630','650','SEC']){
     const plan=auditPlanEmailUpdates(f.baseline,[auditMakeCorrection(row,'UPN',upn)],f.directory,{scope:'changed'});
-    assert.equal(plan.emailUpdates.length,2);assert.ok(plan.emailUpdates.every(c=>c.value.startsWith('mech.')));
+    assert.equal(plan.emailUpdates.length,3);assert.ok(plan.emailUpdates.every(c=>c.value===''||c.value.startsWith('mech.')));
   }
 });
 
@@ -93,11 +94,12 @@ test('review worker applies UPN email precedence to each newly affected row',asy
   assert.ok(prepared.snapshot.rows.every(row=>row.upn==='101'));
 });
 
-test('email settings start off; explicit all-row update ignores filters and skips completed equipment',()=>{
+test('email settings start off; explicit all-row update ignores filters and includes completed equipment',()=>{
   resetSession();assert.equal(S.session.updateEmails,false);
   const f=fixture(),before=structuredClone(f.baseline.rows);
   const plan=auditPlanEmailUpdates(f.baseline,[],f.directory,{scope:'all',completedEquipmentIds:['DEMO-MAH101-01']});
-  assert.equal(plan.changes.length,3);assert.ok(plan.changes.every(c=>c.tag==='DEMO-VFD101-01'));
+  assert.equal(plan.changes.length,6);assert.equal(plan.emailSummary.matchedRows,2);
+  assert.equal(plan.changes.filter(c=>c.tag==='DEMO-MAH101-01').length,3);
   assert.deepEqual(plan.emailSummary.missingDisciplines,['Unknown']);
   assert.deepEqual(f.baseline.rows,before);
 });
@@ -116,9 +118,50 @@ test('automatic email updates touch only newly affected equipment, including cle
   const f=fixture(),previous=[auditMakeCorrection(f.baseline.rows[0],'UPN','101')];
   const changes=auditMergeCorrections(f.baseline,previous,[auditMakeCorrection(f.baseline.rows[1],'Dependencies','')]);
   const plan=auditPlanEmailUpdates(f.baseline,changes,f.directory,{scope:'changed',previousChanges:previous});
-  assert.equal(plan.emailUpdates.length,2);
+  assert.equal(plan.emailUpdates.length,3);
   assert.ok(plan.emailUpdates.every(c=>c.tag==='DEMO-MAH101-01'));
-  assert.ok(!plan.emailUpdates.some(c=>c.prop==='superintendentEmail'),'blank directory entry is not a deletion');
+  assert.equal(plan.emailUpdates.find(c=>c.prop==='superintendentEmail').value,'','blank directory entry clears the old address');
+});
+
+test('directory values replace prior draft email edits in all-row and opted-in changed-row updates',()=>{
+  const f=fixture(),row=f.baseline.rows[0];
+  const prior=[auditMakeCorrection(row,'Intel PM Email Address','manual.pm@example.com')];
+  const all=auditPlanEmailUpdates(f.baseline,prior,f.directory,{scope:'all'});
+  assert.equal(all.changes.find(c=>c.tag===row.equipmentId&&c.prop==='intelPmEmail').value,'fms.pm@example.com');
+  for(const [changes,previousChanges] of [[prior,[]],[prior,prior]]){
+    const edits=changes===previousChanges?[...changes,auditMakeCorrection(row,'Building','UPDATED')]:changes;
+    const plan=auditPlanEmailUpdates(f.baseline,edits,f.directory,{scope:'changed',previousChanges});
+    assert.equal(plan.emailUpdates.length,3);
+    assert.ok(plan.emailUpdates.every(c=>c.tag===row.equipmentId));
+    assert.equal(plan.emailUpdates.find(c=>c.prop==='intelPmEmail').before,'manual.pm@example.com');
+    assert.equal(plan.changes.find(c=>c.prop==='intelPmEmail').value,'fms.pm@example.com');
+  }
+});
+
+test('blank directory rows clear all three emails and a second synchronization makes no changes',async()=>{
+  const f=fixture([{equipmentId:'DEMO-1',upn:'SEC',discipline:'Mechanical'}]);
+  f.directory.byDiscipline.set('SECURITY',{intelPmEmail:'',superintendentEmail:'',cxEngineerEmail:''});
+  const plan=auditPlanEmailUpdates(f.baseline,[],f.directory);
+  assert.equal(plan.emailUpdates.length,3);assert.ok(plan.changes.every(c=>c.value===''));
+  const again=auditPlanEmailUpdates(f.baseline,plan.changes,f.directory);
+  assert.equal(again.emailUpdates.length,0);assert.deepEqual(again.changes,plan.changes);
+  const bytes=await buildAuditUpdateRowsBytes(f.bytes,f.baseline,plan.changes,{uploadTemplate:true});
+  const sheet=XLSX.read(bytes,{type:'array',cellStyles:true}).Sheets['Upload Template'];
+  for(const field of ['intelPmEmail','superintendentEmail','cxEngineerEmail']){
+    const cell=sheet[XLSX.utils.encode_cell({r:2,c:EXTO_REV21_COLUMNS.find(c=>c.field===field).index})];
+    assert.equal(cell.v,'');assert.equal(cell.s.fgColor.rgb,'FFF2CC');
+  }
+});
+
+test('all-row email sync changes completed rows in the draft but completed rows remain excluded from exports',async()=>{
+  const f=fixture(),cache={},completedEquipmentIds=['DEMO-MAH101-01'];
+  const prepared=await auditPrepareInWorker(cache,{baseline:f.baseline,file:new Blob([f.bytes]),changes:[],previousChanges:[],references:{},emailUpdateScope:'all',completedEquipmentIds});
+  assert.equal(prepared.snapshot.rows[1].intelPmEmail,'mech.pm@example.com');
+  assert.equal(prepared.snapshot.rows[1].superintendentEmail,'');
+  const output=await buildAuditUpdateRowsBytes(f.bytes,f.baseline,prepared.changes,{uploadTemplate:true,completedEquipmentIds});
+  const sheet=XLSX.read(output,{type:'array'}).Sheets['Upload Template'];
+  const rows=XLSX.utils.sheet_to_json(sheet,{range:1});
+  assert.deepEqual(rows.map(row=>row['Equipment ID']),['DEMO-VFD101-01']);
 });
 
 test('missing columns and unknown disciplines are reported without guessed addresses',()=>{
@@ -144,7 +187,7 @@ test('review worker stages all email changes explicitly and restores exact draft
   const untouched=await auditPrepareInWorker(cache,input);
   assert.equal(untouched.snapshot.rows[0].intelPmEmail,'old.pm@example.com');
   const prepared=await auditPrepareInWorker(cache,{changes:[],previousChanges:[],references:{},emailUpdateScope:'all'});
-  assert.equal(prepared.changes.length,5);assert.equal(prepared.emailSummary.changedCells,5);
+  assert.equal(prepared.changes.length,6);assert.equal(prepared.emailSummary.changedCells,6);
   assert.equal(prepared.snapshot.rows[0].intelPmEmail,'fms.pm@example.com');
   assert.equal(prepared.impact.unsafe.length,0);
   const restored=await auditPrepareInWorker(cache,{changes:[],previousChanges:prepared.changes,references:{}});
@@ -172,5 +215,6 @@ test('explicit email-only edits export all metadata and yellow cells with automa
   assert.equal(cell(2,'intelPmEmail').s.fgColor.rgb,'FFF2CC');
   assert.equal(cell(2,'discipline').v,'Facilities Monitoring System');
   assert.equal(cell(2,'dependencies').v,'DEMO-FEED');
-  assert.equal(cell(3,'superintendentEmail').v,'old.sup@example.com');
+  assert.equal(cell(3,'superintendentEmail').v,'');
+  assert.equal(cell(3,'superintendentEmail').s.fgColor.rgb,'FFF2CC');
 });

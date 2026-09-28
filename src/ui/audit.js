@@ -899,7 +899,7 @@ function actionSuggestions(findings,context,target,provided){
   }).map(entry=>({...entry,changes:entry.changes.map(change=>({...change}))}));
 }
 function emailUpdateSummary(summary){
-  return [`${summary.changedCells.toLocaleString()} email cells matched using original imported metadata. UPN 630 uses Life Safety emails; UPN 650 uses Facilities Monitoring emails; UPN SEC uses Security emails; other UPNs use discipline.`,summary.missingDisciplines.length?`No directory match for: ${summary.missingDisciplines.join(', ')}.`:'',summary.unavailableFields.length?`Missing registry columns: ${summary.unavailableFields.join(', ')}.`:''].filter(Boolean).join(' ');
+  return [`${summary.matchedRows.toLocaleString()} equipment rows matched; ${summary.changedCells.toLocaleString()} email cells changed. All three email cells follow the Emails table, including blanks. Matching uses original imported metadata: UPN 630 uses Life Safety, 650 uses Facilities Monitoring, SEC uses Security, and other UPNs use discipline.`,summary.missingDisciplines.length?`Unchanged: no directory match for ${summary.missingDisciplines.join(', ')}.`:'',summary.unavailableFields.length?`Unavailable registry columns: ${summary.unavailableFields.join(', ')}.`:''].filter(Boolean).join(' ');
 }
 async function openEmailUpdate(navigate){
   const session=S.session;if(session.reviewBusy)return;
