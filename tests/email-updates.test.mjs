@@ -10,12 +10,12 @@ import { auditPrepareInWorker } from '../src/audit/review.js'
 import { S, resetSession } from '../src/state.js'
 
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.url),'utf8'));
-function fixture(){
-  const records=[
+function fixture(records=[
     {equipmentId:'DEMO-VFD101-01',discipline:'Facilities Monitoring System',upn:'650'},
     {equipmentId:'DEMO-MAH101-01',discipline:'Mechanical',upn:'101'},
     {equipmentId:'DEMO-UNASSIGNED',discipline:'Unknown',upn:'101'},
-  ].map(row=>({...row,intelPmEmail:'old.pm@example.com',superintendentEmail:'old.sup@example.com',cxEngineerEmail:'old.cx@example.com',dependencies:'DEMO-FEED'}));
+  ]){
+  records=records.map(row=>({...row,intelPmEmail:'old.pm@example.com',superintendentEmail:'old.sup@example.com',cxEngineerEmail:'old.cx@example.com',dependencies:'DEMO-FEED'}));
   const aoa=[EXTO_REV21_COLUMNS.map(c=>c.header),...records.map(row=>EXTO_REV21_COLUMNS.map(c=>row[c.field]||''))];
   const baseline=auditSnapshotFromAoa(aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
@@ -23,10 +23,75 @@ function fixture(){
     ['Discipline','Intel PM Email Address','Superintendent Email Address','Cx Engineer Email Address'],
     ['Facilities Monitoring System','fms.pm@example.com','fms.sup@example.com','fms.cx@example.com'],
     ['Mechanical','mech.pm@example.com','','mech.cx@example.com'],
+    ['LIFE SAFETY SYSTEM','life.pm@example.com','life.sup@example.com','life.cx@example.com'],
+    ['SECURITY','security.pm@example.com','security.sup@example.com','security.cx@example.com'],
   ]),'Emails');
   const bytes=XLSX.write(book,{type:'array',bookType:'xlsx'});
   return {baseline,book,bytes,directory:auditEmailDirectory(book)};
 }
+
+for(const [upn,discipline,prefix] of [['630','LIFE SAFETY SYSTEM','life'],['650','FACILITIES MONITORING SYSTEM','fms'],['SEC','SECURITY','security']]){
+  test(`imported UPN ${upn} overrides conflicting discipline in manual updates, automatic updates and exports`,async()=>{
+    const f=fixture([{equipmentId:'DEMO-TAG',discipline:'Mechanical',upn}]),row=f.baseline.rows[0];
+    const manual=auditPlanEmailUpdates(f.baseline,[],f.directory,{scope:'all'});
+    assert.equal(manual.emailUpdates.length,3);
+    assert.ok(manual.emailUpdates.every(c=>c.value.startsWith(prefix+'.')));
+    assert.ok(manual.emailUpdates.every(c=>c.reason.includes(discipline)));
+    const edits=[auditMakeCorrection(row,'UPN','101'),auditMakeCorrection(row,'Discipline','Electrical')];
+    const automatic=auditPlanEmailUpdates(f.baseline,edits,f.directory,{scope:'changed',previousChanges:[]});
+    assert.equal(automatic.emailUpdates.length,3);
+    assert.ok(automatic.emailUpdates.every(c=>c.value.startsWith(prefix+'.')),'metadata edits do not change imported routing');
+    for(const [changes,updateEmails] of [[automatic.changes,false],[edits,true]]){
+      const bytes=await buildAuditUpdateRowsBytes(f.bytes,f.baseline,changes,{uploadTemplate:true,updateEmails});
+      const sheet=XLSX.read(bytes,{type:'array',cellStyles:true}).Sheets['Upload Template'];
+      for(const [field,role] of [['intelPmEmail','pm'],['superintendentEmail','sup'],['cxEngineerEmail','cx']]){
+        const cell=sheet[XLSX.utils.encode_cell({r:2,c:EXTO_REV21_COLUMNS.find(c=>c.field===field).index})];
+        assert.equal(cell.v,`${prefix}.${role}@example.com`);assert.equal(cell.s.fgColor.rgb,'FFF2CC');
+      }
+    }
+    assert.equal(f.baseline.rows[0].discipline,'Mechanical');assert.equal(f.baseline.rows[0].upn,upn);
+  });
+}
+
+test('UPN email overrides normalize case and spaces without matching other identifiers',()=>{
+  const values=[[630,'life'],[' 650 ','fms'],[' sec ','security'],['SEC-1','mech'],['1630','mech'],['6500','mech'],['','mech']];
+  const f=fixture(values.map(([upn],i)=>({equipmentId:`DEMO-${i}`,upn,discipline:'Mechanical'})));
+  const plan=auditPlanEmailUpdates(f.baseline,[],f.directory);
+  values.forEach(([,prefix],i)=>assert.equal(plan.changes.find(c=>c.tag===`DEMO-${i}`&&c.prop==='intelPmEmail').value,`${prefix}.pm@example.com`));
+});
+
+test('missing override directory entries never fall back to a conflicting discipline',()=>{
+  const f=fixture(['630','650','SEC'].map((upn,i)=>({equipmentId:`DEMO-${i}`,upn,discipline:'Mechanical'})));
+  for(const key of ['LIFE SAFETY SYSTEM','FACILITIES MONITORING SYSTEM','SECURITY'])f.directory.byDiscipline.delete(key);
+  const plan=auditPlanEmailUpdates(f.baseline,[],f.directory);
+  assert.equal(plan.changes.length,0);
+  assert.deepEqual(plan.emailSummary.missingDisciplines,['FACILITIES MONITORING SYSTEM','LIFE SAFETY SYSTEM','SECURITY']);
+});
+
+test('UPN override keeps blank email cells and excludes completed equipment',()=>{
+  const f=fixture([{equipmentId:'DEMO-DONE',upn:'630',discipline:'Mechanical'},{equipmentId:'DEMO-OPEN',upn:'SEC',discipline:''}]);
+  f.directory.byDiscipline.get('SECURITY').superintendentEmail='';
+  const plan=auditPlanEmailUpdates(f.baseline,[],f.directory,{completedEquipmentIds:['demo-done']});
+  assert.equal(plan.emailUpdates.length,2);
+  assert.ok(plan.emailUpdates.every(c=>c.tag==='DEMO-OPEN'&&c.prop!=='superintendentEmail'));
+});
+
+test('changing a non-override UPN to an override preserves its original discipline emails',()=>{
+  const f=fixture([{equipmentId:'DEMO-1',upn:'101',discipline:'Mechanical'}]),row=f.baseline.rows[0];
+  for(const upn of ['630','650','SEC']){
+    const plan=auditPlanEmailUpdates(f.baseline,[auditMakeCorrection(row,'UPN',upn)],f.directory,{scope:'changed'});
+    assert.equal(plan.emailUpdates.length,2);assert.ok(plan.emailUpdates.every(c=>c.value.startsWith('mech.')));
+  }
+});
+
+test('review worker applies UPN email precedence to each newly affected row',async()=>{
+  const f=fixture(['630','650','SEC'].map((upn,i)=>({equipmentId:`DEMO-${i}`,upn,discipline:'Mechanical'})));
+  const changes=f.baseline.rows.map(row=>auditMakeCorrection(row,'UPN','101'));
+  const prepared=await auditPrepareInWorker({},{baseline:f.baseline,file:new Blob([f.bytes]),changes,previousChanges:[],references:{},emailUpdateScope:'changed'});
+  assert.equal(prepared.emailSummary.changedCells,9);
+  assert.deepEqual(prepared.snapshot.rows.map(row=>row.intelPmEmail),['life.pm@example.com','fms.pm@example.com','security.pm@example.com']);
+  assert.ok(prepared.snapshot.rows.every(row=>row.upn==='101'));
+});
 
 test('email settings start off; explicit all-row update ignores filters and skips completed equipment',()=>{
   resetSession();assert.equal(S.session.updateEmails,false);

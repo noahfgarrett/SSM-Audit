@@ -24,7 +24,7 @@ export async function auditPrepareInWorker(cache,data,report=()=>{}){
   const baseline=cache.baseline,{references,migration,previousChanges}=data;
   let changes=data.changes,emailPlan;
   if(data.emailUpdateScope){
-    report(.08,'Matching emails to imported disciplines');
+    report(.08,'Matching emails to imported UPNs and disciplines');
     if(!cache.workbook){const bytes=new Uint8Array(await cache.file.arrayBuffer());if(bytes[0]!==0x50||bytes[1]!==0x4b)throw new Error('Email updates require an original XLSX registry.');cache.workbook=XLSX.read(bytes,{type:'array',cellStyles:true});}
     cache.emailDirectory||=auditEmailDirectory(cache.workbook);
     emailPlan=auditPlanEmailUpdates(baseline,changes,cache.emailDirectory,{scope:data.emailUpdateScope,previousChanges,completedEquipmentIds:data.completedEquipmentIds});

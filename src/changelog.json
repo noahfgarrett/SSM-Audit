@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.49.2",
+    "date": "2026-09-28",
+    "type": "fix",
+    "notes": "- Improved email update matching"
+  },
+  {
     "version": "1.49.1",
     "date": "2026-09-25",
     "type": "fix",

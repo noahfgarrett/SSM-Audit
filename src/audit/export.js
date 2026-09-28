@@ -941,9 +941,16 @@ export function buildAuditRemainingRegistry(sourceBytes,baseline,changes=[],opti
 /* ---- Emails tab ----
    A registry workbook may carry an "Emails" tab: Discipline, Intel PM Email
    Address, Superintendent Email Address, Cx Engineer Email Address. Every
-   explicit email update uses the original imported discipline. */
+   explicit email update uses original imported metadata, with UPN overrides. */
 export const AUDIT_EMAIL_FIELDS=Object.freeze([['intelPmEmail','INTEL PM EMAIL ADDRESS'],['superintendentEmail','SUPERINTENDENT EMAIL ADDRESS'],['cxEngineerEmail','CX ENGINEER EMAIL ADDRESS']]);
 export function auditEmailDisciplineKey(value){return extoRev21Norm(extoRev21EffectiveDiscipline(value));}
+function auditEmailTargetDiscipline(row){
+  const upn=extoRev21Norm(row.upn);
+  if(upn==='630')return 'LIFE SAFETY SYSTEM';
+  if(upn==='650')return 'FACILITIES MONITORING SYSTEM';
+  if(upn==='SEC')return 'SECURITY';
+  return clean(row.discipline);
+}
 export function auditEmailDirectory(workbook){
   const name=(workbook&&workbook.SheetNames||[]).find(name=>/^e-?mails?$/i.test(clean(name)));if(!name)return null;
   const aoa=XLSX.utils.sheet_to_json(workbook.Sheets[name],{header:1,defval:'',raw:false});
@@ -978,13 +985,13 @@ export function auditPlanEmailUpdates(baseline,changes,directory,options={}){
   const incoming=[],missing=new Set(),unavailable=new Set();let matchedRows=0;
   for(const row of baseline.rows){
     if(completed.has(auditNormId(row.equipmentId))||options.scope==='changed'&&!affected.has(auditCorrectionSourceKey(row._source)))continue;
-    const entry=directory.byDiscipline.get(auditEmailDisciplineKey(row.discipline));
-    if(!entry){missing.add(clean(row.discipline)||'(blank discipline)');continue;}
+    const discipline=auditEmailTargetDiscipline(row),entry=directory.byDiscipline.get(auditEmailDisciplineKey(discipline));
+    if(!entry){missing.add(discipline||'(blank discipline)');continue;}
     matchedRows++;
     for(const [prop,label] of fields){
       const value=clean(entry[prop]);if(!value)continue;
       if(row._source.columns?.[prop]==null){unavailable.add(label);continue;}
-      const change=auditMakeCorrection(row,label,value,null,'Email directory matched to the original imported discipline.');
+      const change=auditMakeCorrection(row,label,value,null,`Email directory matched to ${discipline} using original imported metadata; UPN 630, 650 and SEC take precedence over discipline.`);
       const key=auditCorrectionKey(change),existing=current.get(key),before=existing?existing.value:row[prop];
       if(options.scope==='changed'&&existing&&existing.value!==previous.get(key)?.value)continue;
       if(clean(before)!==value)incoming.push({...change,before:clean(before)});
@@ -1063,8 +1070,8 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
       }
     }
     if(emails){
-      const entry=emails.byDiscipline.get(auditEmailDisciplineKey(row.discipline));
-      if(!entry)emailMisses.add(clean(row.discipline)||'(blank discipline)');
+      const discipline=auditEmailTargetDiscipline(row),entry=emails.byDiscipline.get(auditEmailDisciplineKey(discipline));
+      if(!entry)emailMisses.add(discipline||'(blank discipline)');
       else for(const [field] of AUDIT_EMAIL_FIELDS){
         const email=entry[field];if(!email)continue;
         const outputColumn=options.uploadTemplate?EXTO_REV21_COLUMNS.find(column=>column.field===field).index:layouts.get(origin.sheet)[origin.columns?.[field]];
