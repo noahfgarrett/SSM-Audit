@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.49.4",
+    "date": "2026-09-28",
+    "type": "fix",
+    "notes": "- Improved registry export consistency"
+  },
+  {
     "version": "1.49.3",
     "date": "2026-09-28",
     "type": "fix",

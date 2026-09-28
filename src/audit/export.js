@@ -1032,7 +1032,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     layouts.set(name,layout);
   }
   options.onStage?.(.3,options.remainingRegistry?'Copying remaining equipment with all metadata':'Copying changed equipment with all metadata');
-  let associationChanges=0,emailChanges=0;
+  let associationChanges=0,emailChanges=0,clearedEmailChanges=0;
   const emails=options.updateEmails===true?auditEmailDirectory(source):null,emailMisses=new Set();
   if(emails&&emails.error)auditCorrectionFail('EMAILS',emails.error);
   const makeWorkbook=selected=>{
@@ -1057,6 +1057,12 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
       sheetSetCell(sheet,XLSX.utils.encode_cell({r:index+headerRows,c:outputColumn}),cell);
     }
     if(options.uploadTemplate){
+      const emailColumn=EXTO_REV21_COLUMNS.find(column=>column.field==='electricalIcSuperintendentEmail').index;
+      const emailAddress=XLSX.utils.encode_cell({r:index+headerRows,c:emailColumn}),emailCell=sheet[emailAddress];
+      if(emailCell?.v!=null&&emailCell.v!==''){
+        sheetSetCell(sheet,emailAddress,{...emailCell,t:'s',v:'',s:{...emailCell.s,fill:yellow}});
+        if(!patch.has(origin.columns?.electricalIcSuperintendentEmail))clearedEmailChanges++;
+      }
       const itemColumn=EXTO_REV21_COLUMNS.find(column=>column.field==='itemMaster').index;
       const associationColumn=EXTO_REV21_COLUMNS.find(column=>column.field==='vfPorFatAssociation').index;
       const item=sheet[XLSX.utils.encode_cell({r:index+headerRows,c:itemColumn})];
@@ -1125,7 +1131,7 @@ async function buildAuditUpdateData(sourceBytes,baseline,changes,options){
     // XLSX files are already compressed. A stored ZIP avoids recompressing
     // them and also works without the browser's CompressionStream API.
     const archive=await zipEntries(entries,fraction=>options.onStage?.(.9+.09*fraction,'Packaging upload batches'),{store:true});
-    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,associationChanges+emailChanges),emailCells:emailChanges,emailsTab:emails?emails.sheet:'',emailMisses:[...emailMisses].sort(natCmp),batches}};
+    return {bytes:archive,filename:`${base}.zip`,summary:{exportedRows:selected.length,excludedCompletedRows:changedRows.length-selected.length,exportedCells:selected.reduce((sum,row)=>sum+byRow.get(auditCorrectionSourceKey(row._source)).size,associationChanges+emailChanges+clearedEmailChanges),emailCells:emailChanges,emailsTab:emails?emails.sheet:'',emailMisses:[...emailMisses].sort(natCmp),batches}};
   }
   options.onStage?.(.65,options.remainingRegistry?'Packaging remaining registry':'Packaging changed rows');
   const output=new Uint8Array(await workbookBytesCompact(makeWorkbook(selected),{onProgress:options.onProgress}));

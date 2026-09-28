@@ -79,6 +79,43 @@ test('remaining registry fails clearly for all-complete inputs and stale staged 
  await assert.rejects(buildAuditRemainingRegistry(f.source,f.baseline,f.changes),/original|match|changed|conflict/i);
 });
 
+test('upload export clears only the Electrical and IC email column, counts actual clears and leaves source and remaining export intact',async()=>{
+ const f=fixture(4),field=EXTO_REV21_COLUMNS.find(c=>c.field==='electricalIcSuperintendentEmail');
+ for(const [i,value] of ['old.eic@example.com','','   ','done.eic@example.com'].entries())f.aoa[i+1][field.index]=value;
+ const baseline=auditSnapshotFromAoa(f.aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(f.aoa),'Registry');
+ const source=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'})),original=source.slice();
+ const changes=baseline.rows.map(row=>auditMakeCorrection(row,'UPN','603'));
+ const completedEquipmentIds=['DEMO-EQ-3'];
+ const result=await buildAuditUpdateBatches(source,baseline,changes,{completedEquipmentIds});
+ const sheet=XLSX.read([...entries(result.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
+ assert.equal(result.summary.exportedRows,3);assert.equal(result.summary.excludedCompletedRows,1);
+ assert.equal(result.summary.exportedCells,5,'three UPN edits plus two email clears');
+ assert.equal(result.summary.emailCells,0,'clearing this column is independent of directory email synchronization');
+ for(let r=3;r<=5;r++){
+  assert.equal(sheet[`AK${r}`]?.v??'','');
+  assert.equal(sheet[`AE${r}`].v,f.aoa[r-2][30],'regular superintendent email is unchanged');
+  if(r!==4)assert.equal(sheet[`AK${r}`].s.fgColor.rgb,'FFF2CC');
+  else assert.notEqual(sheet[`AK${r}`]?.s?.fgColor?.rgb,'FFF2CC','already blank cells are not new changes');
+ }
+ const remaining=await buildAuditRemainingRegistry(source,baseline,changes,{completedEquipmentIds});
+ const remainingSheet=XLSX.read(remaining.bytes,{type:'array'}).Sheets.Registry;
+ assert.equal(remainingSheet.AK2.v,'old.eic@example.com');
+ assert.equal(remainingSheet.AK4.v,'   ');
+ assert.deepEqual(source,original);
+});
+
+test('upload export retains an empty Electrical and IC column when absent from the source',async()=>{
+ const f=fixture(1),aoa=f.aoa.map(row=>row.filter((_,index)=>index!==36));
+ const baseline=auditSnapshotFromAoa(aoa,{sheet:'Registry'}),book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(aoa),'Registry');
+ const source=new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx'}));
+ const result=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[0],'UPN','603')]);
+ const sheet=XLSX.read([...entries(result.bytes).values()][0],{type:'array'}).Sheets['Upload Template'];
+ assert.equal(sheet.AK2.v,'Electrical and IC Superintendent Email Address');
+ assert.equal(sheet.AK3?.v??'','');assert.equal(result.summary.exportedCells,1);
+});
+
 test('VF upload rows receive Yes using final item masters with yellow changes and accurate counts',async()=>{
  const f=fixture(7),item=26,association=38;
  const values=[['VF1_PANEL',''],['VF_Blank','No'],['VF2_PANEL','Yes'],['DEMO_PANEL','No'],['DEMO_PANEL',''],['VF1_PANEL','No'],['VFD_PANEL','No']];
@@ -94,7 +131,7 @@ test('VF upload rows receive Yes using final item masters with yellow changes an
  assert.deepEqual(values.map((_,i)=>output[`AM${i+3}`]?.v),['Yes','Yes','Yes','No','Yes','No','No']);
  for(const row of [3,4,7])assert.equal(output[`AM${row}`].s.fgColor.rgb,'FFF2CC');
  assert.notEqual(output.AM5.s?.fgColor?.rgb,'FFF2CC','existing Yes is unchanged');
- assert.equal(result.summary.exportedCells,12);assert.deepEqual(source,original);
+ assert.equal(result.summary.exportedCells,19);assert.deepEqual(source,original);
 });
 
 test('VF association is supplied when the source has no association column',async()=>{
@@ -105,7 +142,7 @@ test('VF association is supplied when the source has no association column',asyn
  const source=new Uint8Array(XLSX.write(book,{bookType:'xlsx',type:'buffer'}));
  const result=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[0],'UPN','603')]);
  const sheet=XLSX.read([...entries(result.bytes).values()][0],{type:'array',cellStyles:true}).Sheets['Upload Template'];
- assert.equal(sheet.AM3.v,'Yes');assert.equal(sheet.AM3.s.fgColor.rgb,'FFF2CC');assert.equal(result.summary.exportedCells,2);
+ assert.equal(sheet.AM3.v,'Yes');assert.equal(sheet.AM3.s.fgColor.rgb,'FFF2CC');assert.equal(result.summary.exportedCells,3);
 });
 
 for(const [count,sizes] of [[1,[1]],[1950,[1950]],[1951,[1950,1]],[3900,[1950,1950]],[4300,[1950,1950,400]]]){
@@ -114,7 +151,7 @@ for(const [count,sizes] of [[1,[1]],[1950,[1950]],[1951,[1950,1]],[3900,[1950,19
   const result=await buildAuditUpdateBatches(f.source,f.baseline,f.changes,{exportDate:'2026-09-11',sourceWorkbook:f.book,onStage:f=>stages.push(f)});
   assert.equal(result.filename,'Registry_Automated_Update_2026-09-11.zip');
   assert.deepEqual(result.summary.batches.map(b=>b.rows),sizes);
-  assert.equal(result.summary.exportedRows,count);assert.equal(result.summary.exportedCells,count*2);
+  assert.equal(result.summary.exportedRows,count);assert.equal(result.summary.exportedCells,count*3);
   const files=entries(result.bytes),seen=new Set();assert.equal(files.size,sizes.length);
   for(const [i,batch] of result.summary.batches.entries()){
    assert.equal(batch.name,`Registry_Automated_Update_2026-09-11_Batch${String(i+1).padStart(2,'0')}_of_${String(sizes.length).padStart(2,'0')}.xlsx`);
@@ -131,8 +168,8 @@ for(const [count,sizes] of [[1,[1]],[1950,[1950]],[1951,[1950,1]],[3900,[1950,19
     const tag=sheet[`K${r+1}`].v;assert.ok(!seen.has(tag));seen.add(tag);
     const input=f.aoa[Number(tag.split('-').at(-1))+1];
     for(const c of EXTO_REV21_COLUMNS){
-     const cell=sheet[XLSX.utils.encode_cell({r,c:c.index})],changed=['upn','dependencyProject'].includes(c.field);
-     assert.equal(cell?.v??'',c.field==='upn'?'603':c.field==='dependencyProject'?'':input[c.index],c.field);
+     const cell=sheet[XLSX.utils.encode_cell({r,c:c.index})],changed=['upn','dependencyProject','electricalIcSuperintendentEmail'].includes(c.field);
+     assert.equal(cell?.v??'',c.field==='upn'?'603':['dependencyProject','electricalIcSuperintendentEmail'].includes(c.field)?'':input[c.index],c.field);
      if(changed)assert.equal(cell.s.fgColor.rgb,'FFF2CC');
      else assert.notEqual(cell?.s?.fgColor?.rgb,'FFF2CC');
     }
@@ -146,12 +183,12 @@ for(const [count,sizes] of [[1,[1]],[1950,[1950]],[1951,[1950,1]],[3900,[1950,19
 test('completed rows are removed before batching and summary distinguishes cells from rows',async()=>{
  const f=fixture(1952),result=await buildAuditUpdateBatches(f.source,f.baseline,f.changes,{sourceWorkbook:f.book,completedEquipmentIds:['demo-eq-0','DEMO-EQ-1']});
  assert.deepEqual(result.summary.batches.map(b=>b.rows),[1950]);
- assert.equal(result.summary.excludedCompletedRows,2);assert.equal(result.summary.exportedCells,3900);
+ assert.equal(result.summary.excludedCompletedRows,2);assert.equal(result.summary.exportedCells,5850);
  const output=XLSX.read([...entries(result.bytes).values()][0],{type:'array'});
  const tags=XLSX.utils.sheet_to_json(output.Sheets['Upload Template'],{range:1}).map(r=>r['Equipment ID']);
  assert.equal(tags.length,1950);
  assert.ok(!tags.includes('DEMO-EQ-0'));assert.ok(!tags.includes('DEMO-EQ-1'));
- assert.match(auditUpdateExportSummary(result.summary),/1,950 equipment rows exported in 1 batch \(1,950\).*2 completed rows excluded.*3,900 changed cells/);
+ assert.match(auditUpdateExportSummary(result.summary),/1,950 equipment rows exported in 1 batch \(1,950\).*2 completed rows excluded.*5,850 changed cells/);
 });
 
 test('duplicate physical rows remain together without exceeding a batch limit',async()=>{
@@ -227,7 +264,7 @@ test('email export is opt-in and uses imported discipline, with yellow changes a
  assert.equal(cell(3,pm).v,'pm.mech@example.com');assert.notEqual(cell(3,pm).s?.fgColor?.rgb,'FFF2CC','an address already in place is not a change');
  assert.equal(cell(3,sup).v,'sup.mech@example.com');assert.equal(cell(3,sup).s.fgColor.rgb,'FFF2CC');
  assert.equal(cell(4,pm).v,f.aoa[5][pm],'unmatched original discipline keeps its emails');assert.equal(cell(4,discipline).v,'ELECTRICAL');
- assert.equal(result.summary.emailCells,3+3+3+2);assert.equal(result.summary.exportedCells,6+11);
+ assert.equal(result.summary.emailCells,3+3+3+2);assert.equal(result.summary.exportedCells,6+11+5);
  assert.deepEqual(result.summary.emailMisses,['Structural']);assert.equal(result.summary.emailsTab,'Emails');
  assert.match(auditUpdateExportSummary(result.summary),/11 email cells filled from the Emails tab/);
  const stranger=await buildAuditUpdateBatches(source,baseline,[auditMakeCorrection(baseline.rows[4],'UPN','603')],{updateEmails:true});

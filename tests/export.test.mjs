@@ -1029,8 +1029,8 @@ test('upload-template updates map reordered columns, retain upload metadata and 
  assert.equal(XLSX.utils.decode_range(sheet['!ref']).e.r,2);
  for(const column of EXTO_REV21_COLUMNS){
    const cell=sheet[XLSX.utils.encode_cell({r:2,c:column.index})];
-   assert.equal(cell?.v??'',column.field==='dependencyProject'||column.field==='retainCxSteps'?'':values[column.field],column.header);
-   if(column.field==='dependencyProject')assert.equal(cell.s.fgColor.rgb,'FFF2CC');
+   assert.equal(cell?.v??'',['dependencyProject','retainCxSteps','electricalIcSuperintendentEmail'].includes(column.field)?'':values[column.field],column.header);
+   if(['dependencyProject','electricalIcSuperintendentEmail'].includes(column.field))assert.equal(cell.s.fgColor.rgb,'FFF2CC');
    else assert.notEqual(cell?.s?.fgColor?.rgb,'FFF2CC');
  }
  assert.deepEqual(source,original);
