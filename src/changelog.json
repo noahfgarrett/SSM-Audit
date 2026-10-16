@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.50.2",
+    "date": "2026-10-16",
+    "type": "feature",
+    "notes": "- Added a power hierarchy view to the Dependencies tab\n- Column headers on the Dependencies tab now stay visible while scrolling"
+  },
+  {
     "version": "1.50.1",
     "date": "2026-10-16",
     "type": "fix",
