@@ -5,13 +5,14 @@ import { ic } from './ui/icons.js'
 import { activateFocusTrap, animateClose, animateOpen, motionReduced } from './ui/feedback.js'
 import { closeDrawer, renderAuditResult, renderComparisonResult, renderDashboard, renderCompletedEquipment, renderHierarchyResult, renderModifications, renderRules, renderSideNav, renderUpload, closeRuleExample, closeExportOptions, loadRulePreferences } from './ui/audit.js'
 import { closeUpdateModal, initUpdate } from './update/update.js'
+import { renderDependencyCheck } from './ui/dependencies.js'
 
 import { GUIDE_SECTIONS } from './ui/guide-content.js'
 let activeGuide='start';
 let guideOpener=null;
 let guideTrapCleanup=null;
 
-function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='modify')renderModifications(go);else if(screen==='completed')renderCompletedEquipment(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
+function go(screen){const changed=S.screen!==screen;S.screen=screen;if(screen==='dashboard')renderDashboard(go);else if(screen==='audit')renderAuditResult(go);else if(screen==='modify')renderModifications(go);else if(screen==='completed')renderCompletedEquipment(go);else if(screen==='hierarchy')renderHierarchyResult(go);else if(screen==='dependencies')renderDependencyCheck(go);else if(screen==='compare')renderComparisonResult(go);else if(screen==='rules')renderRules(go);else renderUpload(go);renderSideNav(go);if(changed)markViewEnter();}
 /* A screen change slides the new content in; re-renders of the same screen (filters, sorting) stay still. */
 function markViewEnter(){const view=$('#view');if(!view||motionReduced())return;view.classList.remove('view-enter');void view.offsetWidth;view.classList.add('view-enter');view.addEventListener('animationend',()=>view.classList.remove('view-enter'),{once:true});}
 function renderGuide(){

@@ -43,6 +43,7 @@ const NAV_SECTIONS=[
   {id:'modify',icon:'sliders-horizontal',label:'Actions',hint:'Action findings in bulk, or dismiss ones you disagree with'},
   {id:'completed',icon:'circle-check',label:'Completed Equipment',hint:'Equipment finished on site per the Equipment Status Report'},
   {id:'hierarchy',icon:'list-tree',label:'SSM Hierarchy',hint:'Browse the registry as a tree'},
+  {id:'dependencies',icon:'git-branch',label:'Dependencies',hint:'Dependencies the power and control documents call for, checked against this registry'},
   {id:'compare',icon:'square-stack',label:'Compare Projects',hint:'Line this registry up beside a finished one'},
   {id:'rules',icon:'book-open',label:'Rules',hint:'What the audit checks, in plain language'},
 ];
@@ -52,6 +53,7 @@ function navActiveId(){
   if(S.screen==='modify')return 'modify';
   if(S.screen==='completed')return 'completed';
   if(S.screen==='hierarchy')return 'hierarchy';
+  if(S.screen==='dependencies')return 'dependencies';
   if(S.screen==='compare')return 'compare';
   if(S.screen==='rules')return 'rules';
   return S.homeMode==='compare'?'compare':S.homeMode==='rules'?'rules':'audit';
@@ -76,13 +78,14 @@ function navBadges(id){
   if(id==='modify'&&S.session&&S.session.rawResult){const aside=excludedInBase();return aside?navCountHtml(aside,'','dismissed'):'';}
   if(id==='completed'&&S.session&&S.session.status)return navCountHtml(S.session.status.equipment.length,'','completed on the report');
   if(id==='hierarchy'&&S.session&&S.session.snapshot)return navCountHtml(S.session.snapshot.rows.length,'','rows');
+  if(id==='dependencies'){const missing=S.session?.rawResult?.dependencyCheck?.counts.missing;return missing?navCountHtml(missing,'','missing dependencies'):'';}
   if(id==='compare'&&comparison)return navCountHtml(comparison.summary.differentSystems+comparison.summary.targetOnlySystems+comparison.summary.referenceOnlySystems,'','systems with differences');
   return '';
 }
 function navDisabled(id){
   if(id==='hierarchy')return !(S.session&&S.session.result&&S.session.snapshot);
   if(id==='dashboard')return !(S.session&&S.session.result);
-  if(id==='modify')return !(S.session&&S.session.rawResult);
+  if(id==='modify'||id==='dependencies')return !(S.session&&S.session.rawResult);
   if(id==='completed')return !(S.session&&S.session.rawResult&&S.session.status);
   return false;
 }
@@ -113,6 +116,7 @@ function navigateSection(id,navigate){
   if(id==='modify'){if(S.session&&S.session.rawResult)navigate('modify');return;}
   if(id==='completed'){if(S.session&&S.session.rawResult&&S.session.status)navigate('completed');return;}
   if(id==='hierarchy'){if(S.session&&S.session.result)navigate('hierarchy');return;}
+  if(id==='dependencies'){if(S.session&&S.session.rawResult)navigate('dependencies');return;}
   S.homeMode='audit';navigate(S.session&&S.session.result?'audit':'upload');
 }
 
@@ -2186,7 +2190,7 @@ export function closeDrawer(){
 function rerenderRows(reset){const wrap=$('#auditTableWrap');if(reset&&wrap)wrap.scrollTop=0;renderRows();}
 /* Every screen that can host the filter panel tears the previous one down first,
    so a panel never outlives the screen that opened it. */
-function teardownAuditFilters(){
+export function teardownAuditFilters(){
   filterPanelTrap?.();filterPanelTrap=null;filterPanelOpener=null;filterRerender=null;
   document.body.classList.remove('filter-sheet-open');
   if(S.session)S.session.panelOpen=false;

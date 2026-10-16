@@ -28,5 +28,6 @@ export const MODULES=[
   'src/audit/review.js',
   'src/update/update.js',
   'src/ui/audit.js',
+  'src/ui/dependencies.js',
   'src/boot.js',
 ];
