@@ -2423,3 +2423,11 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
   .dep-detail{padding-left:16px}
   .dep-detail dl{grid-template-columns:1fr}
 }
+@media (max-width:640px){
+  .dep-shell .screen-heading{flex-direction:column;align-items:stretch;gap:12px}
+  .dep-shell .screen-heading .btn{justify-content:center}
+  .dep-count{padding:10px 12px}
+  .dep-count b{font-size:20px}
+  .dep-shell .modify-toolbar .searchbox{min-width:0;flex-basis:100%}
+  .dep-shell .modify-toolbar select{flex:1 1 140px;min-width:0}
+}
