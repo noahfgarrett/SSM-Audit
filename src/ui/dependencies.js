@@ -17,7 +17,6 @@ const DEPENDENCY_STATUS=Object.freeze({
   missing:{label:'Missing',icon:'circle-x'},
   absent:{label:'Not in registry',icon:'triangle-alert'},
 });
-const DEPENDENCY_FILTERS=Object.freeze([['all','Compared + not in registry'],['match','Match'],['missing','Missing'],['absent','Not in registry']]);
 
 export function dependencyCheckOf(session){return session?.rawResult?.dependencyCheck||null;}
 
@@ -25,8 +24,9 @@ function dependencyLocation(source){return `${source.label} ${source.sheet}, row
 function dependencySourceHtml(sources){
   const unique=[...new Set(sources.map(dependencyLocation))];
   if(!unique.length)return '<span class="muted">—</span>';
-  return `${esc(unique[0])}${unique.length>1?` <span class="muted">+${unique.length-1}</span>`:''}`;
+  return `<span title="${esc(unique.join('\n'))}">${esc(unique[0])}${unique.length>1?` <span class="muted">+${unique.length-1}</span>`:''}</span>`;
 }
+function dependencySentence(text){const value=clean(text);return value.charAt(0).toUpperCase()+value.slice(1);}
 function dependencyTagsHtml(tags,emptyText='—'){return tags.length?tags.map(tag=>`<code>${esc(tag)}</code>`).join(' '):`<span class="muted">${esc(emptyText)}</span>`;}
 
 /* One list of display items: compared registry rows, then tags missing from the registry. */
@@ -39,7 +39,7 @@ export function dependencyItems(check){
 export function dependencyFiltered(items,session){
   const query=clean(session.depSearch||'').toUpperCase(),status=session.depStatus||'all',discipline=session.depDiscipline||'all',building=session.depBuilding||'all';
   return items.filter(item=>{
-    if(status!=='all'&&item.kind!==status)return false;
+    if(status==='compared'?item.kind==='absent':status!=='all'&&item.kind!==status)return false;
     if(discipline!=='all'&&item.discipline!==discipline)return false;
     if(building!=='all'&&item.building!==building)return false;
     if(query){
@@ -61,7 +61,7 @@ function dependencyDetailHtml(item){
     const chain=[expected.tag,...[...expected.skipped].reverse(),entry.equipmentId];
     const present=!entry.missing.includes(expected.tag);
     return `<section class="dep-expect ${present?'ok':'bad'}"><div class="dep-chain">${ic(present?'circle-check':'circle-x')}${chain.map((tag,index)=>`<code class="${expected.skipped.includes(tag)?'skipped':''}">${esc(tag)}</code>${index<chain.length-1?ic('arrow-right'):''}`).join('')}</div>
-      <p>${esc(expected.reason)} — ${present?'listed in Dependencies.':'not listed in Dependencies.'}</p>
+      <p>${esc(dependencySentence(expected.reason))} — ${present?'listed in Dependencies.':'not listed in Dependencies.'}</p>
       <small>${expected.sources.map(source=>esc(dependencyLocation(source))).join(' · ')}</small></section>`;
   }).join('')}${entry.notes.length?`<ul class="dep-notes">${entry.notes.map(note=>`<li>${ic('info')}${esc(note)}</li>`).join('')}</ul>`:''}
   <dl><dt>Closest Parent</dt><dd>${entry.closestParent?`<code>${esc(entry.closestParent)}</code>`:'<span class="muted">—</span>'}</dd><dt>Registry dependencies</dt><dd>${dependencyTagsHtml(entry.registryDependencies,'None')}</dd></dl></div>`;
@@ -108,14 +108,14 @@ export function renderDependencyCheck(navigate){
   const items=check?dependencyItems(check):[],list=dependencyFiltered(items,session);
   const disciplines=[...new Set(items.map(item=>item.discipline).filter(Boolean))].sort(natCmp),buildings=[...new Set(items.map(item=>item.building).filter(Boolean))].sort(natCmp);
   const status=session.depStatus||'all',counts=check?.counts;
-  const countButton=(id,label,value,extra='')=>`<button class="dep-count ${id} ${status===id?'active':''}" type="button" data-dep-status="${id}" aria-pressed="${status===id}"><b>${(value||0).toLocaleString()}</b><span>${esc(label)}</span>${extra}</button>`;
+  const countButton=(id,label,value)=>`<button class="dep-count ${id} ${status===id?'active':''}" type="button" data-dep-status="${id}" aria-pressed="${status===id}" title="${status===id?'Show every row':`Show only ${esc(label.toLowerCase())}`}"><b>${(value||0).toLocaleString()}</b><span>${esc(label)}</span></button>`;
   const hasDocuments=DEPENDENCY_DOCUMENT_KINDS.some(kind=>session.references?.[kind]?.entries?.length);
   const filtered=!!clean(session.depSearch)||status!=='all'||(session.depDiscipline||'all')!=='all'||(session.depBuilding||'all')!=='all';
   $('#view').innerHTML=`<section class="completed-shell dep-shell">
     <div class="screen-heading"><div><span class="eyebrow">Power and control documents</span><h2>Dependencies</h2><p>${esc(session.name)} — dependencies that EasyPower, the Cable Schedule and the PMD call for, checked against this registry. A feed that crosses a Building, Discipline or System Name boundary should be a dependency; electrical equipment fed inside one building nests instead.</p></div>
       <button class="btn primary" type="button" id="depExport" ${check?'':'disabled'} title="${check?'Download the Summary, Dependencies and Not in registry sheets':'Add a power or control document first'}">${ic('download')}Download dependency check</button></div>
     ${check&&hasDocuments?`<div class="dep-counts" role="group" aria-label="Filter by status">
-      ${countButton('all','Compared',counts.compared)}${countButton('match','Match',counts.match)}${countButton('missing','Missing',counts.missing)}${countButton('absent','Not in registry',counts.notInRegistry)}</div>
+      ${countButton('compared','Compared',counts.compared)}${countButton('match','Match',counts.match)}${countButton('missing','Missing',counts.missing)}${countButton('absent','Not in registry',counts.notInRegistry)}</div>
     <div class="modify-toolbar"><div class="searchbox">${ic('search')}<input id="depSearch" aria-label="Search dependency check" placeholder="Search tags" value="${esc(session.depSearch||'')}"></div>
       <select id="depDiscipline" class="modify-dim" aria-label="Filter by discipline"><option value="all">All disciplines</option>${disciplines.map(name=>`<option value="${esc(name)}" ${session.depDiscipline===name?'selected':''}>${esc(name)}</option>`).join('')}</select>
       <select id="depBuilding" class="modify-dim" aria-label="Filter by building"><option value="all">All buildings</option>${buildings.map(name=>`<option value="${esc(name)}" ${session.depBuilding===name?'selected':''}>${esc(name)}</option>`).join('')}</select>
@@ -124,14 +124,14 @@ export function renderDependencyCheck(navigate){
       ${list.slice(0,DEPENDENCY_CHUNK).map(item=>dependencyRowHtml(item,session.depExpanded.has(item.key))).join('')}
       ${list.length>DEPENDENCY_CHUNK?`<button class="btn ghost sm modify-more" type="button" id="depMore" data-offset="${DEPENDENCY_CHUNK}">${ic('chevrons-down')}Show ${Math.min(list.length-DEPENDENCY_CHUNK,DEPENDENCY_CHUNK).toLocaleString()} more of ${(list.length-DEPENDENCY_CHUNK).toLocaleString()}</button>`:''}</div>`
       :`<div class="rule-reference-empty">${ic(filtered?'search':'check-check')}<b>${filtered?'Nothing matches those filters':'No feeds cross a group boundary'}</b><span>${filtered?'Try a different search, status, discipline or building.':'Every feed in the selected documents stays inside one Building, Discipline and System Name, so no dependencies are expected.'}</span></div>`}</div>
-    <details class="dep-documents"><summary>${ic('file-spreadsheet')}Documents in this check</summary>${engineeringUploadsHtml(DEPENDENCY_DOCUMENT_KINDS,'Power and control documents')}</details>`
-    :`${dependencyEmptyHtml()}${engineeringUploadsHtml(DEPENDENCY_DOCUMENT_KINDS,'Power and control documents')}`}
+    <details class="dep-documents"><summary>${ic('file-spreadsheet')}Documents in this check</summary>${engineeringUploadsHtml(DEPENDENCY_DOCUMENT_KINDS,'Power and control documents','Excel or CSV')}</details>`
+    :`${dependencyEmptyHtml()}${engineeringUploadsHtml(DEPENDENCY_DOCUMENT_KINDS,'Power and control documents','Excel or CSV')}`}
   </section>`;
   wireEngineeringUploads(navigate,rerender);
   const exportButton=$('#depExport');
   if(exportButton)exportButton.onclick=async()=>{exportButton.disabled=true;try{await exportDependencyCheckXlsx();}finally{exportButton.disabled=false;}};
   if(!check||!hasDocuments)return;
-  for(const button of $$('[data-dep-status]'))button.onclick=()=>{session.depStatus=button.dataset.depStatus;rerender();};
+  for(const button of $$('[data-dep-status]'))button.onclick=()=>{session.depStatus=status===button.dataset.depStatus?'all':button.dataset.depStatus;rerender();};
   const search=$('#depSearch');let timer=0;
   search.oninput=()=>{session.depSearch=search.value;clearTimeout(timer);timer=setTimeout(()=>{renderDependencyCheck(navigate);const input=$('#depSearch');if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}},150);};
   $('#depDiscipline').onchange=event=>{session.depDiscipline=event.target.value;rerender();};

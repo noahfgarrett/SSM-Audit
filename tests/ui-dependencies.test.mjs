@@ -21,6 +21,8 @@ test('status, discipline, building and search filters narrow the list', () => {
   const names = session => dependencyFiltered(items, session).map(item => item.tag)
   assert.deepEqual(names({ depStatus: 'missing' }), ['SYN-PUMP-1'])
   assert.deepEqual(names({ depStatus: 'absent' }), ['SYN-MCC<b>'])
+  assert.deepEqual(names({ depStatus: 'compared' }), ['SYN-PUMP-1', 'SYN-PUMP-2'], 'Compared means Match plus Missing')
+  assert.equal(names({}).length, 3, 'no tile selected shows every row')
   assert.deepEqual(names({ depBuilding: 'BLDG-B' }), ['SYN-PUMP-2'])
   assert.deepEqual(names({ depDiscipline: 'MECHANICAL WET' }), ['SYN-PUMP-1', 'SYN-PUMP-2'])
   assert.deepEqual(names({ depSearch: 'pump-1' }), ['SYN-PUMP-1', 'SYN-MCC<b>'], 'a missing upstream tag shows beside the rows it affects')
