@@ -1443,14 +1443,14 @@ export function renderUpload(navigate){
   renderSideNav(navigate);wireUpload(navigate);
 }
 
-function engineeringUploadsHtml(){
+export function engineeringUploadsHtml(kinds=Object.keys(AUDIT_ENGINEERING_KINDS),title='Project documents'){
   const descriptions={mel:'Equipment Tag, UPN, Building / Bldg, Discipline and other equipment metadata.',easyPower:'Starting Source, numbered Downstream columns, Final Source and ID Name.',cable:'Load Name (To) and Panel (From).',pmd:'Instrument Tag and Panel.'};
-  return `<section class="engineering-inputs"><div class="checks-head"><h3>Project documents <small>Optional</small></h3></div><div class="engineering-grid">${Object.entries(AUDIT_ENGINEERING_KINDS).map(([kind,label])=>{
+  return `<section class="engineering-inputs"><div class="checks-head"><h3>${esc(title)} <small>Optional &middot; Excel or CSV</small></h3></div><div class="engineering-grid">${kinds.map(kind=>[kind,AUDIT_ENGINEERING_KINDS[kind]]).map(([kind,label])=>{
     const input=S.session.engineeringInputs?.[kind],active=S.session.references?.[kind];
-    return `<section class="engineering-slot" data-engineering-drop="${kind}" aria-label="${esc(label)} workbook upload"><div class="engineering-title"><b>${esc(label)}</b><button class="btn sm" type="button" data-engineering-browse="${kind}">${ic('upload')}${input?'Replace':'Choose workbook'}</button></div><p>${esc(descriptions[kind])}</p><input type="file" accept=".xlsx,.xls" data-engineering-file="${kind}" hidden>${input?`<div class="engineering-file"><span title="${esc(input.name)}">${esc(input.name)}</span><button class="xbtn icon-btn" type="button" data-engineering-remove="${kind}" aria-label="Remove ${esc(label)}">${ic('x')}</button></div><fieldset class="engineering-sheets"><legend>Sheets to check</legend>${input.references.map((reference,index)=>`<label><input type="checkbox" data-engineering-sheet="${kind}" value="${index}" ${input.selected.includes(index)?'checked':''}><span>${esc(reference.sheetName)} <small>${reference.entries.length.toLocaleString()} entries</small></span></label>`).join('')}</fieldset><small role="status">${active?`${new Set(active.entries.map(entry=>auditNormId(entry.equipmentId))).size.toLocaleString()} tags selected`:'Select the project sheets to include'}</small>`:'<small>No document selected</small>'}</section>`;
+    return `<section class="engineering-slot" data-engineering-drop="${kind}" aria-label="${esc(label)} file upload"><div class="engineering-title"><b>${esc(label)}</b><button class="btn sm" type="button" data-engineering-browse="${kind}">${ic('upload')}${input?'Replace':'Choose file'}</button></div><p>${esc(descriptions[kind])}</p><input type="file" accept=".xlsx,.xls,.csv" data-engineering-file="${kind}" hidden>${input?`<div class="engineering-file"><span title="${esc(input.name)}">${esc(input.name)}</span><button class="xbtn icon-btn" type="button" data-engineering-remove="${kind}" aria-label="Remove ${esc(label)}">${ic('x')}</button></div><fieldset class="engineering-sheets"><legend>Sheets to check</legend>${input.references.map((reference,index)=>`<label><input type="checkbox" data-engineering-sheet="${kind}" value="${index}" ${input.selected.includes(index)?'checked':''}><span>${esc(reference.sheetName)} <small>${reference.entries.length.toLocaleString()} entries</small></span></label>`).join('')}</fieldset><small role="status">${active?`${new Set(active.entries.map(entry=>auditNormId(entry.equipmentId))).size.toLocaleString()} tags selected`:'Select the project sheets to include'}</small>`:'<small>No document selected</small>'}</section>`;
   }).join('')}</div></section>`;
 }
-async function installEngineeringInput(kind,input,navigate){
+async function installEngineeringInput(kind,input,navigate,rerender=()=>renderUpload(navigate)){
   const session=S.session,references={...session.references};
   const selected=input?.references.filter((_,index)=>input.selected.includes(index))||[];
   if(selected.length)references[kind]={kind,sheetName:selected.map(reference=>reference.sheetName).join('; '),entries:selected.flatMap(reference=>reference.entries)};
@@ -1468,24 +1468,24 @@ async function installEngineeringInput(kind,input,navigate){
   }else session.references=references;
   session.engineeringInputs={...session.engineeringInputs};
   if(input)session.engineeringInputs[kind]=input;else delete session.engineeringInputs[kind];
-  renderUpload(navigate);
+  rerender();
 }
-function wireEngineeringUploads(navigate){
+export function wireEngineeringUploads(navigate,rerender=()=>renderUpload(navigate)){
   let loading=false;
   for(const kind of Object.keys(AUDIT_ENGINEERING_KINDS)){
     const fileInput=$(`[data-engineering-file="${kind}"]`);
-    const fail=error=>{toast(error?.message||'The project document could not be loaded');renderUpload(navigate);};
+    const fail=error=>{toast(error?.message||'The project document could not be loaded');rerender();};
     $(`[data-engineering-browse="${kind}"]`)?.addEventListener('click',()=>fileInput?.click());
     const loadFiles=async files=>{
       if(loading){toast('Wait for the current document to finish loading');return;}
-      if(files.length>1){toast('Choose one workbook for each project document');return;}
+      if(files.length>1){toast('Choose one file for each project document');return;}
       const file=files[0];if(!file)return;
-      if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Choose an Excel workbook (.xlsx or .xls)');return;}
+      if(!/\.(xlsx|xls|csv)$/i.test(file.name)){toast('Choose an Excel workbook or CSV file (.xlsx, .xls or .csv)');return;}
       loading=true;
       try{
         let parsed;
         await runWithProgress(`Loading ${AUDIT_ENGINEERING_KINDS[kind]}`,file.name,async(checkpoint,report)=>{await checkpoint();parsed=await importAuditWorkbook(file,{referenceKind:kind,report});});
-        await installEngineeringInput(kind,{name:file.name,references:parsed.references,selected:parsed.references.length===1?[0]:[]},navigate);
+        await installEngineeringInput(kind,{name:file.name,references:parsed.references,selected:parsed.references.length===1?[0]:[]},navigate,rerender);
       }catch(error){fail(error);}finally{loading=false;}
     };
     if(fileInput)fileInput.onchange=()=>{const files=Array.from(fileInput.files||[]);fileInput.value='';return loadFiles(files);};
@@ -1498,10 +1498,10 @@ function wireEngineeringUploads(navigate){
       drop.ondragleave=event=>{event.stopPropagation();dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)drop.classList.remove('dragging');};
       drop.ondrop=event=>{event.preventDefault();event.stopPropagation();dragDepth=0;drop.classList.remove('dragging');return loadFiles(Array.from(event.dataTransfer?.files||[]));};
     }
-    const remove=$(`[data-engineering-remove="${kind}"]`);if(remove)remove.onclick=()=>installEngineeringInput(kind,null,navigate).catch(fail);
+    const remove=$(`[data-engineering-remove="${kind}"]`);if(remove)remove.onclick=()=>installEngineeringInput(kind,null,navigate,rerender).catch(fail);
     for(const checkbox of $$(`[data-engineering-sheet="${kind}"]`))checkbox.onchange=()=>{
       const input=S.session.engineeringInputs[kind],selected=$$(`[data-engineering-sheet="${kind}"]`).filter(element=>element.checked).map(element=>Number(element.value));
-      installEngineeringInput(kind,{...input,selected},navigate).catch(fail);
+      installEngineeringInput(kind,{...input,selected},navigate,rerender).catch(fail);
     };
   }
 }

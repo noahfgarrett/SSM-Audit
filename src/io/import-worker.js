@@ -9,6 +9,19 @@ import { workbookBytesCompact } from '../core/download.js'
 
 const auditReviewWorkerCache={};
 
+/* CSV is decoded as UTF-8 and read cell-for-cell as text, so tags such as
+   "007" or "1E3" never become numbers. Its single sheet takes the file name so
+   source locations read "file.csv, row 12". */
+function auditReadUploadedWorkbook(bytes,fileName=''){
+  if(!/\.csv$/i.test(fileName))return XLSX.read(bytes,{type:'array',dense:true});
+  const workbook=XLSX.read(new TextDecoder('utf-8').decode(bytes),{type:'string',dense:true,raw:true});
+  if(workbook.SheetNames.length===1){
+    const [first]=workbook.SheetNames;
+    workbook.Sheets={[fileName]:workbook.Sheets[first]};workbook.SheetNames=[fileName];
+  }
+  return workbook;
+}
+
 // Keep the workbook and temporary sheet arrays off the UI thread. Only the
 // compact audit model and the untouched original bytes return to the app.
 self.onmessage=async({data})=>{
@@ -39,7 +52,7 @@ self.onmessage=async({data})=>{
     report(.02,'Reading workbook');
     const bytes=new Uint8Array(await data.file.arrayBuffer());
     report(.06,'Opening workbook');
-    const workbook=XLSX.read(bytes,{type:'array',dense:true});
+    const workbook=auditReadUploadedWorkbook(bytes,data.fileName);
     if(data.referenceKind==='registries'){
       report(.2,'Reading registry tabs');
       const reference=await auditSnapshotFromWorkbook(workbook,data.fileName,null,(fraction,label)=>report(.2+fraction*.7,label));

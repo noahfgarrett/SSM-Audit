@@ -14,7 +14,7 @@ import { EXTO_REV21_COLUMNS } from '../src/exto/rev21-contract.js'
 vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.url),'utf8'));
 const ui=readFileSync(new URL('../src/ui/audit.js',import.meta.url),'utf8');
 const state=readFileSync(new URL('../src/state.js',import.meta.url),'utf8').replaceAll('export ','');
-const helpers=ui.slice(ui.indexOf('function engineeringUploadsHtml()'),ui.indexOf('\nfunction clearComparisonTarget()')).replace('export async function','async function');
+const helpers=ui.slice(ui.indexOf('export function engineeringUploadsHtml('),ui.indexOf('\nfunction clearComparisonTarget()')).replace('export async function','async function').replaceAll('export function','function');
 const install=ui.slice(ui.indexOf('function reviewInstallDraft('),ui.indexOf('\nasync function reviewPrepare('));
 const row={equipmentId:'TEST-PUMP111-01',building:'TEST',upn:'111',closestParent:'111 Chilled Water',systemName:'111 Chilled Water',discipline:'MECHANICAL WET'};
 const mel=auditReadEngineeringAoa([['Equipment Tag','Building'],[row.equipmentId,'OTHER']],'mel','Synthetic MEL');
@@ -111,7 +111,11 @@ test('document drops reject unsupported files and batches without changing loade
   await h.drop('mel').ondrop(dragEvent([{name:'wrong.pdf'}]));
   await h.drop('mel').ondrop(dragEvent([{name:'a.xlsx'},{name:'b.xlsx'}]));
   assert.equal(h.imports.length,1);assert.equal(h.getSession().references.mel,prior);
-  assert.match(h.errors[0],/Excel workbook/);assert.match(h.errors[1],/one workbook/);
+  assert.match(h.errors[0],/Excel workbook or CSV/);assert.match(h.errors[1],/one file/);
+});
+test('a CSV project document is accepted by its slot',async()=>{
+  const h=uploadHarness();await h.drop('cable').ondrop(dragEvent([{name:'synthetic cable.csv'}]));
+  assert.equal(h.imports.length,1);assert.deepEqual(h.errors,[]);
 });
 test('document picker retains its browse behavior and uses the same loader',async()=>{
   const h=uploadHarness(),input=h.input('pmd');

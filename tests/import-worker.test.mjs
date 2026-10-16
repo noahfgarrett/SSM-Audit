@@ -36,10 +36,10 @@ function fixture(count=32,withStatus=true,bookType='xlsx'){
 
 // Run the exact packaged worker in an isolated JS thread with browser globals.
 // This tests offline processing, not browser UI or URL-policy behavior.
-async function background(bytes,audit=true,referenceKind){
+async function background(bytes,audit=true,referenceKind,fileName='synthetic.xlsx'){
   const thread=new Thread(`const {parentPort,workerData}=require('node:worker_threads');
     const vm=require('node:vm');
-    const context=vm.createContext({TextEncoder,Uint8Array,self:{postMessage:(data,transfer)=>parentPort.postMessage(data,transfer)}});
+    const context=vm.createContext({TextEncoder,TextDecoder,Uint8Array,self:{postMessage:(data,transfer)=>parentPort.postMessage(data,transfer)}});
     vm.runInContext(workerData,context);
     parentPort.on('message',data=>context.self.onmessage({data}));`,{eval:true,workerData:vendor+'\n'+workerSource});
   const messages=[];
@@ -47,7 +47,7 @@ async function background(bytes,audit=true,referenceKind){
     return await new Promise((resolve,reject)=>{
       thread.on('error',reject);
       thread.on('message',data=>{messages.push(data);if(data.type==='result'||data.type==='error')resolve({data,messages});});
-      thread.postMessage({file:new Blob([bytes]),fileName:'synthetic.xlsx',audit,referenceKind});
+      thread.postMessage({file:new Blob([bytes]),fileName,audit,referenceKind});
     });
   }finally{await thread.terminate();}
 }
@@ -207,4 +207,13 @@ for(const mode of ['construct','post','unavailable','error','messageerror','repo
   await assert.rejects(pending);
   if(mode!=='unavailable')assert.ok(h.events.includes('revoked'));
   if(!['construct','unavailable'].includes(mode))assert.ok(h.events.includes('terminated'));
+});
+
+test('a CSV project document reads as text, keeps UTF-8 and is named after the file',async()=>{
+  const csv='\ufeffLoad Name (To),Panel (From)\nTEST-PUMP-\u00d81,TEST-PNL-007\n1E3,TEST-PNL-007\n';
+  const {data}=await background(new TextEncoder().encode(csv),false,'cable','synthetic cable.csv');
+  assert.equal(data.type,'result');
+  assert.equal(data.references.length,1);
+  assert.equal(data.references[0].sheetName,'synthetic cable.csv');
+  assert.deepEqual(data.references[0].entries.filter(entry=>entry.parent).map(entry=>[entry.equipmentId,entry.parent,entry.sourceRow]),[['TEST-PUMP-\u00d81','TEST-PNL-007',2],['1E3','TEST-PNL-007',3]]);
 });
