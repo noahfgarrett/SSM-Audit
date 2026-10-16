@@ -13,6 +13,8 @@ vm.runInThisContext(readFileSync(new URL('../src/vendor/sheetjs.js',import.meta.
 const parse=(rows,kind='mel')=>auditReadEngineeringAoa(rows,kind,'Selected sheet');
 const snap=(rows)=>auditSnapshotFromAoa([EXTO_REV21_COLUMNS.map(c=>c.header),...rows.map(row=>EXTO_REV21_COLUMNS.map(c=>row[c.field]||''))],{sheet:'Registry'});
 const row={equipmentId:'TEST-PUMP111-01',upn:'111',building:'TEST',discipline:'MECHANICAL WET',systemName:'111 Chilled Water',closestParent:'111 Chilled Water',equipmentDescription:'Pump'};
+const elec={upn:'603',building:'TEST',discipline:'ELECTRICAL',systemName:'603 Low Voltage',closestParent:'603 Low Voltage',equipmentDescription:'Panel'};
+const fms={upn:'650',building:'TEST',discipline:'FACILITIES MONITORING SYSTEM',systemName:'650 Facilities Monitoring System',closestParent:'650 Facilities Monitoring System',equipmentDescription:'RIO'};
 
 test('MEL row 2 headers, formatted fields, explicit parent and system description are read',()=>{
   const ref=parse([['Synthetic'],['Equipment Tag','UPN','Bldg','Discipline','System Description','System Parent Equipment Tag(s)'],[row.equipmentId,'111','TEST','MECHANICAL WET','Chilled Water','TEST-ROLLUP']]);
@@ -40,19 +42,32 @@ test('EasyPower downstream levels sort numerically, cross gaps and collapse adja
 });
 test('cable schedule order is irrelevant and all feeds survive',()=>{
   const ref=parse([['Load Name (To)','Panel (From)'],['TEST-PANEL','TEST-GIS'],['TEST-LOAD','TEST-PANEL'],['TEST-LOAD','TEST-SECOND']],'cable');
-  const findings=auditEngineeringFindings(snap([{...row,equipmentId:'TEST-LOAD',closestParent:'TEST-PANEL'},{...row,equipmentId:'TEST-PANEL',closestParent:'TEST-GIS'},{...row,equipmentId:'TEST-GIS'},{...row,equipmentId:'TEST-SECOND'}]),{cable:ref});
+  const findings=auditEngineeringFindings(snap([{...row,equipmentId:'TEST-LOAD',dependencies:'TEST-PANEL'},{...elec,equipmentId:'TEST-PANEL',closestParent:'TEST-GIS'},{...elec,equipmentId:'TEST-GIS'},{...elec,equipmentId:'TEST-SECOND'}]),{cable:ref});
   assert.equal(findings.length,1);assert.equal(findings[0].expected,'TEST-SECOND');
 });
 test('PMD repeated rows deduplicate findings and semicolon feeds are retained',()=>{
   const ref=parse([['Panel','Instrument Tag'],['TEST-RIO; TEST-PLC',row.equipmentId],['TEST-RIO',row.equipmentId]],'pmd');
-  const findings=auditEngineeringFindings(snap([row,{...row,equipmentId:'TEST-RIO'},{...row,equipmentId:'TEST-PLC'}]),{pmd:ref});
+  const findings=auditEngineeringFindings(snap([row,{...fms,equipmentId:'TEST-RIO'},{...fms,equipmentId:'TEST-PLC'}]),{pmd:ref});
   assert.equal(findings.length,1);assert.equal(findings[0].expected,'TEST-RIO; TEST-PLC');
 });
-test('power/control relationships accept a parent OR local dependency, not a remote one',()=>{
+test('a cross-group feed needs a local dependency; Closest Parent or a remote dependency does not count',()=>{
   const ref=parse([['Panel','Instrument Tag'],['TEST-RIO',row.equipmentId]],'pmd');
-  for(const changes of [{closestParent:'TEST-RIO'},{dependencies:'TEST-RIO'},{dependencies:'test-rio',project:'TEST',site:'TEST-SITE',dependencyProject:'TEST;TEST'}])assert.equal(auditEngineeringFindings(snap([{...row,...changes},{...row,equipmentId:'TEST-RIO'}]),{pmd:ref}).length,0);
-  const findings=auditEngineeringFindings(snap([{...row,dependencies:'TEST-RIO',project:'TEST',site:'TEST-SITE',dependencyProject:'REMOTE'},{...row,equipmentId:'TEST-RIO'}]),{pmd:ref});
-  assert.equal(findings.length,1);
+  for(const changes of [{dependencies:'TEST-RIO'},{dependencies:'test-rio',project:'TEST',site:'TEST-SITE',dependencyProject:'TEST;TEST'}])assert.equal(auditEngineeringFindings(snap([{...row,...changes},{...fms,equipmentId:'TEST-RIO'}]),{pmd:ref}).length,0);
+  for(const changes of [{closestParent:'TEST-RIO'},{dependencies:'TEST-RIO',project:'TEST',site:'TEST-SITE',dependencyProject:'REMOTE'}]){
+    const findings=auditEngineeringFindings(snap([{...row,...changes},{...fms,equipmentId:'TEST-RIO'}]),{pmd:ref});
+    assert.equal(findings.length,1);assert.equal(findings[0].rule.id,'reference.engineering-expected-dependency');
+  }
+});
+test('a feed inside one group is nesting, not a missing dependency',()=>{
+  const ref=parse([['Panel','Instrument Tag'],['TEST-SKID',row.equipmentId]],'pmd');
+  assert.equal(auditEngineeringFindings(snap([row,{...row,equipmentId:'TEST-SKID'}]),{pmd:ref}).length,0);
+});
+test('the session result carries the dependency check when power or control documents are loaded',()=>{
+  const ref=parse([['Load Name (To)','Panel (From)'],[row.equipmentId,'TEST-PANEL']],'cable');
+  const result=auditSessionResult(snap([row,{...elec,equipmentId:'TEST-PANEL'}]),{cable:ref});
+  assert.deepEqual(result.dependencyCheck.counts,{compared:1,match:0,missing:1,notInRegistry:0});
+  assert.equal(result.findings.filter(finding=>finding.rule.id==='reference.engineering-expected-dependency').length,1);
+  assert.ok(!result.findings.some(finding=>finding.rule.id==='reference.engineering-relationship'));
 });
 test('case and whitespace normalize but suffixes remain separate tags',()=>{
   const ref=parse([['Equipment Tag','UPN'],[' test-pump111-01 ','111'],['TEST-PUMP111-01-A','111']]);

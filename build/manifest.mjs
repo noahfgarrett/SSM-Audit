@@ -10,6 +10,7 @@ export const MODULES=[
   'src/audit/engine.js',
   'src/audit/milestone-recommend.js',
   'src/audit/references.js',
+  'src/audit/expected-dependencies.js',
   'src/audit/engineering-references.js',
   'src/audit/milestone-migration.js',
   'src/audit/actions.js',

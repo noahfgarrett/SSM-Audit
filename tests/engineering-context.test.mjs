@@ -171,8 +171,8 @@ test('N/A and NA placeholders are skipped, but tag suffixes and prefixes remain'
 test('dependency locality compares Dependency Project with Project, not Site', () => {
   const snapshot = {
     rows: [
-      { equipmentId: 'SYN-CHILD', closestParent: 'SYN-ROOT', dependencies: 'SYN-PANEL', dependencyProject: 'DEMO', project: 'DEMO', site: 'OTHER' },
-      { equipmentId: 'SYN-PANEL' },
+      { equipmentId: 'SYN-CHILD', closestParent: 'SYN-ROOT', dependencies: 'SYN-PANEL', dependencyProject: 'DEMO', project: 'DEMO', site: 'OTHER', building: 'BLDG-A', discipline: 'MECHANICAL WET', systemName: '111 Chilled Water' },
+      { equipmentId: 'SYN-PANEL', building: 'BLDG-A', discipline: 'ELECTRICAL', systemName: '603 Low Voltage' },
     ],
   }
   const references = { pmd: { entries: [{ equipmentId: 'SYN-CHILD', parent: 'SYN-PANEL' }] } }

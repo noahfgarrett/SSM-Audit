@@ -162,7 +162,7 @@ for(const [ids,fields] of [
 export function auditActionPolicy(finding){
   if(['reference.engineering-missing-tag','reference.engineering-not-in-mel'].includes(finding.rule.id))return {fields:[],targets:false,known:true};
   if(finding.rule.id==='reference.engineering-metadata'||finding.rule.id==='reference.engineering-conflicting-mel')return {fields:AUDIT_ACTION_FIELDS[finding.field]?[finding.field]:[],targets:false,known:true};
-  if(['reference.engineering-relationship','reference.engineering-mel-parent'].includes(finding.rule.id))return {fields:['Closest Parent','Dependencies'],targets:false,known:true};
+  if(['reference.engineering-expected-dependency','reference.engineering-mel-parent'].includes(finding.rule.id))return {fields:['Closest Parent','Dependencies'],targets:false,known:true};
   const metadata=AUDIT_METADATA_TARGETS[finding.rule.id];
   if(metadata)return {fields:metadata,targets:true};
   if(finding.rule.id==='sop.instrument-parent-upn'&&finding.field==='Equipment ID')return {fields:[],targets:false};

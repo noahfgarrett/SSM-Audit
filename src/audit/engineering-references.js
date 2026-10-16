@@ -2,6 +2,7 @@ import { clean } from '../core/text.js'
 import { auditNormId, auditFingerprint, auditSplitReferences } from './model.js'
 import { auditRefSheetAoa } from './references.js'
 import { auditIsBlankItemMaster, SSM_AUDIT_SEVERITIES } from './engine.js'
+import { auditExpectedDependencies } from './expected-dependencies.js'
 
 export const AUDIT_FINDING_LEVELS=Object.freeze([...SSM_AUDIT_SEVERITIES.slice(0,2),'missing',...SSM_AUDIT_SEVERITIES.slice(2)]);
 
@@ -87,13 +88,13 @@ export const SSM_AUDIT_ENGINEERING_RULES=Object.freeze({
   absent:auditEngineeringRule('not-in-mel','Registry tag not found in selected MEL','missing-tags','Physical equipment not found in the selected MEL needs a scope or naming check. Organizational headers are excluded.'),
   metadata:auditEngineeringRule('metadata','Registry metadata differs from MEL','metadata','For an exact equipment tag, reconcile nonblank MEL metadata with registry values. A difference does not establish which source is correct.'),
   ambiguous:auditEngineeringRule('conflicting-mel','MEL contains conflicting values','metadata','Conflicting values for the same exact tag must be resolved before a source-based correction is selected.'),
-  relation:auditEngineeringRule('relationship','Source connection not represented in registry','dependencies','Confirm an explicit power or control connection as a closest parent or dependency. Electrical flow is not the same as SSM nesting.'),
+  dependency:auditEngineeringRule('expected-dependency','Expected dependency missing','dependencies','A power or control feed that crosses a Building, Discipline or System Name boundary is a dependency. Electrical equipment fed inside one building nests instead.'),
   parent:auditEngineeringRule('mel-parent','Closest Parent differs from MEL','structure','Review an explicit MEL system parent against the registry parent. Confirm UPN and commissioning intent before changing nesting.'),
 });
 export function auditEngineeringRuleActive(rule,references={}){
   const kinds=Object.keys(AUDIT_ENGINEERING_KINDS).filter(kind=>references[kind]?.entries?.length);
   if(rule.id===SSM_AUDIT_ENGINEERING_RULES.missing.id)return kinds.length>0;
-  if(rule.id===SSM_AUDIT_ENGINEERING_RULES.relation.id)return kinds.some(kind=>kind!=='mel');
+  if(rule.id===SSM_AUDIT_ENGINEERING_RULES.dependency.id)return kinds.some(kind=>kind!=='mel');
   return kinds.includes('mel');
 }
 function auditEngineeringFinding(rule,row,kind,details){
@@ -123,7 +124,7 @@ export function auditCoverageRows(result){
     return {equipmentId:group.equipmentId,...context,_source:group.source,_coverageOnly:true};
   });
 }
-export function auditEngineeringFindings(snapshot,references={}){
+export function auditEngineeringFindings(snapshot,references={},dependencyCheck=auditExpectedDependencies(snapshot,references)){
   const findings=[],rows=snapshot?.rows||[],registry=new Map();
   for(const row of rows){const key=auditNormId(row.equipmentId);if(!key)continue;const matches=registry.get(key)||[];matches.push(row);registry.set(key,matches);}
   for(const kind of Object.keys(AUDIT_ENGINEERING_KINDS)){
@@ -147,16 +148,21 @@ export function auditEngineeringFindings(snapshot,references={}){
             findings.push(auditEngineeringFinding(rule,row,kind,{field:fieldName,actual:clean(row[field]),expected,why:`${ambiguous?`The selected MEL has conflicting ${fieldName} values for this tag.`:`${fieldName} differs: registry "${clean(row[field])||'(blank)'}"; MEL "${expected}".`} ${evidence}`,recommendation:ambiguous?'Resolve the source conflict before entering a correction.':inc?'Do not copy I&C into the Exto discipline. Confirm the tag UPN, then reconcile the system and its approved discipline.':'Reconcile the difference using the governing project information; neither source is changed automatically.'}));
           }
         }
-      }else{
-        const parents=new Map();for(const entry of entries){const parent=auditEngineeringTag(entry.parent);if(parent&&auditNormId(parent)!==tag)parents.set(auditNormId(parent),parent);}
-        for(const row of targets){
-          const linked=new Set([auditNormId(row.closestParent),...(!clean(row.dependencyProject)||auditSplitReferences(row.dependencyProject).every(project=>auditNormId(project)===auditNormId(row.project))?auditSplitReferences(row.dependencies).map(auditNormId):[])]);
-          const missing=[...parents].filter(([key])=>!linked.has(key)).map(([,value])=>value);
-          if(missing.length)findings.push(auditEngineeringFinding(SSM_AUDIT_ENGINEERING_RULES.relation,row,kind,{field:'Dependencies',actual:[row.closestParent,row.dependencies].filter(Boolean).join('; '),expected:missing.join('; '),why:`A ${label} connection is not represented as a local parent or dependency. ${evidence}`,recommendation:'Confirm this feed or control connection and source scope. Use the appropriate parent or dependency; do not replace existing links solely to clear this check.'}));
-        }
       }
     }
     if(kind==='mel')for(const row of rows)if(row.equipmentId&&!byTag.has(auditNormId(row.equipmentId))&&!auditIsBlankItemMaster(row))findings.push(auditEngineeringFinding(SSM_AUDIT_ENGINEERING_RULES.absent,row,kind,{severity:'info',field:'Equipment ID',actual:row.equipmentId,expected:'Exact tag in selected MEL',why:'This registry tag is not in the selected MEL sheets. The MEL may cover only part of the project.',recommendation:'Confirm scope, naming aliases and the selected sheets. Do not delete equipment based on absence alone.'}));
+  }
+  for(const entry of dependencyCheck.rows){
+    if(entry.status!=='missing')continue;
+    const row=registry.get(auditNormId(entry.equipmentId))?.[0];if(!row)continue;
+    const missing=entry.expected.filter(expected=>entry.missing.includes(expected.tag));
+    const sources=missing.flatMap(expected=>expected.sources),kind=sources[0]?.kind||'';
+    const locations=[...new Set(sources.map(source=>`${source.label} ${source.sheet}, row ${source.row}`))];
+    const feeds=missing.map(expected=>`${expected.tag}: ${expected.reason}`).join('. ');
+    const notes=entry.notes.length?` ${entry.notes.join('. ')}.`:'';
+    findings.push(auditEngineeringFinding(SSM_AUDIT_ENGINEERING_RULES.dependency,row,kind,{field:'Dependencies',actual:clean(row.dependencies),expected:entry.missing.join('; '),
+      why:`Fed from ${feeds}, so it should be a dependency.${notes} Source: ${locations.slice(0,4).join('; ')}${locations.length>4?`; and ${locations.length-4} more rows`:''}.`,
+      recommendation:`Add ${entry.missing.join('; ')} to Dependencies after confirming the feed and project scope.`}));
   }
   return findings;
 }

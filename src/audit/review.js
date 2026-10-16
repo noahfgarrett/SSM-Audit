@@ -1,6 +1,7 @@
 import { runSsmAudit } from './engine.js'
 import { auditReferenceFindings, SSM_AUDIT_REFERENCE_RULES } from './references.js'
 import { auditEngineeringFindings, auditEngineeringRuleActive, SSM_AUDIT_ENGINEERING_RULES, AUDIT_ENGINEERING_KINDS } from './engineering-references.js'
+import { auditExpectedDependencies } from './expected-dependencies.js'
 import { auditMigrationReferences, auditMigrationImpact } from './milestone-migration.js'
 import { auditApplyCorrections, auditCorrectionImpact } from './actions.js'
 import { validateAuditCorrections, auditEmailDirectory, auditPlanEmailUpdates } from './export.js'
@@ -10,11 +11,13 @@ export function auditSessionResult(snapshot,references={},migration){
   const catalog=references.itemMasters;
   const raw=runSsmAudit(snapshot,catalog?{itemMasterVocabulary:catalog.entries.map(entry=>entry.name||entry.value).filter(Boolean)}:{});
   const engineering=Object.keys(AUDIT_ENGINEERING_KINDS).some(kind=>references[kind]?.entries?.length);
-  const extra=[...auditReferenceFindings(snapshot,references),...auditEngineeringFindings(snapshot,references)];if(!references.milestones&&!engineering)return raw;
+  if(!references.milestones&&!engineering)return raw;
+  const dependencyCheck=auditExpectedDependencies(snapshot,references);
+  const extra=[...auditReferenceFindings(snapshot,references),...auditEngineeringFindings(snapshot,references,dependencyCheck)];
   const findings=[...raw.findings,...extra],severity={blocker:0,error:0,warning:0,info:0,missing:0},category={...raw.summary.category},source={...raw.summary.source,reference:extra.length};
   for(const finding of extra)category[finding.category]=(category[finding.category]||0)+1;
   for(const finding of findings)severity[finding.severity]++;
-  return {...raw,findings,summary:{...raw.summary,checks:raw.summary.checks+(references.milestones?Object.values(SSM_AUDIT_REFERENCE_RULES).length:0)+Object.values(SSM_AUDIT_ENGINEERING_RULES).filter(rule=>auditEngineeringRuleActive(rule,references)).length,findings:findings.length,severity,category,source,status:severity.blocker?'blocked':severity.error||severity.warning||raw.summary.unverified||extra.length?'review':'ready'}};
+  return {...raw,findings,dependencyCheck,summary:{...raw.summary,checks:raw.summary.checks+(references.milestones?Object.values(SSM_AUDIT_REFERENCE_RULES).length:0)+Object.values(SSM_AUDIT_ENGINEERING_RULES).filter(rule=>auditEngineeringRuleActive(rule,references)).length,findings:findings.length,severity,category,source,status:severity.blocker?'blocked':severity.error||severity.warning||raw.summary.unverified||extra.length?'review':'ready'}};
 }
 
 // This cache belongs to one worker and one original registry, never storage.
