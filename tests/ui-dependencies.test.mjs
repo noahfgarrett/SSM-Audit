@@ -41,3 +41,9 @@ test('rows escape document text and show the chain when expanded', () => {
   assert.ok(!dependencyRowHtml(absent, true).includes('<b>SYN'))
   assert.match(dependencyRowHtml(absent, false), /Affects 1 registry row</)
 })
+
+test('the column header row stays pinned while the list scrolls', async () => {
+  const { readFileSync } = await import('node:fs')
+  const css = readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
+  assert.match(css, /\.dep-row\.dep-head\{position:sticky;top:-26px;z-index:3;/)
+})

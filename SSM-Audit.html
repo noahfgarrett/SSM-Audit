@@ -2387,7 +2387,7 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
 .dep-row{display:grid;grid-template-columns:18px minmax(170px,1.3fr) 128px minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.1fr);align-items:center;gap:10px;min-height:44px;padding:6px 12px;border-bottom:1px dashed var(--border);font-size:12px;cursor:pointer}
 .dep-row:hover{background:#fbfcfe}
 .dep-row:focus-visible{outline:2px solid var(--accent-400);outline-offset:-2px}
-.dep-row.dep-head{min-height:32px;border-bottom:1px solid var(--border);background:var(--surface-2);cursor:default}
+.dep-row.dep-head{position:sticky;top:-26px;z-index:3;min-height:32px;border-bottom:1px solid var(--border);background:var(--surface-2);box-shadow:0 1px 0 var(--border);cursor:default}
 .dep-row.dep-head b,.dep-row.dep-head span{color:var(--ink-3);font:700 9px var(--mono);text-transform:uppercase}
 .dep-item.open>.dep-row{background:var(--surface-2);border-bottom-style:solid}
 .dep-caret .ic{width:14px;height:14px;color:var(--ink-3)}
