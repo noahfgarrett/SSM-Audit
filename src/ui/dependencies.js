@@ -21,11 +21,13 @@ const DEPENDENCY_STATUS=Object.freeze({
 export function dependencyCheckOf(session){return session?.rawResult?.dependencyCheck||null;}
 
 function dependencyLocation(source){return `${source.label} ${source.sheet}, row ${source.row}`;}
-function dependencySourceHtml(sources){
-  const unique=[...new Set(sources.map(dependencyLocation))];
+const DEPENDENCY_MAX_SHOWN=50;
+function dependencySourceHtml(sources,total=sources.length){
+  const unique=[...new Set(sources.map(dependencyLocation))],count=Math.max(unique.length,total);
   if(!unique.length)return '<span class="muted">—</span>';
-  return `<span title="${esc(unique.join('\n'))}">${esc(unique[0])}${unique.length>1?` <span class="muted">+${unique.length-1}</span>`:''}</span>`;
+  return `<span title="${esc(unique.join('\n')+(count>unique.length?`\nand ${count-unique.length} more`:''))}">${esc(unique[0])}${count>1?` <span class="muted">+${(count-1).toLocaleString()}</span>`:''}</span>`;
 }
+function dependencyMoreHtml(shown,total){return total>shown?`<span class="muted">and ${(total-shown).toLocaleString()} more</span>`:'';}
 function dependencySentence(text){const value=clean(text);return value.charAt(0).toUpperCase()+value.slice(1);}
 function dependencyTagsHtml(tags,emptyText='—'){return tags.length?tags.map(tag=>`<code>${esc(tag)}</code>`).join(' '):`<span class="muted">${esc(emptyText)}</span>`;}
 
@@ -53,8 +55,8 @@ function dependencyDetailHtml(item){
   if(item.kind==='absent'){
     const entry=item.entry;
     return `<div class="dep-detail"><p>This tag appears in the documents but not in the registry. Rows fed through it were compared against the next tag upstream.</p>
-      <dl><dt>Found at</dt><dd>${entry.sources.map(source=>esc(dependencyLocation(source))).join('<br>')}</dd>
-      <dt>Registry rows affected</dt><dd>${dependencyTagsHtml(entry.affects,'None')}</dd></dl></div>`;
+      <dl><dt>Found at</dt><dd>${entry.sources.map(source=>esc(dependencyLocation(source))).join('<br>')}${dependencyMoreHtml(entry.sources.length,entry.sourceCount||entry.sources.length)}</dd>
+      <dt>Registry rows affected</dt><dd>${dependencyTagsHtml(entry.affects.slice(0,DEPENDENCY_MAX_SHOWN),'None')}${dependencyMoreHtml(Math.min(entry.affects.length,DEPENDENCY_MAX_SHOWN),entry.affects.length)}</dd></dl></div>`;
   }
   const entry=item.entry;
   return `<div class="dep-detail">${entry.expected.map(expected=>{
@@ -62,7 +64,7 @@ function dependencyDetailHtml(item){
     const present=!entry.missing.includes(expected.tag);
     return `<section class="dep-expect ${present?'ok':'bad'}"><div class="dep-chain">${ic(present?'circle-check':'circle-x')}${chain.map((tag,index)=>`<code class="${expected.skipped.includes(tag)?'skipped':''}">${esc(tag)}</code>${index<chain.length-1?ic('arrow-right'):''}`).join('')}</div>
       <p>${esc(dependencySentence(expected.reason))} — ${present?'listed in Dependencies.':'not listed in Dependencies.'}</p>
-      <small>${expected.sources.map(source=>esc(dependencyLocation(source))).join(' · ')}</small></section>`;
+      <small>${expected.sources.map(source=>esc(dependencyLocation(source))).join(' · ')} ${dependencyMoreHtml(expected.sources.length,expected.sourceCount||expected.sources.length)}</small></section>`;
   }).join('')}${entry.notes.length?`<ul class="dep-notes">${entry.notes.map(note=>`<li>${ic('info')}${esc(note)}</li>`).join('')}</ul>`:''}
   <dl><dt>Closest Parent</dt><dd>${entry.closestParent?`<code>${esc(entry.closestParent)}</code>`:'<span class="muted">—</span>'}</dd><dt>Registry dependencies</dt><dd>${dependencyTagsHtml(entry.registryDependencies,'None')}</dd></dl></div>`;
 }
@@ -73,6 +75,7 @@ export function dependencyRowHtml(item,expanded){
   const missing=absent?'<span class="muted">—</span>':dependencyTagsHtml(entry.missing,'None');
   const note=absent?(entry.affects.length?`Affects ${entry.affects.length.toLocaleString()} registry row${entry.affects.length===1?'':'s'}`:''):entry.notes[0]||'';
   const sources=absent?entry.sources:entry.expected.flatMap(expected=>expected.sources);
+  const sourceTotal=absent?(entry.sourceCount||entry.sources.length):entry.expected.reduce((sum,expected)=>sum+(expected.sourceCount||expected.sources.length),0);
   return `<div class="dep-item ${expanded?'open':''}" data-dep-key="${esc(item.key)}">
     <div class="dep-row" role="button" tabindex="0" aria-expanded="${expanded}">
       <span class="dep-caret">${ic(expanded?'chevron-down':'chevron-right')}</span>
@@ -82,7 +85,7 @@ export function dependencyRowHtml(item,expanded){
       <span class="dep-cell" data-label="Registry">${registry}</span>
       <span class="dep-cell" data-label="Missing">${missing}</span>
       <span class="dep-cell dep-note" data-label="Note" title="${esc(note)}">${esc(note)||'<span class="muted">—</span>'}</span>
-      <span class="dep-cell dep-source" data-label="Source">${dependencySourceHtml(sources)}</span>
+      <span class="dep-cell dep-source" data-label="Source">${dependencySourceHtml(sources,sourceTotal)}</span>
     </div>${expanded?dependencyDetailHtml(item):''}</div>`;
 }
 function dependencyEmptyHtml(){

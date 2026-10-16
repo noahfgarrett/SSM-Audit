@@ -4,12 +4,19 @@ import { AUDIT_DEPENDENCY_SOURCE_KINDS } from './expected-dependencies.js'
 
 const DEPENDENCY_EXPORT_MISSING_FILL='FBE3E1',DEPENDENCY_EXPORT_MATCH_FILL='E2F0D9';
 const DEPENDENCY_EXPORT_STATUS_LABELS=Object.freeze({match:'Match',missing:'Missing'});
-const DEPENDENCY_EXPORT_MAX_LOCATIONS=5;
+const DEPENDENCY_EXPORT_MAX_LOCATIONS=5,DEPENDENCY_EXPORT_MAX_AFFECTED=200;
 
 function dependencyExportLocation(source){return `${source.label} ${source.sheet}, row ${source.row}`;}
-function dependencyExportLocations(sources){
-  const unique=[...new Set(sources.map(dependencyExportLocation))];
-  return unique.slice(0,DEPENDENCY_EXPORT_MAX_LOCATIONS).join('; ')+(unique.length>DEPENDENCY_EXPORT_MAX_LOCATIONS?`; and ${unique.length-DEPENDENCY_EXPORT_MAX_LOCATIONS} more`:'');
+/* Lists stay short enough for one Excel cell (32,767 characters); the
+   remainder is counted, never dropped silently. */
+function dependencyExportList(items,limit,total=items.length){
+  const shown=items.slice(0,limit);
+  return shown.join('; ')+(total>shown.length?`; and ${(total-shown.length).toLocaleString()} more`:'');
+}
+function dependencyExportLocations(expected){
+  const unique=[...new Set(expected.flatMap(entry=>entry.sources).map(dependencyExportLocation))];
+  const total=Math.max(unique.length,expected.reduce((sum,entry)=>sum+(entry.sourceCount||entry.sources.length),0));
+  return dependencyExportList(unique,DEPENDENCY_EXPORT_MAX_LOCATIONS,total);
 }
 function dependencyExportSheet(rows,widths){
   const sheet=XLSX.utils.aoa_to_sheet(rows);
@@ -43,7 +50,7 @@ function dependencyExportTable(check){
   const rows=[header,...check.rows.map(entry=>[
     entry.equipmentId,DEPENDENCY_EXPORT_STATUS_LABELS[entry.status],
     entry.expected.map(expected=>expected.tag).join('; '),entry.registryDependencies.join('; '),entry.missing.join('; '),
-    entry.notes.join('. '),dependencyExportLocations(entry.expected.flatMap(expected=>expected.sources)),
+    entry.notes.join('. '),dependencyExportLocations(entry.expected),
     entry.expected.map(expected=>`${expected.tag}: ${expected.reason}`).join('. '),
     entry.discipline,entry.building,entry.upn,entry.systemName,
   ])];
@@ -60,11 +67,11 @@ function dependencyExportNotInRegistry(check){
   const header=['Source tag','Document','Sheet','Row','Also found at','Registry rows affected'];
   const rows=[header,...check.notInRegistry.map(entry=>{
     const [first,...rest]=entry.sources;
-    const documents=[...new Set(entry.sources.map(source=>source.label))].join('; ');
-    const others=[...new Set(rest.map(source=>`${source.sheet}, row ${source.row}`))];
+    const documents=(entry.documents||[...new Set(entry.sources.map(source=>source.label))]).join('; ');
+    const others=rest.map(source=>`${source.sheet}, row ${source.row}`);
     return [entry.tag,documents,first?.sheet||'',first?.row||'',
-      others.slice(0,DEPENDENCY_EXPORT_MAX_LOCATIONS).join('; ')+(others.length>DEPENDENCY_EXPORT_MAX_LOCATIONS?`; and ${others.length-DEPENDENCY_EXPORT_MAX_LOCATIONS} more`:''),
-      entry.affects.join('; ')];
+      dependencyExportList(others,DEPENDENCY_EXPORT_MAX_LOCATIONS,Math.max(others.length,(entry.sourceCount||entry.sources.length)-1)),
+      dependencyExportList(entry.affects,DEPENDENCY_EXPORT_MAX_AFFECTED)];
   })];
   return dependencyExportSheet(rows,[30,24,24,8,40,50]);
 }

@@ -158,10 +158,11 @@ export function auditEngineeringFindings(snapshot,references={},dependencyCheck=
     const missing=entry.expected.filter(expected=>entry.missing.includes(expected.tag));
     const sources=missing.flatMap(expected=>expected.sources),kind=sources[0]?.kind||'';
     const locations=[...new Set(sources.map(source=>`${source.label} ${source.sheet}, row ${source.row}`))];
+    const total=Math.max(locations.length,missing.reduce((sum,expected)=>sum+(expected.sourceCount||expected.sources.length),0));
     const feeds=missing.map(expected=>`${expected.tag}: ${expected.reason}`).join('. ');
     const notes=entry.notes.length?` ${entry.notes.join('. ')}.`:'';
     findings.push(auditEngineeringFinding(SSM_AUDIT_ENGINEERING_RULES.dependency,row,kind,{field:'Dependencies',actual:clean(row.dependencies),expected:entry.missing.join('; '),
-      why:`Fed from ${feeds}, so it should be a dependency.${notes} Source: ${locations.slice(0,4).join('; ')}${locations.length>4?`; and ${locations.length-4} more rows`:''}.`,
+      why:`Fed from ${feeds}, so it should be a dependency.${notes} Source: ${locations.slice(0,4).join('; ')}${total>Math.min(4,locations.length)?`; and ${total-Math.min(4,locations.length)} more rows`:''}.`,
       recommendation:`Add ${entry.missing.join('; ')} to Dependencies after confirming the feed and project scope.`}));
   }
   return findings;

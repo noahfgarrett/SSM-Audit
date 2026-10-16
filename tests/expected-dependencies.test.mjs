@@ -95,3 +95,37 @@ test('no source documents means nothing to compare', () => {
   const result = check([row('SYN-PUMP', MECH)], {})
   assert.deepEqual(result, { rows: [], notInRegistry: [], counts: { compared: 0, match: 0, missing: 0, notInRegistry: 0 }, kinds: [] })
 })
+
+/* EasyPower lists one row per load with its whole upstream chain, so the
+   links near the top of the tree repeat on every row. */
+function chainExport(loads) {
+  const entries = [], rows = []
+  const add = (equipmentId, parent, sourceRow) => entries.push({ equipmentId, parent, sourceRow, sheetName: 'Sheet1' })
+  for (let i = 0; i < loads; i++) {
+    const chain = ['SYN-GIS', `SYN-SWBD-${i % 4}`, `SYN-PNL-${i % 40}`, `SYN-SUB-${i % 400}`, `SYN-LOAD-${i}`]
+    chain.forEach((tag, index) => add(tag, index ? chain[index - 1] : '', i + 2))
+  }
+  for (let p = 0; p < 40; p++) rows.push(row(`SYN-PNL-${p}`, ELEC))
+  for (let i = 0; i < loads; i++) rows.push(row(`SYN-LOAD-${i}`, MECH))
+  return { rows, references: { easyPower: { kind: 'easyPower', sheetName: 'Sheet1', entries } } }
+}
+
+test('a large EasyPower export with repeated upstream links stays fast', () => {
+  const { rows, references } = chainExport(30000)
+  const started = performance.now()
+  const result = check(rows, references)
+  assert.ok(performance.now() - started < 2000, `took ${Math.round(performance.now() - started)} ms`)
+  assert.equal(result.counts.compared, 30000)
+})
+
+test('source locations are trimmed for display but counted exactly', () => {
+  const { rows, references } = chainExport(3000)
+  const result = check(rows, references)
+  const gis = result.notInRegistry.find(entry => entry.tag === 'SYN-GIS')
+  assert.equal(gis.sourceCount, 3000)
+  assert.ok(gis.sources.length <= 20)
+  assert.equal(new Set(gis.sources.map(source => source.row)).size, gis.sources.length, 'no duplicate locations')
+  const load = only(result, 'SYN-LOAD-7')
+  assert.equal(load.expected[0].sourceCount, 1)
+  assert.deepEqual(load.expected[0].skipped, ['SYN-SUB-7'])
+})

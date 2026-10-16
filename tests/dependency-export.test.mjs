@@ -72,3 +72,23 @@ test('the written file really freezes the header row', async () => {
     assert.equal(XLSX.read(bytes, { type: 'array' }).SheetNames.length, 3)
   }
 })
+
+test('very long lists stay inside one Excel cell and keep an exact remainder', () => {
+  const entries = [], rows = [{ equipmentId: 'SYN-PANEL', ...ELEC }]
+  for (let i = 0; i < 3000; i++) {
+    entries.push({ equipmentId: `SYN-LONG-LOAD-${i}`, parent: 'SYN-BUS', sourceRow: i + 2, sheetName: 'Synthetic' })
+    rows.push({ equipmentId: `SYN-LONG-LOAD-${i}`, ...MECH })
+  }
+  entries.push({ equipmentId: 'SYN-BUS', parent: 'SYN-PANEL', sourceRow: 9000, sheetName: 'Synthetic' })
+  const big = auditExpectedDependencies({ rows }, {
+    easyPower: { kind: 'easyPower', sheetName: 'Synthetic', entries },
+    cable: { kind: 'cable', sheetName: 'Cable', entries: [{ equipmentId: 'SYN-BUS', parent: '', sourceRow: 5, sheetName: 'Cable' }] },
+  })
+  const sheet = buildDependencyCheckWorkbook(big, 'Big.xlsx').Sheets['Not in registry']
+  const values = cells(sheet, 1)
+  assert.equal(values[0], 'SYN-BUS')
+  assert.equal(values[1], 'EasyPower; Cable Schedule', 'every document is named even past the kept locations')
+  assert.match(String(values[4]), /and 2,99\d more$/)
+  assert.ok(String(values[5]).length < 32767)
+  assert.match(String(values[5]), /; and 2,800 more$/)
+})
