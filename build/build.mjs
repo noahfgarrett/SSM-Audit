@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { MODULES } from './manifest.mjs'
+import { duplicateTopLevelNames } from './unique-names.mjs'
 
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const read=path=>readFileSync(resolve(root,path),'utf8');
@@ -15,8 +16,10 @@ function classicScript(source,path){
 }
 function replaceOnce(source,marker,value){const count=source.split(marker).length-1;if(count!==1)throw new Error(`Expected one ${marker}, found ${count}`);return source.replace(marker,()=>value);}
 
+for(const list of [MODULES]){const duplicates=duplicateTopLevelNames(root,list);if(duplicates.length)throw new Error(`Top-level names collide in the bundle: ${duplicates.join(', ')}`);}
 const app=MODULES.map(path=>classicScript(read(path),path)).join('');
 const workerModules=['src/core/text.js','src/io/workbook.js','src/exto/rev21-contract.js','src/exto/vf-item-masters.js','src/audit/model.js','src/audit/engine.js','src/audit/milestone-recommend.js','src/audit/references.js','src/audit/expected-dependencies.js','src/audit/engineering-references.js','src/audit/milestone-migration.js','src/audit/actions.js','src/core/zip.js','src/core/download.js','src/audit/export.js','src/audit/review.js','src/audit/status-report.js','src/io/import-worker.js'];
+{const duplicates=duplicateTopLevelNames(root,workerModules);if(duplicates.length)throw new Error(`Top-level names collide in the worker: ${duplicates.join(', ')}`);}
 const workerSource=workerModules.map(path=>classicScript(read(path),path)).join('');
 const changelog=JSON.parse(read('src/changelog.json'));
 let html=read('src/index.html');
