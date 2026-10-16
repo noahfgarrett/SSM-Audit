@@ -41,9 +41,17 @@ function sheetExtrasXml(extras){
   const validations=extras.dataValidations||[];
   return formats+(validations.length?`<dataValidations count="${validations.length}">${validations.join('')}</dataValidations>`:'');
 }
+/* The vendored writer ignores !freeze/!views and always writes a bare
+   <sheetView>, so a requested frozen header is written into it here. */
+function sheetFrozenViewXml(sheet){
+  const view=sheet&&Array.isArray(sheet['!views'])&&sheet['!views'][0];
+  if(!view||view.state!=='frozen'||!(view.ySplit>0))return '';
+  const cell=view.topLeftCell||`A${view.ySplit+1}`;
+  return `<sheetView workbookViewId="0"><pane ySplit="${view.ySplit}" topLeftCell="${cell}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="${cell}" sqref="${cell}"/></sheetView>`;
+}
 function workbookExtrasPending(workbook){
   const names=workbook&&workbook.SheetNames||[];
-  const touched=names.some(name=>{const extras=workbook.Sheets[name]&&workbook.Sheets[name][XML_EXTRA_KEY];return extras&&(extras.dataValidations.length||extras.conditionalFormatting.length);});
+  const touched=names.some(name=>{const sheet=workbook.Sheets[name],extras=sheet&&sheet[XML_EXTRA_KEY];return sheetFrozenViewXml(sheet)||extras&&(extras.dataValidations.length||extras.conditionalFormatting.length);});
   return touched||(Array.isArray(workbook.Dxfs)&&workbook.Dxfs.length>0);
 }
 /* Opens the written xlsx as a zip container and splices the extras in place. */
@@ -52,9 +60,9 @@ function workbookContainerWithExtras(workbook,bytes){
   const container=XLSX.CFB.read(new Uint8Array(bytes),{type:'array'}),decoder=new TextDecoder(),encoder=new TextEncoder();
   const replace=(path,transform)=>{const entry=XLSX.CFB.find(container,path);if(!entry)return;const next=transform(decoder.decode(entry.content));entry.content=encoder.encode(next);entry.size=entry.content.length;};
   names.forEach((name,index)=>{
-    const extras=workbook.Sheets[name]&&workbook.Sheets[name][XML_EXTRA_KEY];if(!extras)return;
-    const fragment=sheetExtrasXml(extras);if(!fragment)return;
-    replace(`/xl/worksheets/sheet${index+1}.xml`,xml=>spliceSheetXml(xml,fragment));
+    const sheet=workbook.Sheets[name],extras=sheet&&sheet[XML_EXTRA_KEY],frozen=sheetFrozenViewXml(sheet),fragment=extras?sheetExtrasXml(extras):'';
+    if(!frozen&&!fragment)return;
+    replace(`/xl/worksheets/sheet${index+1}.xml`,xml=>spliceSheetXml(frozen?xml.replace('<sheetView workbookViewId="0"/>',frozen):xml,fragment));
   });
   if(dxfs.length)replace('/xl/styles.xml',xml=>xml.replace(/<dxfs count="0"\/>|<dxfs\/>/,`<dxfs count="${dxfs.length}">${dxfs.join('')}</dxfs>`));
   return container;

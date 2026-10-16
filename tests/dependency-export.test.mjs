@@ -59,3 +59,16 @@ test('an empty check still exports readable sheets', () => {
   const bytes = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
   assert.deepEqual(XLSX.read(bytes, { type: 'array' }).SheetNames, ['Summary', 'Dependencies', 'Not in registry'])
 })
+
+test('the written file really freezes the header row', async () => {
+  const { workbookBytes, workbookBytesCompact } = await import('../src/core/download.js')
+  const workbook = buildDependencyCheckWorkbook(check, 'Synthetic registry.xlsx')
+  for (const bytes of [workbookBytes(workbook), await workbookBytesCompact(workbook)]) {
+    const container = XLSX.CFB.read(new Uint8Array(bytes), { type: 'array' })
+    const xml = new TextDecoder().decode(XLSX.CFB.find(container, '/xl/worksheets/sheet2.xml').content)
+    assert.match(xml, /<sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"\/>/)
+    const summary = new TextDecoder().decode(XLSX.CFB.find(container, '/xl/worksheets/sheet1.xml').content)
+    assert.ok(!summary.includes('<pane'), 'sheets without a freeze stay unfrozen')
+    assert.equal(XLSX.read(bytes, { type: 'array' }).SheetNames.length, 3)
+  }
+})
