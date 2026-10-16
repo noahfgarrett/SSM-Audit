@@ -20,6 +20,7 @@ export const MODULES=[
   'src/audit/hierarchy.js',
   'src/core/zip.js',
   'src/core/download.js',
+  'src/audit/dependency-export.js',
   'src/ui/icons.js',
   'src/ui/guide-content.js',
   'src/ui/feedback.js',
