@@ -125,3 +125,56 @@ export function auditExpectedDependencies(snapshot,references={}){
   const match=rows.filter(entry=>entry.status==='match').length;
   return {rows,notInRegistry,counts:{compared:rows.length,match,missing:rows.length-match,notInRegistry:notInRegistry.length},kinds};
 }
+
+/* ---- Power hierarchy for one tag (on-demand double check) ----
+   Every upstream path from a Starting Source down to the tag, what the tag
+   feeds, and the rule's verdict on each link. Pure; computed on click. */
+const AUDIT_POWER_MAX_PATHS=12,AUDIT_POWER_MAX_CHILDREN=50;
+function auditPowerContext(row){return row?{building:clean(row.building),discipline:clean(row.discipline),systemName:clean(row.systemName),upn:clean(row.upn)}:null;}
+function auditPowerVerdict(child,feeder,childTag='',feederTag=''){
+  if(!child||!feeder){
+    const absent=[!feeder&&feederTag,!child&&childTag].filter(Boolean);
+    return {kind:'unverified',reason:absent.length?`${absent.join(' and ')} ${absent.length===1?'is':'are'} not in the registry`:'Not compared: one end is not in the registry'};
+  }
+  if(!auditDependencyGroup(child)||!auditDependencyGroup(feeder))return {kind:'unverified',reason:'Not compared: Building, Discipline or System Name is blank'};
+  const crossing=auditDependencyCrossing(child,feeder);
+  if(crossing)return {kind:'dependency',reason:crossing};
+  return {kind:'nests',reason:auditDependencyGroup(child).discipline==='ELECTRICAL'&&auditDependencyGroup(feeder).discipline==='ELECTRICAL'&&auditNormId(child.systemName)!==auditNormId(feeder.systemName)?'Electrical feed inside one building':'Same Building, Discipline and System Name'};
+}
+export function auditPowerHierarchy(snapshot,references,tag){
+  const {feedersOf,sourcesOf}=auditDependencyEdges(references),registry=new Map();
+  for(const row of snapshot?.rows||[]){const key=auditNormId(row.equipmentId);if(key&&!registry.has(key))registry.set(key,row);}
+  const startKey=auditNormId(tag),spell=key=>registry.get(key)?.equipmentId||sourcesOf.get(key)?.tag||key;
+  const link=(childKey,parentKey)=>{
+    const bucket=feedersOf.get(childKey)?.get(parentKey)?.bucket;
+    return {...auditPowerVerdict(registry.get(childKey),registry.get(parentKey),spell(childKey),spell(parentKey)),sources:bucket?bucket.list:[],sourceCount:bucket?bucket.keys.size:0};
+  };
+  const paths=[];let loop=false,truncated=false;
+  const climb=trail=>{
+    if(truncated)return;
+    const key=trail[trail.length-1],next=[];
+    for(const parentKey of feedersOf.get(key)?.keys()||[]){if(trail.includes(parentKey))loop=true;else next.push(parentKey);}
+    if(!next.length||trail.length>=AUDIT_DEPENDENCY_MAX_DEPTH){
+      if(trail.length<2)return;
+      if(paths.length>=AUDIT_POWER_MAX_PATHS){truncated=true;return;}
+      paths.push([...trail].reverse());return;
+    }
+    for(const parentKey of next)climb([...trail,parentKey]);
+  };
+  climb([startKey]);
+  const children=[];let childCount=0;
+  for(const [childKey,feeders] of feedersOf){
+    if(!feeders.has(startKey)||childKey===startKey)continue;
+    childCount++;
+    if(children.length<AUDIT_POWER_MAX_CHILDREN)children.push({tag:spell(childKey),registry:auditPowerContext(registry.get(childKey)),link:link(childKey,startKey)});
+  }
+  const nearest=registry.has(startKey)?auditResolveFeeders(registry.get(startKey).equipmentId,feedersOf,registry).found.map(found=>{
+    const verdict=auditPowerVerdict(registry.get(startKey),registry.get(auditNormId(found.tag)));
+    return {tag:found.tag,skipped:found.skipped,kind:verdict.kind,reason:verdict.reason};
+  }):[];
+  return {
+    tag:spell(startKey),registry:auditPowerContext(registry.get(startKey)),
+    paths:paths.map(path=>path.map((key,index)=>({tag:spell(key),registry:auditPowerContext(registry.get(key)),link:index?link(key,path[index-1]):null}))),
+    truncated,loop,children,childCount,nearest,
+  };
+}

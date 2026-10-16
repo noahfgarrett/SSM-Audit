@@ -92,3 +92,18 @@ The four parity-mirrored engine files (`model.js`, `engine.js`, `rev21-contract.
 - Export: three sheets, headers, frozen row, filter.
 - UI: tab renders counts/table/empty state; nav badge.
 - Full `npm test`, `npm build`, visual check in the browser with a synthetic registry.
+
+## Addendum (v1.50.2) — power hierarchy modal and pinned headers
+
+- The Dependencies table's column header row stays pinned while the list scrolls.
+- Each expanded row has **View power hierarchy**, which opens a modal for that tag, computed on click from
+  the documents already loaded (`auditPowerHierarchy(snapshot, references, tag)` — pure):
+  - **Fed from** — every upstream path from a Starting Source down to the tag (all loaded documents),
+    capped at 12 paths with the total noted; loops stop the walk and are noted.
+  - **Feeds** — tags this one feeds directly, first 50 plus an exact count.
+  - Each tag: in the registry (Building · Discipline · System Name) or not in the registry.
+  - Each link: **dependency** (with the differing group parts), **nests** (same group, or electrical
+    inside one building), or **unverified** (an end is not in the registry or has a blank group part);
+    with its document, sheet and row.
+- Tags in the modal are clickable to re-centre on them, with a way back to the starting tag.
+  **Show in SSM Hierarchy** jumps to the registry tree for registry tags.

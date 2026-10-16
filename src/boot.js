@@ -5,7 +5,7 @@ import { ic } from './ui/icons.js'
 import { activateFocusTrap, animateClose, animateOpen, motionReduced } from './ui/feedback.js'
 import { closeDrawer, renderAuditResult, renderComparisonResult, renderDashboard, renderCompletedEquipment, renderHierarchyResult, renderModifications, renderRules, renderSideNav, renderUpload, closeRuleExample, closeExportOptions, loadRulePreferences } from './ui/audit.js'
 import { closeUpdateModal, initUpdate } from './update/update.js'
-import { renderDependencyCheck } from './ui/dependencies.js'
+import { closePowerHierarchy, renderDependencyCheck } from './ui/dependencies.js'
 
 import { GUIDE_SECTIONS } from './ui/guide-content.js'
 let activeGuide='start';
@@ -28,10 +28,10 @@ function closeGuide(){const modal=$('#guideModal');if(!modal.classList.contains(
 function init(){
   $('#brandmark').innerHTML=ic('zap');$('#headerGuide').innerHTML=ic('book-open')+'<span>Guide</span>';$('#headerGuide').onclick=openGuide;
   $('#versionLink').textContent=`v${APP_VERSION}`;$('#guideClose').classList.add('xbtn');$('#guideClose').innerHTML=ic('x');$('#guideClose').onclick=closeGuide;
-  $('#guideModal').onclick=event=>{if(event.target===$('#guideModal'))closeGuide();};$('#exampleClose').innerHTML=ic('x');$('#exportModalClose').innerHTML=ic('x');document.addEventListener('ssm-audit:guide',openGuide);
+  $('#guideModal').onclick=event=>{if(event.target===$('#guideModal'))closeGuide();};$('#exampleClose').innerHTML=ic('x');$('#powerClose').innerHTML=ic('x');$('#exportModalClose').innerHTML=ic('x');document.addEventListener('ssm-audit:guide',openGuide);
   document.addEventListener('ssm-audit:navigate',event=>go(event.detail&&event.detail.screen||'upload'));
   $('#drawerClose').innerHTML=ic('x');$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=event=>{if(event.target===$('#drawerBack'))closeDrawer();};
-  document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if($('#drawerBack').classList.contains('show'))closeDrawer();else if($('#exportModal').classList.contains('show'))closeExportOptions();else if($('#exampleModal').classList.contains('show'))closeRuleExample();else if($('#guideModal').classList.contains('show'))closeGuide();else if($('#updateModal').classList.contains('show'))closeUpdateModal();});
+  document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if($('#drawerBack').classList.contains('show'))closeDrawer();else if($('#exportModal').classList.contains('show'))closeExportOptions();else if($('#powerModal').classList.contains('show'))closePowerHierarchy();else if($('#exampleModal').classList.contains('show'))closeRuleExample();else if($('#guideModal').classList.contains('show'))closeGuide();else if($('#updateModal').classList.contains('show'))closeUpdateModal();});
   /* Narrow screens: the fixed version badge floats over content, so it moves
      into the topbar actions and back again as the window crosses 900px. */
   const badgeHome=$('#versionLink').parentElement,mq=window.matchMedia('(max-width:900px)');

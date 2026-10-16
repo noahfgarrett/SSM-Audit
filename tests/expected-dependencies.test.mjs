@@ -129,3 +129,62 @@ test('source locations are trimmed for display but counted exactly', () => {
   assert.equal(load.expected[0].sourceCount, 1)
   assert.deepEqual(load.expected[0].skipped, ['SYN-SUB-7'])
 })
+
+import { auditPowerHierarchy } from '../src/audit/expected-dependencies.js'
+
+const hierarchyRows = [row('SYN-SWBD', { ...ELEC, systemName: '602 Medium Voltage', upn: '602' }), row('SYN-PNL', ELEC), row('SYN-PUMP-1', MECH), row('SYN-PUMP-2', MECH)]
+const hierarchyRefs = edges('easyPower', [['SYN-UTIL', ''], ['SYN-SWBD', 'SYN-UTIL'], ['SYN-MCC', 'SYN-SWBD'], ['SYN-PNL', 'SYN-SWBD'], ['SYN-PUMP-1', 'SYN-MCC'], ['SYN-PUMP-2', 'SYN-PNL']])
+
+test('the power hierarchy lists the full upstream path with a verdict on every link', () => {
+  const view = auditPowerHierarchy({ rows: hierarchyRows }, hierarchyRefs, 'syn-pump-1')
+  assert.equal(view.tag, 'SYN-PUMP-1')
+  assert.equal(view.registry.discipline, 'MECHANICAL WET')
+  assert.deepEqual(view.paths.map(path => path.map(node => node.tag)), [['SYN-UTIL', 'SYN-SWBD', 'SYN-MCC', 'SYN-PUMP-1']])
+  const [util, swbd, mcc, pump] = view.paths[0]
+  assert.equal(util.registry, null)
+  assert.equal(util.link, null, 'the top of a path has no link above it')
+  assert.equal(swbd.link.kind, 'unverified', 'its feeder is not in the registry')
+  assert.equal(swbd.link.reason, 'SYN-UTIL is not in the registry')
+  assert.equal(pump.link.reason, 'SYN-MCC is not in the registry')
+  assert.equal(mcc.registry, null)
+  assert.equal(mcc.link.kind, 'unverified')
+  assert.equal(pump.link.kind, 'unverified')
+  assert.equal(pump.link.sources[0].row, 6)
+  assert.equal(view.nearest[0].tag, 'SYN-SWBD')
+  assert.equal(view.nearest[0].kind, 'dependency', 'the rule compares against the nearest registry tag upstream')
+})
+
+test('links between two registry tags say whether they nest or cross', () => {
+  const view = auditPowerHierarchy({ rows: hierarchyRows }, hierarchyRefs, 'SYN-PUMP-2')
+  const [, swbd, pnl, pump] = view.paths[0]
+  assert.equal(pnl.link.kind, 'nests', 'electrical feeding electrical inside one building nests')
+  assert.equal(pump.link.kind, 'dependency')
+  assert.match(pump.link.reason, /discipline/)
+  assert.equal(swbd.tag, 'SYN-SWBD')
+})
+
+test('the hierarchy lists what a tag feeds, capped with an exact count', () => {
+  const view = auditPowerHierarchy({ rows: hierarchyRows }, hierarchyRefs, 'SYN-SWBD')
+  assert.deepEqual(view.children.map(child => child.tag), ['SYN-MCC', 'SYN-PNL'])
+  assert.equal(view.childCount, 2)
+  const many = edges('cable', Array.from({ length: 60 }, (_, i) => [`SYN-LOAD-${i}`, 'SYN-PNL']))
+  const capped = auditPowerHierarchy({ rows: hierarchyRows }, many, 'SYN-PNL')
+  assert.equal(capped.children.length, 50)
+  assert.equal(capped.childCount, 60)
+})
+
+test('branching and looping upstream paths are capped and flagged', () => {
+  const pairs = [['SYN-LEAF', 'SYN-A0'], ['SYN-LEAF', 'SYN-B0']]
+  for (let level = 0; level < 6; level++) pairs.push([`SYN-A${level}`, `SYN-A${level + 1}`], [`SYN-A${level}`, `SYN-B${level + 1}`], [`SYN-B${level}`, `SYN-A${level + 1}`], [`SYN-B${level}`, `SYN-B${level + 1}`])
+  const wide = auditPowerHierarchy({ rows: [] }, edges('easyPower', pairs), 'SYN-LEAF')
+  assert.equal(wide.paths.length, 12)
+  assert.equal(wide.truncated, true)
+  const looped = auditPowerHierarchy({ rows: [] }, edges('cable', [['SYN-X', 'SYN-Y'], ['SYN-Y', 'SYN-X']]), 'SYN-X')
+  assert.equal(looped.loop, true)
+  assert.deepEqual(looped.paths.map(path => path.map(node => node.tag)), [['SYN-Y', 'SYN-X']])
+})
+
+test('a tag with no documented feeds returns an empty hierarchy', () => {
+  const view = auditPowerHierarchy({ rows: hierarchyRows }, hierarchyRefs, 'SYN-NOWHERE')
+  assert.deepEqual([view.paths, view.children, view.childCount, view.registry], [[], [], 0, null])
+})

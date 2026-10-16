@@ -2431,3 +2431,51 @@ button.modify-tag:hover{color:var(--accent-700);text-decoration:underline}
   .dep-shell .modify-toolbar .searchbox{min-width:0;flex-basis:100%}
   .dep-shell .modify-toolbar select{flex:1 1 140px;min-width:0}
 }
+
+/* ---- Power hierarchy modal ---- */
+.power-card{width:min(980px,calc(100vw - 32px))}
+.power-card h3{margin:4px 0 4px;font:700 22px var(--mono);letter-spacing:0;padding-right:40px;overflow-wrap:anywhere}
+.power-card h4{display:flex;align-items:baseline;gap:8px;margin:0 0 10px;font-size:13px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
+.power-card h4 small{color:var(--ink-3);font:600 11px var(--mono)}
+.power-sub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 12px;color:var(--ink-2);font-size:13px}
+.power-status{display:inline-flex;align-items:flex-start;gap:6px}
+.power-status .ic{flex:0 0 15px;width:15px;height:15px;margin-top:1px;color:var(--ok)}
+.power-status.absent .ic{color:var(--warn)}
+.power-sub .btn-link .ic{color:inherit}
+.dep-detail-actions{display:flex;justify-content:flex-end}
+.power-nearest{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-bottom:12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);font-size:12px}
+.power-nearest small{flex-basis:100%;color:var(--ink-3)}
+.power-legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-bottom:16px;color:var(--ink-3);font-size:11px}
+.power-legend>span{display:inline-flex;align-items:center;gap:6px}
+.power-columns{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:18px;align-items:start}
+.power-path{display:grid;gap:0;margin-bottom:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
+.power-path-label{margin-bottom:8px;color:var(--ink-3);font:700 9px var(--mono);text-transform:uppercase}
+.power-node{display:flex;flex-direction:column;gap:2px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2)}
+.power-node.here{border-color:var(--accent-400);background:var(--tint);box-shadow:inset 3px 0 0 var(--accent-400)}
+.power-node.absent{border-style:dashed;border-color:var(--warn);background:var(--warn-bg)}
+.power-node small{display:flex;align-items:center;gap:4px;color:var(--ink-3);font-size:11px}
+.power-node small .ic{width:12px;height:12px;color:var(--warn)}
+.power-tag{align-self:flex-start;padding:0;border:0;background:none;color:var(--ink);font:600 12px var(--mono);text-align:left;overflow-wrap:anywhere}
+button.power-tag{cursor:pointer;color:var(--accent-700);text-decoration:underline;text-decoration-color:var(--accent-200);text-underline-offset:2px}
+button.power-tag:hover{text-decoration-color:var(--accent-700)}
+button.power-tag:focus-visible{outline:2px solid var(--accent-400);outline-offset:2px;border-radius:3px}
+.power-link{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:6px 0 6px 14px;margin-left:10px;border-left:2px solid var(--border);font-size:11px;color:var(--ink-2)}
+.power-link>.ic{width:13px;height:13px;color:var(--ink-3)}
+.power-link.dependency{border-left-color:var(--danger)}
+.power-link.nests{border-left-color:var(--ok)}
+.power-link.unverified{border-left-color:var(--warn);border-left-style:dashed}
+.power-link small{flex-basis:100%;color:var(--ink-3);font:10px var(--mono)}
+.power-reason{min-width:0}
+.power-verdict{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font:650 10px var(--mono);white-space:nowrap}
+.power-verdict.dependency{background:#fbe3e1;color:var(--danger)}
+.power-verdict.nests{background:var(--ok-bg);color:var(--ok)}
+.power-verdict.unverified{background:var(--warn-bg);color:var(--warn)}
+.power-children{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.power-children li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+.power-empty,.power-note{margin:0 0 10px;color:var(--ink-3);font-size:12px}
+.power-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+@media (max-width:760px){
+  .power-columns{grid-template-columns:1fr}
+  .power-actions{flex-direction:column-reverse}
+  .power-actions .btn{justify-content:center}
+}

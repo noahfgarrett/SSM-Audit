@@ -47,3 +47,17 @@ test('the column header row stays pinned while the list scrolls', async () => {
   const css = readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
   assert.match(css, /\.dep-row\.dep-head\{position:sticky;top:-26px;z-index:3;/)
 })
+
+test('the power hierarchy modal escapes tags and marks the centred tag', async () => {
+  const { auditPowerHierarchy } = await import('../src/audit/expected-dependencies.js')
+  const { powerHierarchyHtml } = await import('../src/ui/dependencies.js')
+  const refs = { cable: { kind: 'cable', sheetName: 'Synthetic', entries: [{ equipmentId: 'SYN-PUMP-1', parent: 'SYN-MCC<b>', sourceRow: 2, sheetName: 'Synthetic' }, { equipmentId: 'SYN-MCC<b>', parent: 'SYN-PANEL', sourceRow: 3, sheetName: 'Synthetic' }] } }
+  const view = auditPowerHierarchy({ rows: [{ equipmentId: 'SYN-PUMP-1', ...MECH }, { equipmentId: 'SYN-PANEL', ...ELEC }] }, refs, 'SYN-PUMP-1')
+  const html = powerHierarchyHtml(view, 'SYN-PANEL')
+  assert.ok(!html.includes('SYN-MCC<b>'))
+  assert.match(html, /data-power-tag="SYN-MCC&lt;b&gt;"/)
+  assert.match(html, /<b class="power-tag">SYN-PUMP-1<\/b>/, 'the centred tag is not a link')
+  assert.match(html, /Back to SYN-PANEL/)
+  assert.match(html, /power-verdict dependency">SYN-PANEL · Dependency/)
+  assert.match(html, /id="powerShowTree"/)
+})

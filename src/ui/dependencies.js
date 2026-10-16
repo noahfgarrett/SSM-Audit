@@ -1,10 +1,11 @@
 import { $, $$, clean, esc, natCmp } from '../core/text.js'
 import { S } from '../state.js'
 import { ic } from './icons.js'
-import { copyTagHtml, toast, wireCopyTags } from './feedback.js'
+import { activateFocusTrap, animateClose, animateOpen, copyTagHtml, toast, wireCopyTags } from './feedback.js'
 import { downloadBlob, workbookBlobCompact } from '../core/download.js'
 import { buildDependencyCheckWorkbook } from '../audit/dependency-export.js'
-import { engineeringUploadsHtml, renderSideNav, teardownAuditFilters, wireEngineeringUploads } from './audit.js'
+import { auditPowerHierarchy } from '../audit/expected-dependencies.js'
+import { engineeringUploadsHtml, focusHierarchyOnEquipment, renderSideNav, teardownAuditFilters, wireEngineeringUploads } from './audit.js'
 
 /* Dependencies tab: what the power and control documents say each piece of
    equipment should depend on, checked against this registry. Read-only view
@@ -51,15 +52,16 @@ export function dependencyFiltered(items,session){
     return true;
   });
 }
+function powerOpenButtonHtml(tag){return `<div class="dep-detail-actions"><button class="btn sm" type="button" data-power-open="${esc(tag)}">${ic('network')}View power hierarchy</button></div>`;}
 function dependencyDetailHtml(item){
   if(item.kind==='absent'){
     const entry=item.entry;
-    return `<div class="dep-detail"><p>This tag appears in the documents but not in the registry. Rows fed through it were compared against the next tag upstream.</p>
+    return `<div class="dep-detail">${powerOpenButtonHtml(item.tag)}<p>This tag appears in the documents but not in the registry. Rows fed through it were compared against the next tag upstream.</p>
       <dl><dt>Found at</dt><dd>${entry.sources.map(source=>esc(dependencyLocation(source))).join('<br>')}${dependencyMoreHtml(entry.sources.length,entry.sourceCount||entry.sources.length)}</dd>
       <dt>Registry rows affected</dt><dd>${dependencyTagsHtml(entry.affects.slice(0,DEPENDENCY_MAX_SHOWN),'None')}${dependencyMoreHtml(Math.min(entry.affects.length,DEPENDENCY_MAX_SHOWN),entry.affects.length)}</dd></dl></div>`;
   }
   const entry=item.entry;
-  return `<div class="dep-detail">${entry.expected.map(expected=>{
+  return `<div class="dep-detail">${powerOpenButtonHtml(entry.equipmentId)}${entry.expected.map(expected=>{
     const chain=[expected.tag,...[...expected.skipped].reverse(),entry.equipmentId];
     const present=!entry.missing.includes(expected.tag);
     return `<section class="dep-expect ${present?'ok':'bad'}"><div class="dep-chain">${ic(present?'circle-check':'circle-x')}${chain.map((tag,index)=>`<code class="${expected.skipped.includes(tag)?'skipped':''}">${esc(tag)}</code>${index<chain.length-1?ic('arrow-right'):''}`).join('')}</div>
@@ -68,6 +70,57 @@ function dependencyDetailHtml(item){
   }).join('')}${entry.notes.length?`<ul class="dep-notes">${entry.notes.map(note=>`<li>${ic('info')}${esc(note)}</li>`).join('')}</ul>`:''}
   <dl><dt>Closest Parent</dt><dd>${entry.closestParent?`<code>${esc(entry.closestParent)}</code>`:'<span class="muted">—</span>'}</dd><dt>Registry dependencies</dt><dd>${dependencyTagsHtml(entry.registryDependencies,'None')}</dd></dl></div>`;
 }
+const POWER_LINK_LABELS=Object.freeze({dependency:'Dependency',nests:'Nests',unverified:'Unverified'});
+let powerTrapCleanup=null,powerOpener=null;
+
+function powerTagHtml(node,current){
+  const here=node.tag.toUpperCase()===current.toUpperCase();
+  const place=node.registry?[node.registry.building,node.registry.discipline,node.registry.systemName].filter(Boolean).join(' · '):'';
+  return `<div class="power-node ${here?'here':''} ${node.registry?'':'absent'}">${here?`<b class="power-tag">${esc(node.tag)}</b>`:`<button class="power-tag" type="button" data-power-tag="${esc(node.tag)}" title="Centre the hierarchy on ${esc(node.tag)}">${esc(node.tag)}</button>`}
+    <small>${node.registry?esc(place)||'In registry':`${ic('triangle-alert')}Not in registry`}</small></div>`;
+}
+function powerLinkHtml(link){
+  const locations=[...new Set(link.sources.map(dependencyLocation))],more=Math.max(0,link.sourceCount-1);
+  return `<div class="power-link ${link.kind}">${ic('arrow-down')}<span class="power-verdict ${link.kind}">${esc(POWER_LINK_LABELS[link.kind])}</span><span class="power-reason">${esc(dependencySentence(link.reason))}</span>${locations.length?`<small title="${esc(locations.join('\n'))}">${esc(locations[0])}${more?` +${more.toLocaleString()}`:''}</small>`:''}</div>`;
+}
+/* Modal body for one tag; `origin` is the tag the modal was opened on. */
+export function powerHierarchyHtml(view,origin){
+  const here=view.tag,place=view.registry?[view.registry.building,view.registry.discipline,view.registry.systemName].filter(Boolean).join(' · '):'';
+  const paths=view.paths.length?view.paths.map((path,index)=>`<section class="power-path"><span class="power-path-label">${view.paths.length>1?`Path ${index+1} of ${view.paths.length}${view.truncated?'+':''}`:'Path'}</span>
+      ${path.map(node=>`${node.link?powerLinkHtml(node.link):''}${powerTagHtml(node,here)}`).join('')}</section>`).join('')
+    :'<p class="power-empty">No upstream feed for this tag in the loaded documents.</p>';
+  const nearest=view.nearest.length?`<div class="power-nearest"><b>Checked against</b>${view.nearest.map(entry=>`<span class="power-verdict ${entry.kind}">${esc(entry.tag)} · ${esc(POWER_LINK_LABELS[entry.kind])}</span>`).join('')}<small>The nearest registry tag upstream${view.nearest.some(entry=>entry.skipped.length)?', past tags that are not in the registry':''}.</small></div>`:'';
+  const children=view.childCount?`<ul class="power-children">${view.children.map(child=>`<li>${powerTagHtml(child,here)}<span class="power-verdict ${child.link.kind}" title="${esc(dependencySentence(child.link.reason))}">${esc(POWER_LINK_LABELS[child.link.kind])}</span></li>`).join('')}</ul>${view.childCount>view.children.length?`<p class="power-empty">and ${(view.childCount-view.children.length).toLocaleString()} more</p>`:''}`
+    :'<p class="power-empty">This tag feeds nothing in the loaded documents.</p>';
+  return `<span class="eyebrow">Power hierarchy · from the loaded documents</span>
+    <h3 id="powerTitle">${esc(here)}</h3>
+    <p class="power-sub"><span class="power-status ${view.registry?'in':'absent'}">${view.registry?`${ic('circle-check')}<span>In registry${place?` · ${esc(place)}`:''}</span>`:`${ic('triangle-alert')}<span>Not in registry</span>`}</span>${origin&&origin.toUpperCase()!==here.toUpperCase()?` <button class="btn-link" type="button" data-power-tag="${esc(origin)}">${ic('arrow-left')}Back to ${esc(origin)}</button>`:''}</p>
+    ${nearest}
+    <div class="power-legend"><span><b class="power-verdict dependency">Dependency</b>crosses a Building, Discipline or System Name</span><span><b class="power-verdict nests">Nests</b>same group, or electrical inside one building</span><span><b class="power-verdict unverified">Unverified</b>an end is not in the registry or has a blank group</span></div>
+    <div class="power-columns"><div><h4>Fed from</h4>${view.loop?'<p class="power-note">The source chain loops; the loop is shown once.</p>':''}${view.truncated?`<p class="power-note">Showing the first ${view.paths.length} paths.</p>`:''}${paths}</div>
+      <div><h4>Feeds <small>${view.childCount.toLocaleString()}</small></h4>${children}</div></div>
+    <div class="power-actions">${view.registry?`<button class="btn" type="button" id="powerShowTree">${ic('list-tree')}Show in SSM Hierarchy</button>`:''}<button class="btn primary" type="button" id="powerDone">Done</button></div>`;
+}
+export function closePowerHierarchy(){
+  const modal=$('#powerModal');if(!modal||!modal.classList.contains('show'))return;
+  powerTrapCleanup?.();powerTrapCleanup=null;modal.setAttribute('aria-hidden','true');animateClose(modal);
+  const opener=powerOpener;powerOpener=null;if(opener&&document.contains(opener)&&typeof opener.focus==='function')opener.focus();
+}
+export function openPowerHierarchy(tag,origin=tag){
+  const session=S.session;if(!session?.snapshot)return;
+  const view=auditPowerHierarchy(session.snapshot,session.references||{},tag),modal=$('#powerModal'),body=$('#powerBody');
+  body.innerHTML=powerHierarchyHtml(view,origin);
+  for(const button of $$('[data-power-tag]',body))button.onclick=()=>openPowerHierarchy(button.dataset.powerTag,origin);
+  $('#powerDone').onclick=closePowerHierarchy;$('#powerClose').onclick=closePowerHierarchy;
+  const tree=$('#powerShowTree');if(tree)tree.onclick=()=>{closePowerHierarchy();focusHierarchyOnEquipment(view.tag);};
+  modal.onclick=event=>{if(event.target===modal)closePowerHierarchy();};
+  if(!modal.classList.contains('show')){
+    powerOpener=document.activeElement;animateOpen(modal);modal.setAttribute('aria-hidden','false');
+    powerTrapCleanup?.();powerTrapCleanup=activateFocusTrap(modal,closePowerHierarchy);
+  }
+  body.parentElement.scrollTop=0;$('#powerClose').focus();
+}
+
 export function dependencyRowHtml(item,expanded){
   const status=DEPENDENCY_STATUS[item.kind],entry=item.entry,absent=item.kind==='absent';
   const expected=absent?'<span class="muted">—</span>':dependencyTagsHtml(entry.expected.map(expected=>expected.tag));
@@ -147,7 +200,10 @@ export function renderDependencyCheck(navigate){
     const next=document.createElement('div');next.innerHTML=dependencyRowHtml(item,session.depExpanded.has(item.key));
     const replacement=next.firstElementChild;holder.replaceWith(replacement);wireCopyTags(replacement);replacement.querySelector('.dep-row')?.focus();
   };
-  body.onclick=event=>{if(event.target.closest('.copy-tag')||event.target.closest('#depMore'))return;if(event.target.closest('.dep-row:not(.dep-head)'))toggle(event.target);};
+  body.onclick=event=>{
+    const power=event.target.closest('[data-power-open]');if(power){openPowerHierarchy(power.dataset.powerOpen);return;}
+    if(event.target.closest('.copy-tag')||event.target.closest('#depMore'))return;if(event.target.closest('.dep-row:not(.dep-head)'))toggle(event.target);
+  };
   body.onkeydown=event=>{if((event.key==='Enter'||event.key===' ')&&event.target.classList.contains('dep-row')){event.preventDefault();toggle(event.target);}};
   const more=$('#depMore');
   if(more)more.onclick=()=>{
